@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+  <root>
+    <mxCell id="0"/><mxCell id="1" parent="0"/>
+    <mxCell id="title" value="M05 Inventory — Receive/Issue + Revision Flow" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=20;fontStyle=1;fontColor=#4CAF6E;" vertex="1" parent="1">
+      <mxGeometry x="400" y="20" width="800" height="40" as="geometry"/>
+    </mxCell>
+
+    <!-- HUB -->
+    <mxCell id="hub" value="InventoryHubScreen&#xa;Stats + Menu + Recent" style="rounded=1;fillColor=#D1FAE5;strokeColor=#4CAF6E;fontStyle=1;fontSize=12;" vertex="1" parent="1">
+      <mxGeometry x="680" y="80" width="200" height="60" as="geometry"/>
+    </mxCell>
+
+    <!-- DOC LIST -->
+    <mxCell id="rcv_list" value="DocListScreen&#xa;ใบรับสินค้า&#xa;Filter+Search" style="rounded=1;fillColor=#D1FAE5;strokeColor=#4CAF6E;" vertex="1" parent="1">
+      <mxGeometry x="440" y="200" width="160" height="65" as="geometry"/>
+    </mxCell>
+    <mxCell id="iss_list" value="DocListScreen&#xa;ใบเบิกสินค้า&#xa;Filter+Search" style="rounded=1;fillColor=#FEF3C7;strokeColor=#F5A623;" vertex="1" parent="1">
+      <mxGeometry x="960" y="200" width="160" height="65" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_hub_rcv" value="รับสินค้า" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="hub" target="rcv_list" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e_hub_iss" value="เบิกสินค้า" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="hub" target="iss_list" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- DOC FORM -->
+    <mxCell id="doc_form" value="StockDocFormScreen&#xa;สร้าง/แก้ไขเอกสาร" style="rounded=1;fillColor=#FF8F8F;strokeColor=#E06060;fontColor=#FFF;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="660" y="200" width="180" height="65" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_rcv_form" value="สร้างใหม่" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="rcv_list" target="doc_form" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e_iss_form" value="สร้างใหม่" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="iss_list" target="doc_form" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- FORM SECTIONS -->
+    <mxCell id="hdr_sec" value="1. Header Form&#xa;คลัง + Supplier/ปลายทาง" style="rounded=1;fillColor=#FFF8F5;strokeColor=#EAE0D8;" vertex="1" parent="1">
+      <mxGeometry x="660" y="310" width="180" height="50" as="geometry"/></mxCell>
+    <mxCell id="e_form_hdr" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="doc_form" target="hdr_sec" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- ADD METHODS -->
+    <mxCell id="method_dec" value="เพิ่มสินค้า&#xa;อย่างไร?" style="rhombus;fillColor=#FFF1CB;strokeColor=#F5D87E;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="686" y="390" width="148" height="70" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_hdr_method" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="hdr_sec" target="method_dec" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- METHOD 1: DROPDOWN -->
+    <mxCell id="dropdown" value="Dropdown&#xa;ค้นหาสินค้า&#xa;เลือก UOM" style="rounded=1;fillColor=#C2E2FA;strokeColor=#7DBFF0;" vertex="1" parent="1">
+      <mxGeometry x="460" y="400" width="150" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="show_stock" value="แสดงยอดคงเหลือ&#xa;(หน่วยที่เลือก)" style="rounded=1;fillColor=#D1FAE5;strokeColor=#4CAF6E;" vertex="1" parent="1">
+      <mxGeometry x="460" y="490" width="150" height="50" as="geometry"/></mxCell>
+    <mxCell id="e_dec_drop" value="Dropdown" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="method_dec" target="dropdown" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e_drop_stock" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="dropdown" target="show_stock" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- METHOD 2: SCAN -->
+    <mxCell id="scan_mode" value="Scan Mode&#xa;กด Toggle ON" style="rounded=1;fillColor=#C2E2FA;strokeColor=#7DBFF0;" vertex="1" parent="1">
+      <mxGeometry x="960" y="400" width="150" height="55" as="geometry"/>
+    </mxCell>
+    <mxCell id="scan_loop" value="สแกน Barcode&#xa;→ Auto UOM&#xa;ซ้ำ = qty+1" style="rounded=1;fillColor=#D1FAE5;strokeColor=#4CAF6E;" vertex="1" parent="1">
+      <mxGeometry x="960" y="490" width="150" height="65" as="geometry"/></mxCell>
+    <mxCell id="e_dec_scan" value="Scan" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="method_dec" target="scan_mode" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e_scan_loop" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="scan_mode" target="scan_loop" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- ROW LIST -->
+    <mxCell id="row_list" value="รายการสินค้า (Rows)&#xa;unit | ชื่อ | คงเหลือ | qty± | ราคา" style="rounded=1;fillColor=#FFF1CB;strokeColor=#F5D87E;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="650" y="580" width="220" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_stock_row" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="show_stock" target="row_list" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e_scan_row" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="scan_loop" target="row_list" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- SAVE DECISION -->
+    <mxCell id="save_dec" value="บันทึก&#xa;อย่างไร?" style="rhombus;fillColor=#FFF1CB;strokeColor=#F5D87E;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="690" y="680" width="140" height="70" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_row_save" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="row_list" target="save_dec" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- DRAFT -->
+    <mxCell id="draft" value="status = draft&#xa;(แบบร่าง)" style="rounded=1;fillColor=#FEF3C7;strokeColor=#F5A623;" vertex="1" parent="1">
+      <mxGeometry x="480" y="695" width="150" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_save_draft" value="บันทึกแบบร่าง" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="save_dec" target="draft" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- CONFIRM -->
+    <mxCell id="confirm_doc" value="status = confirmed&#xa;Running No.&#xa;RCV/ISS 2406-xxxx" style="rounded=1;fillColor=#D1FAE5;strokeColor=#4CAF6E;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="880" y="690" width="170" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_save_confirm" value="ยืนยัน" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="save_dec" target="confirm_doc" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- DOC DETAIL -->
+    <mxCell id="detail" value="StockDocDetailScreen&#xa;ดูรายละเอียด + Print" style="rounded=1;fillColor=#FF8F8F;strokeColor=#E06060;fontColor=#FFF;" vertex="1" parent="1">
+      <mxGeometry x="650" y="800" width="220" height="55" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_confirm_detail" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="confirm_doc" target="detail" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e_draft_detail" style="edgeStyle=orthogonalEdgeStyle;dashed=1;" edge="1" source="draft" target="detail" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- REVISE FLOW -->
+    <mxCell id="revise_dec" value="Revise&#xa;ต้องการไหม?" style="rhombus;fillColor=#EDE9FE;strokeColor=#7C3AED;" vertex="1" parent="1">
+      <mxGeometry x="686" y="890" width="148" height="70" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_detail_rev" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="detail" target="revise_dec" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <mxCell id="revise_modal" value="ReviseModal&#xa;เลือกเหตุผล" style="rounded=1;fillColor=#EDE9FE;strokeColor=#7C3AED;" vertex="1" parent="1">
+      <mxGeometry x="890" y="895" width="150" height="55" as="geometry"/>
+    </mxCell>
+    <mxCell id="new_rev" value="Rev.N draft (ใหม่)&#xa;เดิม = revised" style="rounded=1;fillColor=#FFBDBD;strokeColor=#FF8F8F;" vertex="1" parent="1">
+      <mxGeometry x="890" y="980" width="160" height="55" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_rev_modal" value="ใช่" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="revise_dec" target="revise_modal" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e_modal_newrev" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="revise_modal" target="new_rev" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e_newrev_form" value="แก้ไข Rev." style="edgeStyle=orthogonalEdgeStyle;curved=1;strokeColor=#7C3AED;" edge="1" source="new_rev" target="doc_form" parent="1">
+      <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1150" y="1007"/><mxPoint x="1150" y="232"/></Array></mxGeometry>
+    </mxCell>
+  </root>
+</mxGraphModel>

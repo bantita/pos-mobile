@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "POS Mobile",
+    "slug": "pos-mobile",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.posapp.mobile"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#000000"
+      },
+      "package": "com.posapp.mobile",
+      "versionCode": 1,
+      "permissions": []
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "name": "POS Mobile",
+      "shortName": "POS",
+      "themeColor": "#FF343D",
+      "backgroundColor": "#FFF8F8"
+    },
+    "scheme": "pos-mobile",
+    "extra": {
+      "eas": {
+        "projectId": "86439bc5-a32c-431b-9906-3a3ceabd3461"
+      },
+      "API_BASE_URL": "${process.env.API_BASE_URL || 'http://localhost:3000/api/v1'}",
+      "PAYMENT_API_URL": "${process.env.PAYMENT_API_URL || 'http://localhost:3000/api/v1/payment'}",
+      "PAYMENT_MERCHANT_ID": "${process.env.PAYMENT_MERCHANT_ID || 'MERCHANT_DEV_001'}",
+      "PROMPTPAY_ID": "${process.env.PROMPTPAY_ID || '0812345678'}",
+      "LINE_CHANNEL_ACCESS_TOKEN": "${process.env.LINE_CHANNEL_ACCESS_TOKEN || ''}",
+      "LINE_CHANNEL_SECRET": "${process.env.LINE_CHANNEL_SECRET || ''}",
+      "LINE_LIFF_ID": "${process.env.LINE_LIFF_ID || ''}",
+      "APP_ENV": "${process.env.APP_ENV || 'development'}",
+      "ENABLE_MOCK": "${process.env.ENABLE_MOCK || 'true'}",
+      "LOG_LEVEL": "${process.env.LOG_LEVEL || 'debug'}"
+    },
+    "owner": "acare26"
+  }
+}

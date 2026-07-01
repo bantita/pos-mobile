@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+  <root>
+    <mxCell id="0"/><mxCell id="1" parent="0"/>
+
+    <mxCell id="title" value="POS Mobile — User Flow by Role" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=20;fontStyle=1;fontColor=#FF8F8F;" vertex="1" parent="1">
+      <mxGeometry x="400" y="20" width="800" height="40" as="geometry"/>
+    </mxCell>
+
+    <!-- LOGIN BOX -->
+    <mxCell id="login_start" value="เปิดแอป&#xa;LoadingScreen" style="ellipse;fillColor=#FFF1CB;strokeColor=#F5D87E;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="720" y="80" width="160" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="login_screen" value="Login / OTP&#xa;SCR-AUTH-002/003" style="rounded=1;fillColor=#FF8F8F;strokeColor=#E06060;fontColor=#FFF;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="720" y="180" width="160" height="55" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_start" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="login_start" target="login_screen" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- ROLE DECISION -->
+    <mxCell id="role_decision" value="ตรวจ Role" style="rhombus;fillColor=#FFF1CB;strokeColor=#F5D87E;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="726" y="280" width="148" height="70" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_login_role" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="login_screen" target="role_decision" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- OWNER COLUMN -->
+    <mxCell id="col_owner" value="👑 Owner" style="swimlane;startSize=30;fillColor=#FFBDBD;strokeColor=#FF8F8F;fontStyle=1;fontSize=12;" vertex="1" parent="1">
+      <mxGeometry x="40" y="390" width="180" height="700" as="geometry"/>
+    </mxCell>
+    <mxCell id="o1" value="DashboardScreen&#xa;KPI + Low Stock" style="rounded=1;fillColor=#FFF;strokeColor=#FF8F8F;" vertex="1" parent="1"><mxGeometry x="55" y="430" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="o2" value="POSSale + Kiosk&#xa;ขาย+จัดการ" style="rounded=1;fillColor=#FFF;strokeColor=#FF8F8F;" vertex="1" parent="1"><mxGeometry x="55" y="490" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="o3" value="Product Manage&#xa;+UOM +Import" style="rounded=1;fillColor=#FFF;strokeColor=#FF8F8F;" vertex="1" parent="1"><mxGeometry x="55" y="550" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="o4" value="Inventory&#xa;รับ/เบิก/Revise" style="rounded=1;fillColor=#FFF;strokeColor=#FF8F8F;" vertex="1" parent="1"><mxGeometry x="55" y="610" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="o5" value="Reports (ทุกตัว)&#xa;+Export Excel/PDF" style="rounded=1;fillColor=#FFF;strokeColor=#FF8F8F;" vertex="1" parent="1"><mxGeometry x="55" y="670" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="o6" value="Settings (ทุกอย่าง)&#xa;Permission Matrix" style="rounded=1;fillColor=#FFF;strokeColor=#FF8F8F;" vertex="1" parent="1"><mxGeometry x="55" y="730" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="o7" value="Audit Log&#xa;Sync Monitor" style="rounded=1;fillColor=#FFF;strokeColor=#FF8F8F;" vertex="1" parent="1"><mxGeometry x="55" y="790" width="150" height="45" as="geometry"/></mxCell>
+
+    <!-- MANAGER COLUMN -->
+    <mxCell id="col_mgr" value="👔 Manager" style="swimlane;startSize=30;fillColor=#C2E2FA;strokeColor=#7DBFF0;fontStyle=1;fontSize=12;" vertex="1" parent="1">
+      <mxGeometry x="240" y="390" width="180" height="700" as="geometry"/>
+    </mxCell>
+    <mxCell id="m1" value="DashboardScreen&#xa;KPI ทั่วไป" style="rounded=1;fillColor=#FFF;strokeColor=#7DBFF0;" vertex="1" parent="1"><mxGeometry x="255" y="430" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="m2" value="POSSale&#xa;อนุมัติส่วนลด" style="rounded=1;fillColor=#FFF;strokeColor=#7DBFF0;" vertex="1" parent="1"><mxGeometry x="255" y="490" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="m3" value="Product&#xa;Add/Edit/Approve" style="rounded=1;fillColor=#FFF;strokeColor=#7DBFF0;" vertex="1" parent="1"><mxGeometry x="255" y="550" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="m4" value="Inventory (ทุก)&#xa;อนุมัติ Adjust" style="rounded=1;fillColor=#FFF;strokeColor=#7DBFF0;" vertex="1" parent="1"><mxGeometry x="255" y="610" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="m5" value="Reports (ส่วนใหญ่)&#xa;+Export" style="rounded=1;fillColor=#FFF;strokeColor=#7DBFF0;" vertex="1" parent="1"><mxGeometry x="255" y="670" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="m6" value="Settings บางส่วน&#xa;User Manage" style="rounded=1;fillColor=#FFF;strokeColor=#7DBFF0;" vertex="1" parent="1"><mxGeometry x="255" y="730" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="m6b" value="❌ Permission Matrix&#xa;❌ Enterprise Report" style="rounded=1;fillColor=#FEE2E2;strokeColor=#EF4444;fontSize=10;" vertex="1" parent="1"><mxGeometry x="255" y="790" width="150" height="45" as="geometry"/></mxCell>
+
+    <!-- CASHIER COLUMN -->
+    <mxCell id="col_cash" value="💰 Cashier" style="swimlane;startSize=30;fillColor=#D1FAE5;strokeColor=#4CAF6E;fontStyle=1;fontSize=12;" vertex="1" parent="1">
+      <mxGeometry x="440" y="390" width="180" height="700" as="geometry"/>
+    </mxCell>
+    <mxCell id="c1" value="CashierDashboard&#xa;Shift Status" style="rounded=1;fillColor=#FFF;strokeColor=#4CAF6E;" vertex="1" parent="1"><mxGeometry x="455" y="430" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="c2" value="POSSale (หลัก)&#xa;เลือก/สแกน/ขาย" style="rounded=1;fillColor=#FFF;strokeColor=#4CAF6E;" vertex="1" parent="1"><mxGeometry x="455" y="490" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="c3" value="Cart → Payment&#xa;Cash/QR/Credit" style="rounded=1;fillColor=#FFF;strokeColor=#4CAF6E;" vertex="1" parent="1"><mxGeometry x="455" y="550" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="c4" value="Receipt → Print&#xa;Reprint (ตามสิทธิ์)" style="rounded=1;fillColor=#FFF;strokeColor=#4CAF6E;" vertex="1" parent="1"><mxGeometry x="455" y="610" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="c5" value="Hold Bill / Recall" style="rounded=1;fillColor=#FFF;strokeColor=#4CAF6E;" vertex="1" parent="1"><mxGeometry x="455" y="670" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="c6" value="❌ คลัง ❌ รายงาน&#xa;❌ Settings หลัก" style="rounded=1;fillColor=#FEE2E2;strokeColor=#EF4444;fontSize=10;" vertex="1" parent="1"><mxGeometry x="455" y="730" width="150" height="45" as="geometry"/></mxCell>
+
+    <!-- STOCK STAFF COLUMN -->
+    <mxCell id="col_stock" value="📦 Stock Staff" style="swimlane;startSize=30;fillColor=#FEF3C7;strokeColor=#F5A623;fontStyle=1;fontSize=12;" vertex="1" parent="1">
+      <mxGeometry x="640" y="390" width="180" height="700" as="geometry"/>
+    </mxCell>
+    <mxCell id="s1" value="Dashboard (View)" style="rounded=1;fillColor=#FFF;strokeColor=#F5A623;" vertex="1" parent="1"><mxGeometry x="655" y="430" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="s2" value="Inventory (ทุก)&#xa;รับ/เบิก/นับ/ปรับ" style="rounded=1;fillColor=#FFF;strokeColor=#F5A623;" vertex="1" parent="1"><mxGeometry x="655" y="490" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="s3" value="Product (View only)" style="rounded=1;fillColor=#FFF;strokeColor=#F5A623;" vertex="1" parent="1"><mxGeometry x="655" y="550" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="s4" value="Reports คลัง&#xa;(View only)" style="rounded=1;fillColor=#FFF;strokeColor=#F5A623;" vertex="1" parent="1"><mxGeometry x="655" y="610" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="s5" value="ปรับสต๊อก&#xa;ส่งอนุมัติ Manager" style="rounded=1;fillColor=#FFF;strokeColor=#F5A623;" vertex="1" parent="1"><mxGeometry x="655" y="670" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="s6" value="❌ ขาย ❌ Settings" style="rounded=1;fillColor=#FEE2E2;strokeColor=#EF4444;fontSize=11;" vertex="1" parent="1"><mxGeometry x="655" y="730" width="150" height="45" as="geometry"/></mxCell>
+
+    <!-- REPORT VIEWER COLUMN -->
+    <mxCell id="col_rpt" value="📊 Report Viewer" style="swimlane;startSize=30;fillColor=#EDE9FE;strokeColor=#7C3AED;fontStyle=1;fontSize=12;" vertex="1" parent="1">
+      <mxGeometry x="840" y="390" width="180" height="700" as="geometry"/>
+    </mxCell>
+    <mxCell id="r1" value="Dashboard (View)" style="rounded=1;fillColor=#FFF;strokeColor=#7C3AED;" vertex="1" parent="1"><mxGeometry x="855" y="430" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="r2" value="Reports (ทุกตัว)&#xa;View + Export" style="rounded=1;fillColor=#FFF;strokeColor=#7C3AED;" vertex="1" parent="1"><mxGeometry x="855" y="490" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="r3" value="Export Excel/PDF&#xa;ทุก Report" style="rounded=1;fillColor=#FFF;strokeColor=#7C3AED;" vertex="1" parent="1"><mxGeometry x="855" y="550" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="r4" value="Sale/Inventory&#xa;(View only)" style="rounded=1;fillColor=#FFF;strokeColor=#7C3AED;" vertex="1" parent="1"><mxGeometry x="855" y="610" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="r5" value="❌ ขาย ❌ คลัง&#xa;❌ Settings" style="rounded=1;fillColor=#FEE2E2;strokeColor=#EF4444;fontSize=11;" vertex="1" parent="1"><mxGeometry x="855" y="670" width="150" height="45" as="geometry"/></mxCell>
+
+    <!-- ADMIN COLUMN -->
+    <mxCell id="col_admin" value="⚙️ Admin" style="swimlane;startSize=30;fillColor=#F3F4F6;strokeColor=#6B7280;fontStyle=1;fontSize=12;" vertex="1" parent="1">
+      <mxGeometry x="1040" y="390" width="180" height="700" as="geometry"/>
+    </mxCell>
+    <mxCell id="a1" value="Settings Hub&#xa;(หน้าหลัก)" style="rounded=1;fillColor=#FFF;strokeColor=#6B7280;" vertex="1" parent="1"><mxGeometry x="1055" y="430" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="a2" value="User Manage&#xa;Full CRUD" style="rounded=1;fillColor=#FFF;strokeColor=#6B7280;" vertex="1" parent="1"><mxGeometry x="1055" y="490" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="a3" value="Role + Permission&#xa;Matrix (ทุก)" style="rounded=1;fillColor=#FFF;strokeColor=#6B7280;" vertex="1" parent="1"><mxGeometry x="1055" y="550" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="a4" value="Security Policy&#xa;Device Binding" style="rounded=1;fillColor=#FFF;strokeColor=#6B7280;" vertex="1" parent="1"><mxGeometry x="1055" y="610" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="a5" value="Audit Log + Export&#xa;Sync Monitor" style="rounded=1;fillColor=#FFF;strokeColor=#6B7280;" vertex="1" parent="1"><mxGeometry x="1055" y="670" width="150" height="45" as="geometry"/></mxCell>
+    <mxCell id="a6" value="Menu Visibility&#xa;เปิด/ปิดเมนู" style="rounded=1;fillColor=#FFF;strokeColor=#6B7280;" vertex="1" parent="1"><mxGeometry x="1055" y="730" width="150" height="45" as="geometry"/></mxCell>
+
+    <!-- Arrows from role_decision -->
+    <mxCell id="ea1" value="Owner" style="edgeStyle=orthogonalEdgeStyle;exitX=0.5;exitY=1;" edge="1" source="role_decision" target="o1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="ea2" value="Manager" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="role_decision" target="m1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="ea3" value="Cashier" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="role_decision" target="c1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="ea4" value="Stock" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="role_decision" target="s1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="ea5" value="Report" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="role_decision" target="r1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="ea6" value="Admin" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="role_decision" target="a1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+  </root>
+</mxGraphModel>

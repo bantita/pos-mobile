@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+  <root>
+    <mxCell id="0"/><mxCell id="1" parent="0"/>
+
+    <!-- Title -->
+    <mxCell id="title" value="POS Mobile — System Overview" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1;fontColor=#FF8F8F;" vertex="1" parent="1">
+      <mxGeometry x="500" y="20" width="600" height="40" as="geometry"/>
+    </mxCell>
+
+    <!-- Platform Layer -->
+    <mxCell id="plat_bg" value="Platform Layer" style="swimlane;startSize=30;fillColor=#FFF1CB;strokeColor=#F5D87E;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="40" y="80" width="1560" height="100" as="geometry"/>
+    </mxCell>
+    <mxCell id="ios" value="iOS&#xa;(iPhone/iPad)" style="rounded=1;fillColor=#C2E2FA;strokeColor=#7DBFF0;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="100" y="120" width="150" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="android" value="Android&#xa;(Phone/Tablet)" style="rounded=1;fillColor=#C2E2FA;strokeColor=#7DBFF0;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="300" y="120" width="150" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="web_mac" value="Web Browser&#xa;(macOS)" style="rounded=1;fillColor=#C2E2FA;strokeColor=#7DBFF0;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="500" y="120" width="150" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="web_win" value="Web Browser&#xa;(Windows)" style="rounded=1;fillColor=#C2E2FA;strokeColor=#7DBFF0;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="700" y="120" width="150" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="kiosk_node" value="Kiosk Mode&#xa;(Fullscreen + PIN)" style="rounded=1;fillColor=#FFBDBD;strokeColor=#FF8F8F;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="900" y="120" width="160" height="50" as="geometry"/>
+    </mxCell>
+
+    <!-- App Layer -->
+    <mxCell id="app_bg" value="React Native + Expo Application" style="swimlane;startSize=30;fillColor=#FFF8F5;strokeColor=#EAE0D8;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="40" y="200" width="1560" height="120" as="geometry"/>
+    </mxCell>
+    <mxCell id="auth_nav" value="AuthNavigator&#xa;M01" style="rounded=1;fillColor=#FF8F8F;strokeColor=#E06060;fontColor=#FFFFFF;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="100" y="240" width="120" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="main_nav" value="MainNavigator&#xa;Bottom Tab (7)" style="rounded=1;fillColor=#FF8F8F;strokeColor=#E06060;fontColor=#FFFFFF;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="280" y="240" width="140" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="loading" value="LoadingScreen&#xa;Splash" style="rounded=1;fillColor=#FFF1CB;strokeColor=#F5D87E;" vertex="1" parent="1">
+      <mxGeometry x="480" y="240" width="120" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="zustand" value="Zustand Stores&#xa;(6 stores)" style="rounded=1;fillColor=#EDE9FE;strokeColor=#7C3AED;" vertex="1" parent="1">
+      <mxGeometry x="660" y="240" width="130" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="sqlite" value="SQLite&#xa;Offline First" style="rounded=1;fillColor=#D1FAE5;strokeColor=#4CAF6E;" vertex="1" parent="1">
+      <mxGeometry x="850" y="240" width="120" height="60" as="geometry"/>
+    </mxCell>
+
+    <!-- Module Layer -->
+    <mxCell id="mod_bg" value="Application Modules" style="swimlane;startSize=30;fillColor=#FFF8F5;strokeColor=#EAE0D8;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="40" y="340" width="1560" height="120" as="geometry"/>
+    </mxCell>
+    <mxCell id="m01" value="M01&#xa;Auth" style="rounded=1;fillColor=#FFBDBD;strokeColor=#FF8F8F;" vertex="1" parent="1"><mxGeometry x="60" y="375" width="90" height="55" as="geometry"/></mxCell>
+    <mxCell id="m02" value="M02&#xa;Dashboard" style="rounded=1;fillColor=#FFBDBD;strokeColor=#FF8F8F;" vertex="1" parent="1"><mxGeometry x="165" y="375" width="90" height="55" as="geometry"/></mxCell>
+    <mxCell id="m03" value="M03&#xa;POS Sale" style="rounded=1;fillColor=#FF8F8F;strokeColor=#E06060;fontColor=#FFF;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="270" y="375" width="90" height="55" as="geometry"/></mxCell>
+    <mxCell id="m04" value="M04&#xa;Product" style="rounded=1;fillColor=#FFBDBD;strokeColor=#FF8F8F;" vertex="1" parent="1"><mxGeometry x="375" y="375" width="90" height="55" as="geometry"/></mxCell>
+    <mxCell id="m05" value="M05&#xa;Inventory" style="rounded=1;fillColor=#FFBDBD;strokeColor=#FF8F8F;" vertex="1" parent="1"><mxGeometry x="480" y="375" width="90" height="55" as="geometry"/></mxCell>
+    <mxCell id="m09" value="M09&#xa;Reports" style="rounded=1;fillColor=#FFBDBD;strokeColor=#FF8F8F;" vertex="1" parent="1"><mxGeometry x="585" y="375" width="90" height="55" as="geometry"/></mxCell>
+    <mxCell id="m10" value="M10&#xa;Settings" style="rounded=1;fillColor=#FFBDBD;strokeColor=#FF8F8F;" vertex="1" parent="1"><mxGeometry x="690" y="375" width="90" height="55" as="geometry"/></mxCell>
+    <mxCell id="m11" value="M11&#xa;Sync" style="rounded=1;fillColor=#FFBDBD;strokeColor=#FF8F8F;" vertex="1" parent="1"><mxGeometry x="795" y="375" width="90" height="55" as="geometry"/></mxCell>
+
+    <!-- Data Layer -->
+    <mxCell id="data_bg" value="Data Layer" style="swimlane;startSize=30;fillColor=#D1FAE5;strokeColor=#4CAF6E;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="40" y="480" width="1560" height="100" as="geometry"/>
+    </mxCell>
+    <mxCell id="d1" value="SQLite&#xa;(Local)" style="shape=cylinder3;fillColor=#C2E2FA;strokeColor=#7DBFF0;" vertex="1" parent="1"><mxGeometry x="100" y="510" width="100" height="50" as="geometry"/></mxCell>
+    <mxCell id="d2" value="Zustand&#xa;(Memory)" style="shape=cylinder3;fillColor=#EDE9FE;strokeColor=#7C3AED;" vertex="1" parent="1"><mxGeometry x="260" y="510" width="100" height="50" as="geometry"/></mxCell>
+    <mxCell id="d3" value="SyncQueue&#xa;(Pending)" style="shape=cylinder3;fillColor=#FEF3C7;strokeColor=#F5A623;" vertex="1" parent="1"><mxGeometry x="420" y="510" width="100" height="50" as="geometry"/></mxCell>
+    <mxCell id="d4" value="Server API&#xa;(Online)" style="shape=cylinder3;fillColor=#D1FAE5;strokeColor=#4CAF6E;" vertex="1" parent="1"><mxGeometry x="580" y="510" width="100" height="50" as="geometry"/></mxCell>
+
+    <!-- Connectors -->
+    <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="loading" target="auth_nav" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="auth_nav" target="main_nav" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;dashed=1;" edge="1" source="sqlite" target="d1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;dashed=1;" edge="1" source="zustand" target="d2" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+  </root>
+</mxGraphModel>

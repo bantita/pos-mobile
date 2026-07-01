@@ -1,0 +1,415 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 แก้ไข WebNavigator onLogin route": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781680915429
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781681165623
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781681597922
+      }
+    ],
+    "2.1 สร้าง type definitions สำหรับ ProductGroupPromotion, BundlePromotion, QuantityPromotion, StorePromoFormData": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781680915506
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781681166528
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781681598835
+      }
+    ],
+    "2.2 สร้าง promoManagementStore ด้วย Zustand": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781680915580
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781681699760
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781682116179
+      }
+    ],
+    "2.3 สร้าง promoValidation utility functions": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781680915670
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781681700316
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781682116762
+      }
+    ],
+    "3. Checkpoint - ตรวจสอบ types, store, และ validation": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781680915736
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781682294857
+      }
+    ],
+    "4.1 สร้างหน้าจอ PromoCategoriesScreen": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781680915814
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781682295710
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781682768653
+      }
+    ],
+    "5.1 อัปเดต PromotionNavigator ด้วย routes ใหม่ทั้งหมด": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781680915869
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781683118143
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781683399849
+      }
+    ],
+    "6.1 สร้าง MemberPromoListScreen": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781680915952
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781683500211
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781684105708
+      }
+    ],
+    "6.3 สร้าง GroupProductPromoListScreen": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781680916018
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781683501023
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781684106495
+      }
+    ],
+    "6.4 สร้าง BundleProductPromoListScreen": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781680916084
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781683501779
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781684107281
+      }
+    ],
+    "6.5 สร้าง QuantityPromoListScreen": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781680916152
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781683502599
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781684108076
+      }
+    ],
+    "6.6 อัปเดต PromoListScreen เพิ่ม status filter สำหรับหมวดร้านค้า": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781680916283
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781683503608
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781684109243
+      }
+    ],
+    "7. Checkpoint - ตรวจสอบ navigation และหน้ารายการ": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781680916366
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781684110648
+      }
+    ],
+    "8.1 สร้าง StorePromoCreateScreen": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781680916442
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781684213758
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781685118817
+      }
+    ],
+    "8.2 สร้าง GroupProductPromoCreateScreen": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781680916515
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781684214572
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781685119568
+      }
+    ],
+    "8.3 สร้าง BundleProductPromoCreateScreen": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781680916580
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781684215377
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781685120273
+      }
+    ],
+    "8.4 สร้าง QuantityPromoCreateScreen": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781680916636
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781684216070
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781685121070
+      }
+    ],
+    "9. Checkpoint - ตรวจสอบฟอร์มและ validation": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781680916723
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781685122072
+      }
+    ],
+    "10.1 อัปเดต PointHistoryScreen เพิ่ม read-only member promo section": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781680916829
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781685224232
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781685934293
+      }
+    ],
+    "10.2 เพิ่มปุ่มลัด \"สร้างโปรโมชั่นสมาชิก\" ใน MemberNavigator": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781680916920
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781685226024
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781685935545
+      }
+    ],
+    "11.1 อัปเดต WebPromotionScreen แสดงหมวดหมู่โปรโมชั่น": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781680917003
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781685227702
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781685936601
+      }
+    ],
+    "12. Final checkpoint - ตรวจสอบระบบทั้งหมด": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781680917114
+      },
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781685937953
+      }
+    ],
+    "1. แก้ไข post-login navigation bug (Requirement 10)": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781681598042
+      }
+    ],
+    "2. สร้าง Data Types และ Store (พื้นฐานสำหรับทุกฟอร์ม)": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781682116863
+      }
+    ],
+    "4. สร้าง PromoCategoriesScreen (initialRoute ใหม่)": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781682768764
+      }
+    ],
+    "5. อัปเดต PromotionNavigator เพิ่ม routes ใหม่": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781683399975
+      }
+    ],
+    "6. สร้างหน้ารายการโปรโมชั่นแต่ละหมวด": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781684109343
+      }
+    ],
+    "8. สร้างฟอร์มสร้างโปรโมชั่น (Requirement 11)": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781685121247
+      }
+    ],
+    "10. อัปเดต MemberNavigator (shortcut + read-only promo display)": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781685935674
+      }
+    ],
+    "11. อัปเดต Web Promotion Screen (categories)": [
+      {
+        "executionId": "70722057-e8bf-4ed6-9935-ee05291db573",
+        "chatSessionId": "sess_b8a1adbb-2563-48ff-9152-93cc101cbcd3",
+        "timestamp": 1781685936681
+      }
+    ]
+  }
+}

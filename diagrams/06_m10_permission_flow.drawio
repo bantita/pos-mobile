@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+  <root>
+    <mxCell id="0"/><mxCell id="1" parent="0"/>
+    <mxCell id="title" value="M10 Settings — Permission &amp; Role Flow" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=20;fontStyle=1;fontColor=#6B7280;" vertex="1" parent="1">
+      <mxGeometry x="400" y="20" width="800" height="40" as="geometry"/>
+    </mxCell>
+
+    <!-- SETTINGS HUB -->
+    <mxCell id="hub" value="SettingsHubScreen&#xa;User Card + Role Switcher" style="rounded=1;fillColor=#F3F4F6;strokeColor=#6B7280;fontStyle=1;fontSize=12;" vertex="1" parent="1">
+      <mxGeometry x="660" y="80" width="220" height="65" as="geometry"/>
+    </mxCell>
+
+    <!-- MENU VISIBILITY CHECK -->
+    <mxCell id="vis_chk" value="MenuVisibility&#xa;เมนูเปิดอยู่?" style="rhombus;fillColor=#FFF1CB;strokeColor=#F5D87E;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="666" y="190" width="208" height="80" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_hub_vis" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="hub" target="vis_chk" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <mxCell id="menu_off" value="🔒 เมนูปิด&#xa;(icon ปิดตา + disabled)" style="rounded=1;fillColor=#FEE2E2;strokeColor=#EF4444;" vertex="1" parent="1">
+      <mxGeometry x="440" y="205" width="180" height="55" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_vis_off" value="ไม่" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="vis_chk" target="menu_off" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- PERMISSION CHECK -->
+    <mxCell id="perm_chk" value="Permission&#xa;มีสิทธิ์?" style="rhombus;fillColor=#FFF1CB;strokeColor=#F5D87E;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="666" y="310" width="208" height="80" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_vis_perm" value="ใช่" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="vis_chk" target="perm_chk" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <mxCell id="no_perm" value="🔒 ไม่มีสิทธิ์&#xa;(dim + lock icon)" style="rounded=1;fillColor=#FEE2E2;strokeColor=#EF4444;" vertex="1" parent="1">
+      <mxGeometry x="440" y="325" width="180" height="55" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_perm_no" value="ไม่" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="perm_chk" target="no_perm" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- ENTER SCREEN -->
+    <mxCell id="enter" value="✅ เข้าหน้าจอได้" style="rounded=1;fillColor=#D1FAE5;strokeColor=#4CAF6E;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="690" y="430" width="160" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_perm_yes" value="ใช่" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="perm_chk" target="enter" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- PERMISSION GUARD IN SCREEN -->
+    <mxCell id="guard" value="PermissionGuard&#xa;ใน Screen" style="swimlane;startSize=25;fillColor=#EDE9FE;strokeColor=#7C3AED;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="560" y="520" width="420" height="120" as="geometry"/>
+    </mxCell>
+    <mxCell id="g1" value="&lt;PermissionGuard module='X' action='add'&gt;&#xa;  &lt;AddButton/&gt;  ← แสดงเฉพาะถ้ามีสิทธิ์" style="text;html=1;align=left;" vertex="1" parent="1"><mxGeometry x="575" y="550" width="385" height="35" as="geometry"/></mxCell>
+    <mxCell id="g2" value="&lt;PermissionGuard module='X' action='delete'&gt;&#xa;  &lt;DeleteButton/&gt;  ← ซ่อนถ้าไม่มีสิทธิ์" style="text;html=1;align=left;" vertex="1" parent="1"><mxGeometry x="575" y="590" width="385" height="35" as="geometry"/></mxCell>
+    <mxCell id="e_enter_guard" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="enter" target="guard" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- PERMISSION MATRIX FLOW -->
+    <mxCell id="perm_matrix" value="PermissionMatrixScreen" style="swimlane;startSize=30;fillColor=#EDE9FE;strokeColor=#7C3AED;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="80" y="480" width="420" height="320" as="geometry"/>
+    </mxCell>
+    <mxCell id="pm1" value="เลือก Role Tab&#xa;(Owner/Manager/Cashier/...)" style="rounded=1;fillColor=#EDE9FE;strokeColor=#7C3AED;" vertex="1" parent="1"><mxGeometry x="100" y="520" width="180" height="45" as="geometry"/></mxCell>
+    <mxCell id="pm2" value="Module × Action Matrix&#xa;sale/product/inventory/..." style="rounded=1;fillColor=#EDE9FE;strokeColor=#7C3AED;" vertex="1" parent="1"><mxGeometry x="300" y="520" width="180" height="45" as="geometry"/></mxCell>
+    <mxCell id="pm3" value="Toggle ✅/❌ แต่ละ cell&#xa;view/add/edit/delete/approve/export" style="rounded=1;fillColor=#FFF;strokeColor=#7C3AED;" vertex="1" parent="1"><mxGeometry x="100" y="580" width="380" height="45" as="geometry"/></mxCell>
+    <mxCell id="pm4" value="Menu Visibility Toggles&#xa;เปิด/ปิดเมนูทั้งโมดูล" style="rounded=1;fillColor=#FFF1CB;strokeColor=#F5D87E;" vertex="1" parent="1"><mxGeometry x="100" y="640" width="380" height="45" as="geometry"/></mxCell>
+    <mxCell id="pm5" value="[บันทึก] → Audit Log: PERMISSION_CHANGE" style="rounded=1;fillColor=#D1FAE5;strokeColor=#4CAF6E;" vertex="1" parent="1"><mxGeometry x="100" y="700" width="380" height="40" as="geometry"/></mxCell>
+    <mxCell id="pm6" value="🔄 Real-time: UI ทั้งแอปเปลี่ยนทันที" style="rounded=1;fillColor=#FFBDBD;strokeColor=#FF8F8F;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="100" y="755" width="380" height="35" as="geometry"/></mxCell>
+
+    <!-- AUDIT LOG FLOW -->
+    <mxCell id="audit" value="AuditLogScreen" style="swimlane;startSize=25;fillColor=#FFF8F5;strokeColor=#EAE0D8;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="1060" y="480" width="400" height="280" as="geometry"/>
+    </mxCell>
+    <mxCell id="au1" value="Search + Filter Action Type" style="rounded=1;fillColor=#FFF;strokeColor=#EAE0D8;" vertex="1" parent="1"><mxGeometry x="1075" y="515" width="370" height="35" as="geometry"/></mxCell>
+    <mxCell id="au2" value="FlatList entries (timestamp/user/role/action)" style="rounded=1;fillColor=#FFF;strokeColor=#EAE0D8;" vertex="1" parent="1"><mxGeometry x="1075" y="560" width="370" height="35" as="geometry"/></mxCell>
+    <mxCell id="au3" value="กด → expand (before/after/IP/device)" style="rounded=1;fillColor=#FFF1CB;strokeColor=#F5D87E;" vertex="1" parent="1"><mxGeometry x="1075" y="605" width="370" height="35" as="geometry"/></mxCell>
+    <mxCell id="au4" value="Actions ที่บันทึก: LOGIN · SALE_CREATE · SALE_CANCEL&#xa;PRICE_CHANGE · STOCK_ADJUST · USER_CHANGE&#xa;PERMISSION_CHANGE · DISCOUNT_APPLY · REPRINT" style="text;html=1;align=left;fontSize=10;" vertex="1" parent="1"><mxGeometry x="1075" y="650" width="370" height="60" as="geometry"/></mxCell>
+    <mxCell id="au5" value="[Export Excel/PDF]" style="rounded=1;fillColor=#D1FAE5;strokeColor=#4CAF6E;" vertex="1" parent="1"><mxGeometry x="1075" y="720" width="370" height="30" as="geometry"/></mxCell>
+
+    <!-- ROLES TABLE -->
+    <mxCell id="roles_tbl" value="Permission Table" style="swimlane;startSize=25;fillColor=#FFF1CB;strokeColor=#F5D87E;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="80" y="840" width="1380" height="200" as="geometry"/>
+    </mxCell>
+    <mxCell id="rt_hdr" value="Role" style="text;html=1;fontStyle=1;fontSize=11;" vertex="1" parent="1"><mxGeometry x="90" y="870" width="80" height="25" as="geometry"/></mxCell>
+    <mxCell id="rt_sale" value="Sale" style="text;html=1;fontStyle=1;align=center;" vertex="1" parent="1"><mxGeometry x="200" y="870" width="100" height="25" as="geometry"/></mxCell>
+    <mxCell id="rt_prod" value="Product" style="text;html=1;fontStyle=1;align=center;" vertex="1" parent="1"><mxGeometry x="320" y="870" width="100" height="25" as="geometry"/></mxCell>
+    <mxCell id="rt_inv" value="Inventory" style="text;html=1;fontStyle=1;align=center;" vertex="1" parent="1"><mxGeometry x="440" y="870" width="100" height="25" as="geometry"/></mxCell>
+    <mxCell id="rt_rpt" value="Reports" style="text;html=1;fontStyle=1;align=center;" vertex="1" parent="1"><mxGeometry x="560" y="870" width="100" height="25" as="geometry"/></mxCell>
+    <mxCell id="rt_set" value="Settings" style="text;html=1;fontStyle=1;align=center;" vertex="1" parent="1"><mxGeometry x="680" y="870" width="100" height="25" as="geometry"/></mxCell>
+    <mxCell id="rt_usr" value="Users" style="text;html=1;fontStyle=1;align=center;" vertex="1" parent="1"><mxGeometry x="800" y="870" width="100" height="25" as="geometry"/></mxCell>
+    <mxCell id="rt_aud" value="Audit/Sync" style="text;html=1;fontStyle=1;align=center;" vertex="1" parent="1"><mxGeometry x="920" y="870" width="110" height="25" as="geometry"/></mxCell>
+
+    <mxCell id="r_owner" value="👑 Owner" style="text;html=1;fontStyle=1;color=#FF8F8F;" vertex="1" parent="1"><mxGeometry x="90" y="900" width="100" height="20" as="geometry"/></mxCell>
+    <mxCell id="r_owner_v" value="✅ ทุก" style="text;html=1;align=center;fontColor=#4CAF6E;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="200" y="900" width="100" height="20" as="geometry"/></mxCell>
+    <mxCell id="r_owner_v2" value="✅ ทุก" style="text;html=1;align=center;fontColor=#4CAF6E;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="320" y="900" width="100" height="20" as="geometry"/></mxCell>
+    <mxCell id="r_owner_v3" value="✅ ทุก" style="text;html=1;align=center;fontColor=#4CAF6E;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="440" y="900" width="100" height="20" as="geometry"/></mxCell>
+    <mxCell id="r_owner_v4" value="✅ ทุก" style="text;html=1;align=center;fontColor=#4CAF6E;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="560" y="900" width="100" height="20" as="geometry"/></mxCell>
+    <mxCell id="r_owner_v5" value="✅ ทุก" style="text;html=1;align=center;fontColor=#4CAF6E;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="680" y="900" width="100" height="20" as="geometry"/></mxCell>
+    <mxCell id="r_owner_v6" value="✅ ทุก" style="text;html=1;align=center;fontColor=#4CAF6E;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="800" y="900" width="100" height="20" as="geometry"/></mxCell>
+    <mxCell id="r_owner_v7" value="✅ ทุก" style="text;html=1;align=center;fontColor=#4CAF6E;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="920" y="900" width="110" height="20" as="geometry"/></mxCell>
+
+    <mxCell id="r_mgr" value="👔 Manager" style="text;html=1;fontStyle=1;color:#7DBFF0;" vertex="1" parent="1"><mxGeometry x="90" y="925" width="100" height="20" as="geometry"/></mxCell>
+    <mxCell id="r_mgr_v" value="✅ ทุก" style="text;html=1;align=center;fontColor=#4CAF6E;" vertex="1" parent="1"><mxGeometry x="200" y="925" width="100" height="20" as="geometry"/></mxCell>
+    <mxCell id="r_mgr_v2" value="View/Add/Edit" style="text;html=1;align=center;fontSize=9;" vertex="1" parent="1"><mxGeometry x="320" y="925" width="100" height="20" as="geometry"/></mxCell>
+    <mxCell id="r_mgr_v3" value="✅ ทุก" style="text;html=1;align=center;fontColor=#4CAF6E;" vertex="1" parent="1"><mxGeometry x="440" y="925" width="100" height="20" as="geometry"/></mxCell>
+    <mxCell id="r_mgr_v4" value="View/Export" style="text;html=1;align=center;fontSize=9;" vertex="1" parent="1"><mxGeometry x="560" y="925" width="100" height="20" as="geometry"/></mxCell>
+    <mxCell id="r_mgr_v5" value="View/Edit" style="text;html=1;align=center;fontSize=9;" vertex="1" parent="1"><mxGeometry x="680" y="925" width="100" height="20" as="geometry"/></mxCell>
+    <mxCell id="r_mgr_v6" value="View/Add/Edit" style="text;html=1;align=center;fontSize=9;" vertex="1" parent="1"><mxGeometry x="800" y="925" width="100" height="20" as="geometry"/></mxCell>
+    <mxCell id="r_mgr_v7" value="❌" style="text;html=1;align=center;fontColor=#EF4444;" vertex="1" parent="1"><mxGeometry x="920" y="925" width="110" height="20" as="geometry"/></mxCell>
+
+    <mxCell id="r_cash" value="💰 Cashier" style="text;html=1;fontStyle=1;color:#4CAF6E;" vertex="1" parent="1"><mxGeometry x="90" y="950" width="100" height="20" as="geometry"/></mxCell>
+    <mxCell id="r_cash_v" value="View/Add" style="text;html=1;align=center;fontSize=9;" vertex="1" parent="1"><mxGeometry x="200" y="950" width="100" height="20" as="geometry"/></mxCell>
+    <mxCell id="r_cash_v2" value="View" style="text;html=1;align=center;fontSize=9;" vertex="1" parent="1"><mxGeometry x="320" y="950" width="100" height="20" as="geometry"/></mxCell>
+    <mxCell id="r_cash_v3" value="View" style="text;html=1;align=center;fontSize=9;" vertex="1" parent="1"><mxGeometry x="440" y="950" width="100" height="20" as="geometry"/></mxCell>
+    <mxCell id="r_cash_v4" value="❌" style="text;html=1;align=center;fontColor=#EF4444;" vertex="1" parent="1"><mxGeometry x="560" y="950" width="100" height="20" as="geometry"/></mxCell>
+    <mxCell id="r_cash_v5" value="❌" style="text;html=1;align=center;fontColor=#EF4444;" vertex="1" parent="1"><mxGeometry x="680" y="950" width="100" height="20" as="geometry"/></mxCell>
+    <mxCell id="r_cash_v6" value="❌" style="text;html=1;align=center;fontColor=#EF4444;" vertex="1" parent="1"><mxGeometry x="800" y="950" width="100" height="20" as="geometry"/></mxCell>
+    <mxCell id="r_cash_v7" value="❌" style="text;html=1;align=center;fontColor=#EF4444;" vertex="1" parent="1"><mxGeometry x="920" y="950" width="110" height="20" as="geometry"/></mxCell>
+
+    <mxCell id="r_stk" value="📦 Stock Staff" style="text;html=1;fontStyle=1;color:#F5A623;" vertex="1" parent="1"><mxGeometry x="90" y="975" width="100" height="20" as="geometry"/></mxCell>
+    <mxCell id="r_stk_v" value="❌" style="text;html=1;align=center;fontColor=#EF4444;" vertex="1" parent="1"><mxGeometry x="200" y="975" width="100" height="20" as="geometry"/></mxCell>
+    <mxCell id="r_stk_v2" value="View" style="text;html=1;align=center;fontSize=9;" vertex="1" parent="1"><mxGeometry x="320" y="975" width="100" height="20" as="geometry"/></mxCell>
+    <mxCell id="r_stk_v3" value="✅ ทุก" style="text;html=1;align=center;fontColor=#4CAF6E;" vertex="1" parent="1"><mxGeometry x="440" y="975" width="100" height="20" as="geometry"/></mxCell>
+    <mxCell id="r_stk_v4" value="View" style="text;html=1;align=center;fontSize=9;" vertex="1" parent="1"><mxGeometry x="560" y="975" width="100" height="20" as="geometry"/></mxCell>
+    <mxCell id="r_stk_v5" value="❌" style="text;html=1;align=center;fontColor=#EF4444;" vertex="1" parent="1"><mxGeometry x="680" y="975" width="100" height="20" as="geometry"/></mxCell>
+    <mxCell id="r_stk_v6" value="❌" style="text;html=1;align=center;fontColor=#EF4444;" vertex="1" parent="1"><mxGeometry x="800" y="975" width="100" height="20" as="geometry"/></mxCell>
+    <mxCell id="r_stk_v7" value="❌" style="text;html=1;align=center;fontColor=#EF4444;" vertex="1" parent="1"><mxGeometry x="920" y="975" width="110" height="20" as="geometry"/></mxCell>
+  </root>
+</mxGraphModel>

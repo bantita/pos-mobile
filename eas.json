@@ -1,0 +1,36 @@
+{
+  "cli": {
+    "version": ">= 5.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "APP_ENV": "development",
+        "ENABLE_MOCK": "true",
+        "API_BASE_URL": "http://localhost:3000/api/v1"
+      }
+    },
+    "staging": {
+      "distribution": "internal",
+      "env": {
+        "APP_ENV": "staging",
+        "ENABLE_MOCK": "false",
+        "API_BASE_URL": "https://staging-api.yourpos.com/api/v1",
+        "LOG_LEVEL": "info"
+      }
+    },
+    "production": {
+      "env": {
+        "APP_ENV": "production",
+        "ENABLE_MOCK": "false",
+        "API_BASE_URL": "https://api.yourpos.com/api/v1",
+        "LOG_LEVEL": "error"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

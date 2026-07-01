@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+  <root>
+    <mxCell id="0"/><mxCell id="1" parent="0"/>
+    <mxCell id="title" value="M03 POS Sale — Full Flow (Normal + Kiosk)" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=20;fontStyle=1;fontColor=#FF8F8F;" vertex="1" parent="1">
+      <mxGeometry x="400" y="20" width="800" height="40" as="geometry"/>
+    </mxCell>
+
+    <!-- START -->
+    <mxCell id="start" value="Start&#xa;Tab ขาย" style="ellipse;fillColor=#FFF1CB;strokeColor=#F5D87E;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="740" y="80" width="120" height="50" as="geometry"/>
+    </mxCell>
+
+    <!-- POS SALE SCREEN -->
+    <mxCell id="pos" value="POSSaleScreen&#xa;SCR-SALE-001" style="rounded=1;fillColor=#FF8F8F;strokeColor=#E06060;fontColor=#FFF;fontStyle=1;fontSize=12;" vertex="1" parent="1">
+      <mxGeometry x="720" y="170" width="160" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_start_pos" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="start" target="pos" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- MODE DECISION -->
+    <mxCell id="mode_dec" value="Sale Mode?" style="rhombus;fillColor=#FFF1CB;strokeColor=#F5D87E;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="726" y="270" width="148" height="70" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_pos_mode" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="pos" target="mode_dec" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- BUTTON MODE -->
+    <mxCell id="grid" value="Product Grid&#xa;Category/Search" style="rounded=1;fillColor=#C2E2FA;strokeColor=#7DBFF0;" vertex="1" parent="1">
+      <mxGeometry x="480" y="280" width="150" height="55" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_mode_grid" value="button/both" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="mode_dec" target="grid" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- SCAN MODE -->
+    <mxCell id="scan" value="Scanner&#xa;SCR-SALE-002" style="rounded=1;fillColor=#C2E2FA;strokeColor=#7DBFF0;" vertex="1" parent="1">
+      <mxGeometry x="960" y="280" width="150" height="55" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_mode_scan" value="scan/both" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="mode_dec" target="scan" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- UOM SELECTOR -->
+    <mxCell id="uom" value="UOM Selector&#xa;(Long press)" style="rounded=1;fillColor=#EDE9FE;strokeColor=#7C3AED;" vertex="1" parent="1">
+      <mxGeometry x="340" y="380" width="150" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_grid_uom" value="Multi-unit" style="edgeStyle=orthogonalEdgeStyle;dashed=1;" edge="1" source="grid" target="uom" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- ADD TO CART -->
+    <mxCell id="add_cart" value="addItem()" style="rounded=1;fillColor=#D1FAE5;strokeColor=#4CAF6E;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="720" y="390" width="160" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_grid_add" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="grid" target="add_cart" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e_scan_add" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="scan" target="add_cart" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e_uom_add" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="uom" target="add_cart" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- CART -->
+    <mxCell id="cart" value="CartScreen&#xa;SCR-SALE-003&#xa;qty ± / delete / VAT" style="rounded=1;fillColor=#FF8F8F;strokeColor=#E06060;fontColor=#FFF;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="720" y="480" width="160" height="65" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_add_cart2" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="add_cart" target="cart" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- HOLD BILL -->
+    <mxCell id="hold" value="HoldBillScreen&#xa;SCR-SALE-005" style="rounded=1;fillColor=#FEF3C7;strokeColor=#F5A623;" vertex="1" parent="1">
+      <mxGeometry x="480" y="500" width="150" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_cart_hold" value="พักบิล" style="edgeStyle=orthogonalEdgeStyle;dashed=1;" edge="1" source="cart" target="hold" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e_hold_cart" value="Recall" style="edgeStyle=orthogonalEdgeStyle;dashed=1;" edge="1" source="hold" target="cart" parent="1">
+      <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="555" y="590"/><mxPoint x="800" y="590"/></Array></mxGeometry>
+    </mxCell>
+
+    <!-- DISCOUNT -->
+    <mxCell id="disc" value="DiscountScreen&#xa;SCR-SALE-004&#xa;% / บาท / Approval" style="rounded=1;fillColor=#FEF3C7;strokeColor=#F5A623;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="960" y="490" width="160" height="65" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_cart_disc" value="ส่วนลด" style="edgeStyle=orthogonalEdgeStyle;dashed=1;" edge="1" source="cart" target="disc" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e_disc_cart" value="Apply" style="edgeStyle=orthogonalEdgeStyle;dashed=1;" edge="1" source="disc" target="cart" parent="1">
+      <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1040" y="590"/><mxPoint x="880" y="590"/></Array></mxGeometry>
+    </mxCell>
+
+    <!-- PAYMENT -->
+    <mxCell id="pay" value="PaymentScreen&#xa;SCR-SALE-006" style="rounded=1;fillColor=#FF8F8F;strokeColor=#E06060;fontColor=#FFF;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="720" y="600" width="160" height="55" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_cart_pay" value="ชำระเงิน" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="cart" target="pay" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- PAYMENT METHODS -->
+    <mxCell id="pm_box" value="ช่องทางชำระ" style="swimlane;startSize=25;fillColor=#FFF8F5;strokeColor=#EAE0D8;" vertex="1" parent="1">
+      <mxGeometry x="480" y="610" width="180" height="160" as="geometry"/>
+    </mxCell>
+    <mxCell id="pm1" value="💵 Cash + ทอน" style="rounded=1;fillColor=#D1FAE5;strokeColor=#4CAF6E;fontSize=10;" vertex="1" parent="1"><mxGeometry x="490" y="640" width="155" height="28" as="geometry"/></mxCell>
+    <mxCell id="pm2" value="📱 QR Code" style="rounded=1;fillColor=#C2E2FA;strokeColor=#7DBFF0;fontSize=10;" vertex="1" parent="1"><mxGeometry x="490" y="673" width="155" height="28" as="geometry"/></mxCell>
+    <mxCell id="pm3" value="💳 Credit Card" style="rounded=1;fillColor=#EDE9FE;strokeColor=#7C3AED;fontSize=10;" vertex="1" parent="1"><mxGeometry x="490" y="706" width="155" height="28" as="geometry"/></mxCell>
+    <mxCell id="pm4" value="🏦 Transfer / E-Wallet / Split" style="rounded=1;fillColor=#FEF3C7;strokeColor=#F5A623;fontSize=10;" vertex="1" parent="1"><mxGeometry x="490" y="739" width="155" height="28" as="geometry"/></mxCell>
+    <mxCell id="e_pay_pm" style="edgeStyle=orthogonalEdgeStyle;dashed=1;" edge="1" source="pay" target="pm_box" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- RECEIPT -->
+    <mxCell id="receipt" value="ReceiptScreen&#xa;SCR-SALE-007&#xa;Print/Share PDF" style="rounded=1;fillColor=#FF8F8F;strokeColor=#E06060;fontColor=#FFF;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="720" y="720" width="160" height="65" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_pay_receipt" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="pay" target="receipt" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- NEW SALE -->
+    <mxCell id="new_sale" value="ขายรายการถัดไป&#xa;clearCart()" style="ellipse;fillColor=#D1FAE5;strokeColor=#4CAF6E;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="730" y="830" width="140" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_receipt_new" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="receipt" target="new_sale" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e_new_pos" style="edgeStyle=orthogonalEdgeStyle;curved=1;" edge="1" source="new_sale" target="pos" parent="1">
+      <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1150" y="855"/><mxPoint x="1150" y="200"/></Array></mxGeometry>
+    </mxCell>
+
+    <!-- CANCEL -->
+    <mxCell id="cancel" value="CancelBillScreen&#xa;เหตุผล + Approval" style="rounded=1;fillColor=#FEE2E2;strokeColor=#EF4444;" vertex="1" parent="1">
+      <mxGeometry x="960" y="620" width="155" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_cart_cancel" value="ยกเลิก" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeColor=#EF4444;" edge="1" source="cart" target="cancel" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- CUSTOMER DISPLAY -->
+    <mxCell id="cdisp" value="CustomerDisplay&#xa;จอที่ 2" style="rounded=1;fillColor=#EDE9FE;strokeColor=#7C3AED;" vertex="1" parent="1">
+      <mxGeometry x="960" y="390" width="155" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_pos_cdisp" value="จอ 2" style="edgeStyle=orthogonalEdgeStyle;dashed=1;" edge="1" source="pos" target="cdisp" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+    <!-- KIOSK FLOW -->
+    <mxCell id="kiosk_setup" value="KioskSetupScreen&#xa;PIN / Layout / Idle" style="rounded=1;fillColor=#FFBDBD;strokeColor=#FF8F8F;" vertex="1" parent="1">
+      <mxGeometry x="200" y="170" width="160" height="55" as="geometry"/>
+    </mxCell>
+    <mxCell id="kiosk_screen" value="KioskPOSSaleScreen&#xa;Compact/Split/FullGrid" style="rounded=1;fillColor=#FF8F8F;strokeColor=#E06060;fontColor=#FFF;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="200" y="270" width="160" height="55" as="geometry"/>
+    </mxCell>
+    <mxCell id="kiosk_exit" value="KioskExitModal&#xa;PIN Pad (กดค้าง 2วิ)" style="rounded=1;fillColor=#FEE2E2;strokeColor=#EF4444;" vertex="1" parent="1">
+      <mxGeometry x="200" y="370" width="160" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_pos_kiosk" value="กด Kiosk" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeColor=#FF8F8F;" edge="1" source="pos" target="kiosk_setup" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e_ksetup_kscreen" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="kiosk_setup" target="kiosk_screen" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e_kscreen_exit" value="ค้าง 2วิ" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="kiosk_screen" target="kiosk_exit" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e_kexit_pos" value="PIN ถูก" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#4CAF6E;" edge="1" source="kiosk_exit" target="pos" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+  </root>
+</mxGraphModel>
