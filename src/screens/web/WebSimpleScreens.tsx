@@ -499,6 +499,18 @@ const SettingBranchScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   // ── Branch expand / POS sub-setting ───────────────────────────────────────
   const [expandedBranch, setExpandedBranch] = useState<string | null>('b1');
 
+  // ── Shift schedule per branch ─────────────────────────────────────────────
+  const DEFAULT_SHIFTS = [
+    { name: 'กะเช้า', startTime: '06:00', endTime: '15:00', enabled: true },
+    { name: 'กะบ่าย', startTime: '15:00', endTime: '22:00', enabled: true },
+    { name: 'กะดึก', startTime: '22:00', endTime: '06:00', enabled: false },
+  ];
+  const [branchShifts, setBranchShifts] = useState<Record<string, typeof DEFAULT_SHIFTS>>({});
+  const [editingShift, setEditingShift] = useState<{ branchId: string; index: number } | null>(null);
+  const [editShiftName, setEditShiftName] = useState('');
+  const [editShiftStart, setEditShiftStart] = useState('');
+  const [editShiftEnd, setEditShiftEnd] = useState('');
+
   // Ad settings per POS
   const [posAdSettingsId, setPosAdSettingsId] = useState<string | null>(null);
 
@@ -666,6 +678,75 @@ const SettingBranchScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                 {/* POS list under branch */}
                 {isBranchExpanded && (
                   <View style={{ backgroundColor: WebColors.gray50, borderRadius: 12, marginHorizontal: 8, marginBottom: 8, overflow: 'hidden' as any }}>
+                    {/* ── ตั้งเวลากะ (per branch) ── */}
+                    <View style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: WebColors.border }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                        <Ionicons name="time-outline" size={14} color={WebColors.primary} />
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: WebColors.text }}>เวลาเปิด-ปิดกะ ({b.name})</Text>
+                      </View>
+                      {(branchShifts[b.id] || DEFAULT_SHIFTS).map((shift, si) => {
+                        const isEditing = editingShift?.branchId === b.id && editingShift?.index === si;
+                        if (isEditing) {
+                          return (
+                            <View key={si} style={{ gap: 6, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: WebColors.border }}>
+                              <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                                <TextInput style={{ flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, fontSize: 12 }} value={editShiftName} onChangeText={setEditShiftName} placeholder="ชื่อกะ" />
+                                {Platform.OS === 'web' ? (
+                                  <>
+                                    <input type="time" value={editShiftStart} onChange={(e: any) => setEditShiftStart(e.target.value)} style={{ width: 90, height: 28, border: '1px solid #ddd', borderRadius: 6, paddingLeft: 6, fontSize: 12 }} />
+                                    <Text style={{ fontSize: 11, color: '#888' }}>ถึง</Text>
+                                    <input type="time" value={editShiftEnd} onChange={(e: any) => setEditShiftEnd(e.target.value)} style={{ width: 90, height: 28, border: '1px solid #ddd', borderRadius: 6, paddingLeft: 6, fontSize: 12 }} />
+                                  </>
+                                ) : (
+                                  <>
+                                    <TextInput style={{ width: 60, borderWidth: 1, borderColor: '#ddd', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 4, fontSize: 12, textAlign: 'center' }} value={editShiftStart} onChangeText={setEditShiftStart} placeholder="HH:MM" />
+                                    <Text style={{ fontSize: 11, color: '#888' }}>ถึง</Text>
+                                    <TextInput style={{ width: 60, borderWidth: 1, borderColor: '#ddd', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 4, fontSize: 12, textAlign: 'center' }} value={editShiftEnd} onChangeText={setEditShiftEnd} placeholder="HH:MM" />
+                                  </>
+                                )}
+                              </View>
+                              <View style={{ flexDirection: 'row', gap: 6 }}>
+                                <TouchableOpacity style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, backgroundColor: WebColors.primary }} onPress={() => {
+                                  const current = branchShifts[b.id] || [...DEFAULT_SHIFTS];
+                                  const updated = current.map((s, i) => i === si ? { ...s, name: editShiftName, startTime: editShiftStart, endTime: editShiftEnd } : s);
+                                  setBranchShifts(prev => ({ ...prev, [b.id]: updated }));
+                                  setEditingShift(null);
+                                }}>
+                                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#fff' }}>บันทึก</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#ddd' }} onPress={() => setEditingShift(null)}>
+                                  <Text style={{ fontSize: 11, color: '#888' }}>ยกเลิก</Text>
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                          );
+                        }
+                        return (
+                          <TouchableOpacity key={si} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 }}
+                            onPress={() => {
+                              setEditingShift({ branchId: b.id, index: si });
+                              setEditShiftName(shift.name);
+                              setEditShiftStart(shift.startTime);
+                              setEditShiftEnd(shift.endTime);
+                            }}
+                            onLongPress={() => {
+                              const current = branchShifts[b.id] || [...DEFAULT_SHIFTS];
+                              const updated = current.map((s, i) => i === si ? { ...s, enabled: !s.enabled } : s);
+                              setBranchShifts(prev => ({ ...prev, [b.id]: updated }));
+                            }}
+                          >
+                            <Ionicons name="time-outline" size={13} color={shift.enabled ? WebColors.success : WebColors.textDisabled} />
+                            <Text style={{ flex: 1, fontSize: 12, color: shift.enabled ? WebColors.text : WebColors.textDisabled }}>{shift.name}: {shift.startTime} — {shift.endTime}</Text>
+                            <TouchableOpacity onPress={(e) => { e.stopPropagation?.(); const current = branchShifts[b.id] || [...DEFAULT_SHIFTS]; const updated = current.map((s, i) => i === si ? { ...s, enabled: !s.enabled } : s); setBranchShifts(prev => ({ ...prev, [b.id]: updated })); }}>
+                              <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, backgroundColor: shift.enabled ? WebColors.successLight : WebColors.gray100 }}>
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: shift.enabled ? WebColors.success : WebColors.textSecondary }}>{shift.enabled ? 'เปิด' : 'ปิด'}</Text>
+                              </View>
+                            </TouchableOpacity>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
                     {/* Add POS button */}
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 10 }}>
                       <Text style={{ fontSize: 13, fontWeight: '700', color: WebColors.textSecondary }}>🖥 จุดขาย ({branchPos.length})</Text>
