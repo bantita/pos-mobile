@@ -2,7 +2,7 @@
  * WebBranchManageScreen — Manage branches (ENTERPRISE) and terminals (RETAIL/ENTERPRISE)
  */
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { WebColors } from '../../constants/webColors';
 import * as branchStore from '../../store/branchStore';
@@ -186,7 +186,115 @@ export const WebBranchManageScreen: React.FC = () => {
       {isEnterprise && !selectedBranchId && branches.length > 0 && (
         <View style={st.empty}><Ionicons name="arrow-up-outline" size={32} color="#ddd" /><Text style={st.emptyText}>เลือกสาขาเพื่อดูจุดขาย</Text></View>
       )}
+
+      {/* ── Shift Schedule Section ── */}
+      <ShiftScheduleSection />
     </ScrollView>
+  );
+};
+
+// ─── Shift Schedule Section ────────────────────────────────────────────────────
+const ShiftScheduleSection: React.FC = () => {
+  const [shifts, setShifts] = useState([
+    { id: '1', name: 'กะเช้า', startTime: '06:00', endTime: '15:00', enabled: true },
+    { id: '2', name: 'กะบ่าย', startTime: '15:00', endTime: '22:00', enabled: true },
+    { id: '3', name: 'กะดึก', startTime: '22:00', endTime: '06:00', enabled: false },
+  ]);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editStart, setEditStart] = useState('');
+  const [editEnd, setEditEnd] = useState('');
+
+  const handleEdit = (shift: typeof shifts[0]) => {
+    setEditing(shift.id);
+    setEditName(shift.name);
+    setEditStart(shift.startTime);
+    setEditEnd(shift.endTime);
+  };
+
+  const handleSave = () => {
+    if (!editing) return;
+    setShifts(s => s.map(sh => sh.id === editing ? { ...sh, name: editName, startTime: editStart, endTime: editEnd } : sh));
+    setEditing(null);
+  };
+
+  const handleToggle = (id: string) => {
+    setShifts(s => s.map(sh => sh.id === id ? { ...sh, enabled: !sh.enabled } : sh));
+  };
+
+  const handleAdd = () => {
+    const newShift = { id: String(Date.now()), name: `กะที่ ${shifts.length + 1}`, startTime: '08:00', endTime: '17:00', enabled: true };
+    setShifts(s => [...s, newShift]);
+    handleEdit(newShift);
+  };
+
+  return (
+    <View style={st.section}>
+      <View style={st.headerRow}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Ionicons name="time-outline" size={18} color={WebColors.primary} />
+          <Text style={st.sectionTitle}>ตั้งเวลาเปิด-ปิดกะ</Text>
+        </View>
+        <TouchableOpacity style={st.addBtn} onPress={handleAdd}>
+          <Ionicons name="add-outline" size={18} color="#fff" />
+          <Text style={st.addText}>เพิ่มกะ</Text>
+        </TouchableOpacity>
+      </View>
+
+      <Text style={{ fontSize: 12, color: '#888', marginBottom: 4 }}>
+        กำหนดช่วงเวลาเปิด-ปิดกะของร้าน เพื่อใช้ในระบบเปิด/ปิดกะอัตโนมัติ
+      </Text>
+
+      {shifts.map(shift => (
+        <View key={shift.id} style={[st.card, { width: '100%', flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
+          {editing === shift.id ? (
+            <View style={{ flex: 1, gap: 8 }}>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TextInput style={[st.input, { flex: 1 }]} value={editName} onChangeText={setEditName} placeholder="ชื่อกะ" placeholderTextColor="#aaa" />
+                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  {Platform.OS === 'web' ? (
+                    <>
+                      <input type="time" value={editStart} onChange={(e: any) => setEditStart(e.target.value)} style={{ flex: 1, height: 36, border: '1px solid #ddd', borderRadius: 8, paddingLeft: 8, paddingRight: 8, fontSize: 13 }} />
+                      <Text style={{ color: '#888' }}>ถึง</Text>
+                      <input type="time" value={editEnd} onChange={(e: any) => setEditEnd(e.target.value)} style={{ flex: 1, height: 36, border: '1px solid #ddd', borderRadius: 8, paddingLeft: 8, paddingRight: 8, fontSize: 13 }} />
+                    </>
+                  ) : (
+                    <>
+                      <TextInput style={[st.input, { flex: 1 }]} value={editStart} onChangeText={setEditStart} placeholder="HH:MM" placeholderTextColor="#aaa" />
+                      <Text style={{ color: '#888' }}>ถึง</Text>
+                      <TextInput style={[st.input, { flex: 1 }]} value={editEnd} onChangeText={setEditEnd} placeholder="HH:MM" placeholderTextColor="#aaa" />
+                    </>
+                  )}
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity style={st.cancelBtn} onPress={() => setEditing(null)}><Text style={st.cancelText}>ยกเลิก</Text></TouchableOpacity>
+                <TouchableOpacity style={st.saveBtn} onPress={handleSave}><Text style={st.saveText}>บันทึก</Text></TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <>
+              <Ionicons name="time-outline" size={20} color={shift.enabled ? WebColors.primary : '#bbb'} />
+              <View style={{ flex: 1 }}>
+                <Text style={[st.itemName, !shift.enabled && { color: '#bbb' }]}>{shift.name}</Text>
+                <Text style={st.itemSub}>{shift.startTime} — {shift.endTime}</Text>
+              </View>
+              <TouchableOpacity onPress={() => handleToggle(shift.id)}>
+                <Text style={[st.statusBadge, shift.enabled ? st.statusGreen : st.statusGray]}>
+                  {shift.enabled ? 'เปิดใช้' : 'ปิดใช้'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => handleEdit(shift)} style={{ paddingHorizontal: 8 }}>
+                <Text style={st.editText}>แก้ไข</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setShifts(s => s.filter(sh => sh.id !== shift.id))} style={{ paddingHorizontal: 8 }}>
+                <Text style={st.deleteText}>ลบ</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      ))}
+    </View>
   );
 };
 

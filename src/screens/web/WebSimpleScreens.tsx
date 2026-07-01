@@ -232,6 +232,16 @@ export const WebUsersScreen: React.FC = () => {
 };
 
 // ─── Audit Log ────────────────────────────────────────────────────────────────
+function detectDeviceFromMeta(): string {
+  if (typeof navigator === 'undefined') return 'Server';
+  const ua = navigator.userAgent || '';
+  if (ua.includes('Chrome') && ua.includes('Windows')) return 'Chrome on Windows';
+  if (ua.includes('Safari') && ua.includes('iPhone')) return 'Mobile Safari on iOS';
+  if (ua.includes('Safari') && ua.includes('Mac')) return 'Safari on macOS';
+  if (ua.includes('Android')) return 'Android Browser';
+  return 'Unknown';
+}
+
 const AUDIT_MOCK = [
   { date: '8/6/2569 10:11', user: 'สมชาย ใจดี', userId: '12.1', action: 'LOGIN', module: 'Authentication', desc: 'เข้าสู่ระบบสำเร็จ', device: 'Chrome on Windows', status: 'สำเร็จ', ok: true },
   { date: '8/6/2569 09:45', user: 'สมชาย ใจดี', userId: '12.1', action: 'SALE_CREATE', module: 'POS', desc: 'สร้างบิลขาย #5001 มูลค่า ฿500.00', device: 'Mobile Safari on iOS', status: 'สำเร็จ', ok: true },
@@ -250,7 +260,7 @@ export const WebAuditLogScreen: React.FC = () => {
 
   // รวม mock + real logs
   const allLogs = [
-    ...logs.map(l => ({ user: l.actor, action: l.action, desc: l.description, time: new Date(l.timestamp).toLocaleString('th-TH'), status: 'สำเร็จ', ok: true, module: l.module })),
+    ...logs.map(l => ({ user: l.actor, userId: l.role || '-', action: l.action, desc: l.description, date: new Date(l.timestamp).toLocaleString('th-TH'), device: l.device || detectDeviceFromMeta(), status: 'สำเร็จ', ok: true, module: l.module })),
     ...AUDIT_MOCK,
   ];
 

@@ -25,6 +25,7 @@ import { usePromoStore } from '../../store/promoStore';
 import { MOCK_PRODUCTS } from '../../data/mockProducts';
 import { PromoConditionTabs, ConditionProduct } from './components/PromoConditionTabs';
 import { PromoRewardSection, DiscountProduct, FreeProduct } from './components/PromoRewardSection';
+import { DatePicker } from '../../components/ui/DatePicker';
 
 // Re-export types for consumers
 export type { ConditionProduct, DiscountProduct, FreeProduct };
@@ -292,24 +293,18 @@ export const StorePromoCreateScreen: React.FC<Props> = ({ onBack, onSave, promoG
 
         <View style={styles.fieldRow}>
           <View style={styles.fieldHalf}>
-            <Text style={styles.fieldLabel}>วันที่เริ่มมีผล *</Text>
-            <TextInput
-              style={styles.input}
-              value={startDate}
-              onChangeText={setStartDate}
-              placeholder="DD/MM/YYYY"
-              placeholderTextColor={Colors.textDisabled}
+            <DatePicker
+              label="วันที่เริ่มมีผล *"
+              value={startDate ? new Date(startDate) : null}
+              onChange={(d) => setStartDate(d ? d.toISOString().slice(0, 10) : '')}
             />
           </View>
           <View style={styles.fieldHalf}>
-            <Text style={styles.fieldLabel}>วันที่สิ้นสุด</Text>
-            <TextInput
-              style={styles.input}
-              value={endDate}
-              onChangeText={setEndDate}
-              placeholder="DD/MM/YYYY"
-              placeholderTextColor={Colors.textDisabled}
-              editable={!noEndDate}
+            <DatePicker
+              label="วันที่สิ้นสุด"
+              value={endDate ? new Date(endDate) : null}
+              onChange={(d) => setEndDate(d ? d.toISOString().slice(0, 10) : '')}
+              disabled={noEndDate}
             />
           </View>
         </View>

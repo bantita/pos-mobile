@@ -22,6 +22,7 @@ import { MOCK_PRODUCTS } from '../../data/mockProducts';
 import { Colors } from '../../constants/colors';
 import { Typography, FontSize } from '../../constants/typography';
 import { Spacing, BorderRadius } from '../../constants/spacing';
+import { DatePicker } from '../../components/ui/DatePicker';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 interface Props {
@@ -188,29 +189,23 @@ export const QuantityPromoCreateScreen: React.FC<Props> = ({ onBack }) => {
 
           {/* วันที่เริ่ม */}
           <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>วันที่เริ่มโปรโมชั่น *</Text>
-            <TextInput
-              style={[styles.input, errors['startDate'] ? styles.inputError : undefined]}
-              placeholder="dd/mm/yyyy"
-              placeholderTextColor={Colors.gray400}
-              value={startDate}
-              onChangeText={setStartDate}
+            <DatePicker
+              label="วันที่เริ่มโปรโมชั่น *"
+              value={startDate ? new Date(startDate) : null}
+              onChange={(d) => setStartDate(d ? d.toISOString().slice(0, 10) : '')}
+              error={errors['startDate']}
             />
-            {errors['startDate'] && <Text style={styles.errorText}>{errors['startDate']}</Text>}
           </View>
 
           {/* วันที่สิ้นสุด */}
           <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>วันที่สิ้นสุดโปรโมชั่น *</Text>
-            <TextInput
-              style={[styles.input, noEndDate ? styles.inputDisabled : undefined, errors['endDate'] ? styles.inputError : undefined]}
-              placeholder="dd/mm/yyyy"
-              placeholderTextColor={Colors.gray400}
-              value={endDate}
-              onChangeText={setEndDate}
-              editable={!noEndDate}
+            <DatePicker
+              label="วันที่สิ้นสุดโปรโมชั่น *"
+              value={endDate ? new Date(endDate) : null}
+              onChange={(d) => setEndDate(d ? d.toISOString().slice(0, 10) : '')}
+              disabled={noEndDate}
+              error={errors['endDate']}
             />
-            {errors['endDate'] && <Text style={styles.errorText}>{errors['endDate']}</Text>}
           </View>
 
           {/* Checkbox: ไม่กำหนดวันสิ้นสุด */}

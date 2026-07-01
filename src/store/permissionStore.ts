@@ -25,7 +25,6 @@ export type Module =
   | 'reports'
   | 'crm'
   | 'promotion'
-  | 'supplier'
   | 'settings'
   | 'users'
   | 'roles'
@@ -70,7 +69,7 @@ export interface AuditEntry {
 const ALL_ACTIONS: Action[] = ['view', 'add', 'edit', 'delete', 'approve', 'export'];
 const ALL_MODULES: Module[] = [
   'sale', 'product', 'inventory', 'reports', 'crm', 'promotion',
-  'supplier', 'settings', 'users', 'roles', 'audit_log', 'sync',
+  'settings', 'users', 'roles', 'audit_log', 'sync',
 ];
 
 const DEFAULT_ROLE_PERMISSIONS: RolePermission[] = [

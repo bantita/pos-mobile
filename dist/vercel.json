@@ -1,1 +1,8 @@
-{"routes":[{"handle":"filesystem"},{"src":"/(.*)","dest":"/index.html"}]}
+{
+  "rewrites": [
+    { "source": "/fonts/(.*)", "destination": "/fonts/$1" },
+    { "source": "/assets/(.*)", "destination": "/assets/$1" },
+    { "source": "/font-fix.css", "destination": "/font-fix.css" },
+    { "source": "/((?!fonts|assets|_expo|font-fix\\.css).*)", "destination": "/index.html" }
+  ]
+}

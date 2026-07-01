@@ -13,6 +13,7 @@ import { usePromoStore } from '../../store/promoStore';
 import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
 import { Spacing, BorderRadius } from '../../constants/spacing';
+import { DatePicker } from '../../components/ui/DatePicker';
 
 interface Props {
   onBack: () => void;
@@ -102,12 +103,18 @@ export const PercentDiscountScreen: React.FC<Props> = ({ onBack }) => {
 
         <View style={styles.row}>
           <View style={[styles.field, { flex: 1 }]}>
-            <Text style={styles.label}>วันเริ่มต้น *</Text>
-            <TextInput style={styles.input} value={startDate} onChangeText={setStartDate} placeholder="2026-01-01" placeholderTextColor={Colors.gray400} />
+            <DatePicker
+              label="วันเริ่มต้น *"
+              value={startDate ? new Date(startDate) : null}
+              onChange={(d) => setStartDate(d ? d.toISOString().slice(0, 10) : '')}
+            />
           </View>
           <View style={[styles.field, { flex: 1 }]}>
-            <Text style={styles.label}>วันสิ้นสุด *</Text>
-            <TextInput style={styles.input} value={endDate} onChangeText={setEndDate} placeholder="2026-12-31" placeholderTextColor={Colors.gray400} />
+            <DatePicker
+              label="วันสิ้นสุด *"
+              value={endDate ? new Date(endDate) : null}
+              onChange={(d) => setEndDate(d ? d.toISOString().slice(0, 10) : '')}
+            />
           </View>
         </View>
 

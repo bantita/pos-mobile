@@ -20,6 +20,8 @@ export interface AuditEntry {
   action: string;
   /** รายละเอียด */
   description: string;
+  /** อุปกรณ์ที่ใช้ */
+  device: string;
   /** ข้อมูลเพิ่มเติม */
   metadata?: Record<string, any>;
 }
@@ -66,6 +68,20 @@ export const useAuditLogStore = create<AuditLogState>()(
 );
 
 // ─── Helper: log action (ใช้เรียกจากทุกที่) ─────────────────────────────────
+function detectDevice(): string {
+  if (typeof navigator === 'undefined') return 'Server';
+  const ua = navigator.userAgent || '';
+  if (ua.includes('Chrome') && ua.includes('Windows')) return 'Chrome on Windows';
+  if (ua.includes('Chrome') && ua.includes('Mac')) return 'Chrome on macOS';
+  if (ua.includes('Safari') && ua.includes('iPhone')) return 'Mobile Safari on iOS';
+  if (ua.includes('Safari') && ua.includes('iPad')) return 'Safari on iPad';
+  if (ua.includes('Safari') && ua.includes('Mac')) return 'Safari on macOS';
+  if (ua.includes('Firefox')) return 'Firefox';
+  if (ua.includes('Android')) return 'Android Browser';
+  if (ua.includes('Edge')) return 'Edge on Windows';
+  return ua.slice(0, 40) || 'Unknown';
+}
+
 export function logAction(module: string, action: string, description: string, metadata?: Record<string, any>) {
   // ดึง user ปัจจุบัน
   let actor = 'ระบบ';
@@ -78,5 +94,5 @@ export function logAction(module: string, action: string, description: string, m
     }
   } catch (e) {}
 
-  useAuditLogStore.getState().addLog({ actor, role, module, action, description, metadata });
+  useAuditLogStore.getState().addLog({ actor, role, module, action, description, device: detectDevice(), metadata });
 }

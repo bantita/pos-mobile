@@ -7,7 +7,11 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "web:build": "expo export --platform web"
+    "web:build": "expo export --platform web",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
     "@expo/metro-runtime": "~5.0.5",
@@ -42,6 +46,9 @@
     "@types/react": "~18.2.79",
     "babel-plugin-module-resolver": "^5.0.3",
     "tsx": "^4.22.4",
-    "typescript": "~5.3.3"
+    "typescript": "~5.3.3",
+    "vitest": "^2.0.5",
+    "@vitest/coverage-v8": "^2.0.5",
+    "happy-dom": "^15.7.3"
   }
 }

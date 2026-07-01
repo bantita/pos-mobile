@@ -477,8 +477,22 @@ const StaffFormView: React.FC<StaffFormProps> = ({ employee, onSave, onBack }) =
         <View style={fs.row}>
           <FormField label="ตำแหน่ง" value={position} onChange={setPosition} flex={1} />
           <FormField label="แผนก" value={department} onChange={setDepartment} flex={1} />
-          <FormField label="วันที่เริ่มงาน" value={startDate} onChange={setStartDate} placeholder="YYYY-MM-DD" flex={1} />
-          <FormField label="วันที่สิ้นสุด" value={endDate} onChange={setEndDate} placeholder="—" flex={1} />
+          <View style={[fs.fieldWrap, { flex: 1 }]}>
+            <Text style={fs.label}>วันที่เริ่มงาน</Text>
+            {Platform.OS === 'web' ? (
+              <input type="date" value={startDate} onChange={(e: any) => setStartDate(e.target.value)} style={{ height: 36, border: '1px solid #E5E7EB', borderRadius: 8, paddingLeft: 10, paddingRight: 10, fontSize: 13, color: '#1F2937', width: '100%' }} />
+            ) : (
+              <TextInput style={fs.input} value={startDate} onChangeText={setStartDate} placeholder="YYYY-MM-DD" placeholderTextColor={WebColors.textDisabled} />
+            )}
+          </View>
+          <View style={[fs.fieldWrap, { flex: 1 }]}>
+            <Text style={fs.label}>วันที่สิ้นสุด</Text>
+            {Platform.OS === 'web' ? (
+              <input type="date" value={endDate} onChange={(e: any) => setEndDate(e.target.value)} style={{ height: 36, border: '1px solid #E5E7EB', borderRadius: 8, paddingLeft: 10, paddingRight: 10, fontSize: 13, color: '#1F2937', width: '100%' }} />
+            ) : (
+              <TextInput style={fs.input} value={endDate} onChangeText={setEndDate} placeholder="—" placeholderTextColor={WebColors.textDisabled} />
+            )}
+          </View>
         </View>
         <View style={fs.fieldWrap}>
           <Text style={fs.label}>ประเภทสัญญา</Text>

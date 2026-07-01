@@ -643,8 +643,8 @@ export const WebReportsScreen: React.FC<Props> = ({ onNavigate, initialView }) =
   }, [initialView]);
 
   // Filter
-  const [filterDate,   setFilterDate]   = useState('10/06/2569');
-  const [filterDateTo, setFilterDateTo] = useState('10/06/2569');
+  const [filterDate,   setFilterDate]   = useState('2026-06-10');
+  const [filterDateTo, setFilterDateTo] = useState('2026-06-10');
   const [filterBranch, setFilterBranch] = useState<string[]>([]);
   const [filterPOS,    setFilterPOS]    = useState<string[]>([]);
   // legacy — kept for compat but not displayed
@@ -745,17 +745,25 @@ export const WebReportsScreen: React.FC<Props> = ({ onNavigate, initialView }) =
         {/* ── Filter bar ── */}
         <View style={rpt.filterBar}>
           <View style={rpt.filterRow}>
-            {/* วันที่ — ใช้ native date picker */}
+            {/* วันที่ — native date picker */}
             <View style={rpt.filterField}>
               <Text style={rpt.filterLabel}>วันที่</Text>
               <View style={rpt.filterInputWrap}>
                 <Ionicons name="calendar-outline" size={13} color={WebColors.textSecondary} />
-                <TextInput
-                  style={rpt.filterInputText}
-                  value={filterDate} onChangeText={setFilterDate}
-                  placeholder="วว/ดด/ปปปป" placeholderTextColor={WebColors.textDisabled}
-                  {...(Platform.OS === 'web' ? { type: 'date' } as any : {})}
-                 {...(Platform.OS === "web" ? { type: "date" } as any : {})} />
+                {Platform.OS === 'web' ? (
+                  <input
+                    type="date"
+                    value={filterDate}
+                    onChange={(e: any) => setFilterDate(e.target.value)}
+                    style={{ flex: 1, border: 'none', outline: 'none', fontSize: 13, fontFamily: 'inherit', color: '#1F2937', backgroundColor: 'transparent', height: 28 }}
+                  />
+                ) : (
+                  <TextInput
+                    style={rpt.filterInputText}
+                    value={filterDate} onChangeText={setFilterDate}
+                    placeholder="วว/ดด/ปปปป" placeholderTextColor={WebColors.textDisabled}
+                  />
+                )}
               </View>
             </View>
             {/* ถึง */}
@@ -763,12 +771,20 @@ export const WebReportsScreen: React.FC<Props> = ({ onNavigate, initialView }) =
               <Text style={rpt.filterLabel}>ถึง</Text>
               <View style={rpt.filterInputWrap}>
                 <Ionicons name="calendar-outline" size={13} color={WebColors.textSecondary} />
-                <TextInput
-                  style={rpt.filterInputText}
-                  value={filterDateTo} onChangeText={setFilterDateTo}
-                  placeholder="วว/ดด/ปปปป" placeholderTextColor={WebColors.textDisabled}
-                  {...(Platform.OS === 'web' ? { type: 'date' } as any : {})}
-                 {...(Platform.OS === "web" ? { type: "date" } as any : {})} />
+                {Platform.OS === 'web' ? (
+                  <input
+                    type="date"
+                    value={filterDateTo}
+                    onChange={(e: any) => setFilterDateTo(e.target.value)}
+                    style={{ flex: 1, border: 'none', outline: 'none', fontSize: 13, fontFamily: 'inherit', color: '#1F2937', backgroundColor: 'transparent', height: 28 }}
+                  />
+                ) : (
+                  <TextInput
+                    style={rpt.filterInputText}
+                    value={filterDateTo} onChangeText={setFilterDateTo}
+                    placeholder="วว/ดด/ปปปป" placeholderTextColor={WebColors.textDisabled}
+                  />
+                )}
               </View>
             </View>
             {/* สาขา — LookupCheckbox */}

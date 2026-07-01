@@ -23,8 +23,7 @@ export type InvStackParamList = {
   DocList:        { docType: DocType };
   DocForm:        { docType: DocType; editDocId?: string };
   DocDetail:      { docId: string };
-  // Other M05 screens (placeholders)
-  TransferStock:  undefined;
+
   StockCount:     undefined;
   AdjustStock:    undefined;
   StockInquiry:   undefined;
@@ -54,11 +53,7 @@ const InventoryHubScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       badge: documents.filter(d => d.docType === 'issue' && d.status === 'draft').length,
       onPress: () => navigation.navigate('DocList', { docType: 'issue' }),
     },
-    {
-      icon: 'swap-horizontal-outline', label: 'โอนสินค้า', sub: 'Transfer',
-      color: Colors.primary, bgColor: Colors.primaryLight,
-      badge: 0, onPress: () => navigation.navigate('TransferStock'),
-    },
+
     {
       icon: 'scan-outline', label: 'นับสต๊อก', sub: 'Count',
       color: Colors.warning, bgColor: Colors.warningLight,
@@ -257,9 +252,7 @@ export const InventoryNavigator: React.FC = () => {
         }}
       </Stack.Screen>
 
-      <Stack.Screen name="TransferStock">
-        {({ navigation }) => <PlaceholderScreen title="โอนสินค้า" icon="swap-horizontal-outline" color={Colors.primary} onBack={() => navigation.goBack()} />}
-      </Stack.Screen>
+
       <Stack.Screen name="StockCount">
         {({ navigation }) => <PlaceholderScreen title="นับสต๊อก" icon="scan-outline" color={Colors.warning} onBack={() => navigation.goBack()} />}
       </Stack.Screen>

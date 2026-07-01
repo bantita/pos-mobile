@@ -88,7 +88,6 @@ const ROUTE_TO_SCREEN: Record<string, string> = {
   crm: 'crm_members',
   promotions: 'promotions',
   communication: 'crm_communication',
-  purchase: 'inventory',
   team: 'team',
   users: 'team',
   auditlog: 'auditlog',
