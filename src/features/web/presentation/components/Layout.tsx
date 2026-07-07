@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
-import { Platform, ScrollView, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { Sidebar } from '@/features/web/presentation/components/Sidebar';
 import { TopBar } from '@/features/web/presentation/components/TopBar';
+import React, { useEffect, useState } from 'react';
+import { Platform, ScrollView, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 
-// เส้นทางที่ไม่มี padding (ใช้พื้นที่เต็ม — report routes ต้องการ flex:1 เต็มจอ)
-const NO_PADDING_ROUTES = ['pos', 'reports'];
+// เส้นทางที่ไม่มี padding (ใช้พื้นที่เต็ม — มี layout/scroll ของตัวเอง)
+const NO_PADDING_ROUTES = ['pos', 'reports', 'crm', 'auditlog'];
 const MAX_CONTENT_WIDTH = 1680;
 // เส้นทางแบบ Kiosk (ซ่อน sidebar + topbar)
 const KIOSK_ROUTES = ['pos'];
@@ -26,7 +26,7 @@ export const Layout: React.FC<Props> = ({ activeRoute, onNavigate, pageName, chi
   const { width } = useWindowDimensions();
   const shouldExpandSidebar = width >= 1280;
   const [expanded, setExpanded] = useState(shouldExpandSidebar);
-  // report routes ต้องการ flex:1 เต็มจอ (มี sidebar ของตัวเอง)
+  // routes ที่จัดการ layout เอง (มี sidebar หรือ scroll ของตัวเอง)
   const isReportRoute = activeRoute === 'reports' || activeRoute.startsWith('report_');
   const noPadding  = NO_PADDING_ROUTES.includes(activeRoute) || isReportRoute;
   const isKiosk    = KIOSK_ROUTES.includes(activeRoute);
