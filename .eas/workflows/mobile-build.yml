@@ -1,0 +1,63 @@
+name: Verify and build mobile apps
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        type: choice
+        description: EAS build profile
+        required: true
+        default: preview
+        options:
+          - preview
+          - production
+  push:
+    branches:
+      - main
+    paths:
+      - app.json
+      - eas.json
+      - package.json
+      - package-lock.json
+      - src/**
+      - assets/**
+
+concurrency:
+  cancel_in_progress: true
+  group: ${{ workflow.filename }}-${{ github.ref }}
+
+defaults:
+  tools:
+    node: 22.13.1
+
+jobs:
+  verify:
+    name: Verify JS, types, lint, Expo config
+    runs_on: linux-medium
+    steps:
+      - uses: eas/checkout
+      - uses: eas/install_node_modules
+      - name: Run project verification
+        run: npm run verify
+      - name: Compile web bundle
+        run: npm run export:web
+
+  build_android:
+    name: Build Android
+    needs:
+      - verify
+    type: build
+    runs_on: linux-medium
+    params:
+      platform: android
+      profile: ${{ inputs.profile || 'preview' }}
+
+  build_ios:
+    name: Build iOS
+    needs:
+      - verify
+    type: build
+    runs_on: macos-medium
+    params:
+      platform: ios
+      profile: ${{ inputs.profile || 'preview' }}

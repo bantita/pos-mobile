@@ -1,56 +1,111 @@
 {
   "expo": {
-    "name": "POS Mobile",
-    "slug": "pos-mobile",
+    "name": "xclnc-pos",
+    "slug": "xclnc-pos",
     "version": "1.0.0",
     "orientation": "default",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#000000"
-    },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "icon": "./assets/app-icon.png",
+    "scheme": "xclncpos",
+    "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.posapp.mobile"
+      "bundleIdentifier": "com.xclnc.pos",
+      "icon": "./assets/app-icon.png"
     },
     "android": {
+      "package": "com.xclnc.pos",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#000000"
+        "backgroundColor": "#f8fafc",
+        "foregroundImage": "./assets/adaptive-foreground.png"
       },
-      "package": "com.posapp.mobile",
-      "versionCode": 1,
-      "permissions": []
+      "predictiveBackGestureEnabled": false
     },
     "web": {
       "bundler": "metro",
-      "output": "single",
-      "name": "POS Mobile",
-      "shortName": "POS",
-      "themeColor": "#FF343D",
-      "backgroundColor": "#FFF8F8"
+      "output": "static",
+      "favicon": "./assets/favicon-square.png"
     },
-    "scheme": "pos-mobile",
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "headers": {
+            "Cross-Origin-Embedder-Policy": "credentialless",
+            "Cross-Origin-Opener-Policy": "same-origin"
+          }
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#f8fafc",
+          "image": "./assets/splash.png",
+          "imageWidth": 160
+        }
+      ],
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/Sarabun-Regular.ttf",
+            "./assets/fonts/Sarabun-Medium.ttf",
+            "./assets/fonts/Sarabun-SemiBold.ttf",
+            "./assets/fonts/Sarabun-Bold.ttf",
+            "./assets/fonts/Sarabun-ExtraBold.ttf"
+          ],
+          "android": {
+            "fonts": [
+              {
+                "fontFamily": "Sarabun",
+                "fontDefinitions": [
+                  {
+                    "path": "./assets/fonts/Sarabun-Regular.ttf",
+                    "weight": 400
+                  },
+                  {
+                    "path": "./assets/fonts/Sarabun-Medium.ttf",
+                    "weight": 500
+                  },
+                  {
+                    "path": "./assets/fonts/Sarabun-SemiBold.ttf",
+                    "weight": 600
+                  },
+                  {
+                    "path": "./assets/fonts/Sarabun-Bold.ttf",
+                    "weight": 700
+                  },
+                  {
+                    "path": "./assets/fonts/Sarabun-ExtraBold.ttf",
+                    "weight": 800
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "expo-sqlite",
+      "expo-sharing"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
     "extra": {
-      "eas": {
-        "projectId": "86439bc5-a32c-431b-9906-3a3ceabd3461"
+      "router": {
+        "headers": {
+          "Cross-Origin-Embedder-Policy": "credentialless",
+          "Cross-Origin-Opener-Policy": "same-origin"
+        }
       },
-      "API_BASE_URL": "${process.env.API_BASE_URL || 'http://localhost:3000/api/v1'}",
-      "PAYMENT_API_URL": "${process.env.PAYMENT_API_URL || 'http://localhost:3000/api/v1/payment'}",
-      "PAYMENT_MERCHANT_ID": "${process.env.PAYMENT_MERCHANT_ID || 'MERCHANT_DEV_001'}",
-      "PROMPTPAY_ID": "${process.env.PROMPTPAY_ID || '0812345678'}",
-      "LINE_CHANNEL_ACCESS_TOKEN": "${process.env.LINE_CHANNEL_ACCESS_TOKEN || ''}",
-      "LINE_CHANNEL_SECRET": "${process.env.LINE_CHANNEL_SECRET || ''}",
-      "LINE_LIFF_ID": "${process.env.LINE_LIFF_ID || ''}",
-      "APP_ENV": "${process.env.APP_ENV || 'development'}",
-      "ENABLE_MOCK": "${process.env.ENABLE_MOCK || 'true'}",
-      "LOG_LEVEL": "${process.env.LOG_LEVEL || 'debug'}"
+      "eas": {
+        "projectId": "092e3024-fe9b-4fba-a3a5-81a975e35cac"
+      }
     },
-    "owner": "acare26"
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/092e3024-fe9b-4fba-a3a5-81a975e35cac"
+    }
   }
 }

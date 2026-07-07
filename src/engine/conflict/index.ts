@@ -1,1 +1,0 @@
-export { resolveConflicts } from './resolver';

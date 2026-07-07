@@ -1,85 +1,92 @@
-# POS Mobile — React Native
+# XCLNC POS
 
-ระบบ POS on Mobile พัฒนาด้วย React Native + Expo
+Universal point-of-sale application for web, Android, and iOS. The main repository is modernized on Expo SDK 57 with Feature-Driven Clean Architecture, NativeWind, Tailwind CSS, and Lucide icons.
 
-## โครงสร้างโปรเจกต์
+## Stack
 
-```
-pos-mobile/
-├── App.tsx                          # Entry point + Root Navigator
-├── app.json                         # Expo config
-├── package.json
-├── src/
-│   ├── constants/
-│   │   ├── colors.ts                # Design tokens — สี
-│   │   ├── typography.ts            # Design tokens — ตัวอักษร
-│   │   └── spacing.ts               # Design tokens — ระยะห่าง, border radius
-│   ├── components/
-│   │   └── ui/
-│   │       ├── Button.tsx           # Reusable Button component
-│   │       ├── Input.tsx            # Reusable Input component
-│   │       ├── Card.tsx             # Reusable Card component
-│   │       └── index.ts
-│   ├── navigation/
-│   │   └── AuthNavigator.tsx        # M01 Auth stack navigator
-│   └── screens/
-│       └── auth/
-│           ├── WelcomeScreen.tsx    # SCR-AUTH-001
-│           ├── LoginScreen.tsx      # SCR-AUTH-002
-│           ├── OTPLoginScreen.tsx   # SCR-AUTH-003
-│           ├── ForgotPasswordScreen.tsx  # SCR-AUTH-004
-│           └── RegisterShopScreen.tsx    # SCR-AUTH-005
-```
+- Expo SDK 57, React Native 0.86, React 19, and Expo Router
+- NativeWind 4, Tailwind CSS 3, and `react-native-css-interop`
+- Zustand stores with AsyncStorage persistence
+- Zod, React Hook Form, Axios, and date-fns
+- Lucide React Native icons
 
-## Screens ที่สร้างแล้ว
+## Requirements
 
-### M01 — Authentication (Phase 1) ✅
-| Screen ID | หน้าจอ | สถานะ |
-|---|---|---|
-| SCR-AUTH-001 | Welcome Screen | ✅ Done |
-| SCR-AUTH-002 | Login Screen | ✅ Done |
-| SCR-AUTH-003 | OTP Login Screen | ✅ Done |
-| SCR-AUTH-004 | Forgot Password Screen | ✅ Done |
-| SCR-AUTH-005 | Register Shop Screen | ✅ Done |
+- Node.js 22.13 or newer, as required by Expo SDK 57
+- npm
+- Android Studio or Xcode only when running a native simulator
 
-### M02 — Dashboard (Phase 1) ✅
-| Screen ID | หน้าจอ | สถานะ |
-|---|---|---|
-| SCR-DASH-001 | Dashboard หลัก (KPI Cards + Top Products + Low Stock) | ✅ Done |
-| SCR-DASH-002 | Dashboard Cashier (Shift Status + Start Sale) | ✅ Done |
-| SCR-DASH-003 | Sync Status (Queue list + Retry) | ✅ Done |
-| Screen ID | หน้าจอ | สถานะ |
-|---|---|---|
-| SCR-SALE-001 | หน้าขายสินค้า (Product Grid + Search + Category) | ✅ Done |
-| SCR-SALE-002 | หน้าสแกน Barcode (Camera + Manual Input) | ✅ Done |
-| SCR-SALE-003 | หน้าตะกร้าสินค้า (Qty +/- + Summary) | ✅ Done |
-| SCR-SALE-004 | หน้าส่วนลด (% / บาท + Quick select + Approval) | ✅ Done |
-| SCR-SALE-005 | หน้าพักบิล/เรียกบิล (Hold + Recall + Delete) | ✅ Done |
-| SCR-SALE-006 | หน้าชำระเงิน (Cash/Credit/QR/Transfer/E-Wallet + Split) | ✅ Done |
-| SCR-SALE-007 | หน้าใบเสร็จ (Print + Reprint + Audit Log) | ✅ Done |
-
-## วิธีติดตั้งและรัน
+## Quick Start
 
 ```bash
-cd pos-mobile
 npm install
-npx expo start
+npm start
 ```
 
-## Dependencies หลัก
-- **expo ~51.0.0** — Managed workflow
-- **expo-router ~3.5.0** — File-based routing
-- **@react-navigation** — Stack & Tab navigation
-- **zustand** — State management
-- **react-hook-form + zod** — Form validation
-- **expo-sqlite** — Local database (Offline First)
-- **expo-camera** — Barcode scanning
+Use `w` for web, `a` for Android, or `i` for iOS from the Expo CLI. Direct commands are also available:
 
-### M04 — Product Management (Phase 1) ✅
-| Screen ID | หน้าจอ | สถานะ |
-|---|---|---|
-| SCR-PROD-001 | รายการสินค้า (Search + Filter Category + Status) | ✅ Done |
-| SCR-PROD-002 | เพิ่มสินค้า (Form + Margin Preview + VAT toggle) | ✅ Done |
-| SCR-PROD-003 | แก้ไขสินค้า (รวมกับ SCR-PROD-002 + Audit Log ราคา) | ✅ Done |
-| SCR-PROD-004 | Import/Export Excel (Preview table + Error rows + Progress) | ✅ Done |
-| SCR-PROD-005 | จัดการหมวด/Brand (Tab switcher + CRUD + FAB) | ✅ Done |
+```bash
+npm run web
+npm run android
+npm run ios
+```
+
+Demo accounts are `admin`, `manager`, and `cashier`. Their development password is `1234`.
+
+## Quality Checks
+
+```bash
+npm run verify
+npx expo export --platform web
+```
+
+`npm run verify` runs the promotion engine tests, TypeScript, ESLint, and Expo Doctor. The engine suite currently covers 39 promotion, discount, point, conflict, and audit assertions.
+
+## Architecture
+
+```text
+src/
+  app/            Expo Router entry and root layout
+  features/       Feature modules split by domain/application/data/presentation
+  shared/         Cross-feature UI, hooks, constants, infrastructure, icons, and utilities
+  core/           Shared business engines such as POS promotion and point calculation
+  assets/         Source-level assets used by Expo imports
+```
+
+The Expo Router root owns platform initialization. Each feature keeps its own presentation screens/navigation, application stores, data APIs/mocks, and domain types. Business engines that cut across features live in `src/core`.
+
+## Styling
+
+Tailwind CSS is configured in `src/global.css`, and NativeWind-enabled primitives are imported from `@/shared/tw`. Use `className` for static layout and design tokens. Keep `style` only for runtime-computed values such as animation, measured dimensions, or colors supplied through props.
+
+```tsx
+import { Text, View } from '@/shared/tw';
+
+export function Summary() {
+  return (
+    <View className="rounded-lg border border-pos-border bg-pos-surface p-4">
+      <Text className="font-semibold text-pos-text">ยอดขายวันนี้</Text>
+    </View>
+  );
+}
+```
+
+## Migration Status
+
+- Source code is organized under feature-driven clean architecture boundaries.
+- NativeWind/Tailwind v4 runtime setup is complete.
+- Legacy vector-icon imports are removed; icons render through Lucide.
+- Shared design-system components are migrated to NativeWind.
+- Screen-level lint cleanup remains in progress and is tracked in `Plan.md`.
+
+See [Plan.md](./Plan.md) for the current architecture migration status and verification notes.
+
+## Documentation
+
+- [Expo SDK 57 reference](https://docs.expo.dev/versions/v57.0.0/)
+- [Architecture documentation](./docs)
+- [Migration plan](./Plan.md)
+
+## License
+
+MIT. See [LICENSE](./LICENSE).
