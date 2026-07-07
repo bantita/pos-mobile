@@ -129,7 +129,7 @@ export const MemberPromoListScreen: React.FC<Props> = ({ onBack, onSelectPromo }
 
       <FlatList
         data={promotions}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item: MemberPromotion) => item.id}
         renderItem={renderPromoItem}
         contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 20, gap: 10 }}
         showsVerticalScrollIndicator={false}

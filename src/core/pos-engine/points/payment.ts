@@ -27,13 +27,14 @@ export function processPointPayment(
   const now = new Date(currentDateTime);
   const validBalances = balances.filter(b => !b.expiryDate || new Date(b.expiryDate) > now);
 
-  // Calculate available by priority
+  // Calculate available by priority (deduplicate types)
   let totalAvailable = 0;
-  const priorityOrder = policy.priorityOrder.length > 0 ? policy.priorityOrder : validBalances.map(b => b.pointType);
+  const rawOrder = policy.priorityOrder.length > 0 ? policy.priorityOrder : validBalances.map(b => b.pointType);
+  const priorityOrder = [...new Set(rawOrder)];
 
   for (const type of priorityOrder) {
-    const bal = validBalances.find(b => b.pointType === type);
-    if (bal) totalAvailable += bal.balance;
+    const typeBalances = validBalances.filter(b => b.pointType === type);
+    totalAvailable += typeBalances.reduce((sum, b) => sum + b.balance, 0);
   }
 
   pointsToUse = Math.min(pointsToUse, totalAvailable);

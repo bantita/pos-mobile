@@ -135,7 +135,7 @@ export const BundleProductPromoListScreen: React.FC<Props> = ({ onBack, onCreate
 
       <FlatList
         data={filtered}
-        keyExtractor={(p) => p.id}
+        keyExtractor={(p: BundlePromotion) => p.id}
         renderItem={renderPromo}
         contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 100, gap: 12 }}
         showsVerticalScrollIndicator={false}

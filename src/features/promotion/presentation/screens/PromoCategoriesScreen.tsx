@@ -122,7 +122,7 @@ export const PromoCategoriesScreen: React.FC<Props> = ({ onNavigate }) => {
 
       <FlatList
         data={PROMO_CATEGORIES}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item: { id: string; key: string; label: string; icon: string; route: string }) => item.id}
         renderItem={renderCategory}
         contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 20, gap: 10 }}
         showsVerticalScrollIndicator={false}

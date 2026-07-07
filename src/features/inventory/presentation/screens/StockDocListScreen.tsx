@@ -263,7 +263,7 @@ export const StockDocListScreen: React.FC<Props> = ({ docType, onCreateNew, onOp
 
       <FlatList
         data={filtered}
-        keyExtractor={(d) => d.id}
+        keyExtractor={(d: StockDocument) => d.id}
         renderItem={renderDoc}
         contentContainerClassName={cn('px-3 pb-5 gap-3')}
         showsVerticalScrollIndicator={false}

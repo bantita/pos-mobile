@@ -119,7 +119,7 @@ export const QuantityPromoListScreen: React.FC<Props> = ({ onBack, onCreateNew }
 
       <FlatList
         data={filtered}
-        keyExtractor={(p) => p.id}
+        keyExtractor={(p: QuantityPromotion) => p.id}
         renderItem={renderItem}
         contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 20, gap: 10 }}
         showsVerticalScrollIndicator={false}

@@ -136,7 +136,7 @@ export const GroupProductPromoListScreen: React.FC<Props> = ({ onBack, onCreateN
 
       <FlatList
         data={filtered}
-        keyExtractor={(p) => p.id}
+        keyExtractor={(p: ProductGroupPromotion) => p.id}
         renderItem={renderRow}
         contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 40, gap: 10 }}
         showsVerticalScrollIndicator={false}

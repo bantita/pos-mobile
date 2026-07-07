@@ -71,7 +71,11 @@ export function calculate(request: CalculationRequest): CalculationResult {
 
   for (const promo of resolvedPromos) {
     const matchedEval = evaluated.find(e => e.config.promotionId === promo.promotionId);
-    const eligibleItems = matchedEval?.conditionResult.matchedItems || request.cartItems;
+    let eligibleItems = matchedEval?.conditionResult.matchedItems || request.cartItems;
+    if (matchedEval?.conditionResult.excludedItems?.length) {
+      const excludedIds = new Set(matchedEval.conditionResult.excludedItems.map(i => i.lineId));
+      eligibleItems = eligibleItems.filter(i => !excludedIds.has(i.lineId));
+    }
     
     const result = applyAllBenefits(promo.benefits, eligibleItems, request.subtotal, benefitRegistry);
     
@@ -93,8 +97,10 @@ export function calculate(request: CalculationRequest): CalculationResult {
     audit.add(promo.promotionId, 'APPLIED', `Benefit applied: value ${result.totalBenefitValue}`);
   }
 
-  // Step 6: Calculate eligible subtotal
-  const subtotalAfterPromo = Math.max(0, request.subtotal - combinedBenefit.totalBenefitValue);
+  // Step 6: Calculate eligible subtotal (exclude non-monetary free gift value)
+  const freeGiftValue = combinedBenefit.freeGifts.reduce((s, g) => s + g.value, 0);
+  const monetaryDiscount = combinedBenefit.totalBenefitValue - freeGiftValue;
+  const subtotalAfterPromo = Math.max(0, request.subtotal - monetaryDiscount);
 
   // Step 7: Redeem points
   const { processRedeem, processPayment } = shouldProcessPoints(request.pointPolicy, request.pointUsageRequest, request.redeemRequest);

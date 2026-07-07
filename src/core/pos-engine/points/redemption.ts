@@ -28,8 +28,7 @@ export function processRedemption(
   if (policy?.allowMerge && !request.pointType) {
     available = validBalances.reduce((sum, b) => sum + b.balance, 0);
   } else {
-    const matched = validBalances.find(b => b.pointType === targetType);
-    available = matched?.balance || 0;
+    available = validBalances.filter(b => b.pointType === targetType).reduce((sum, b) => sum + b.balance, 0);
   }
 
   if (available < request.pointCost) {

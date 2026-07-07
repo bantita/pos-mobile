@@ -171,7 +171,7 @@ export const CategoryManageScreen: React.FC<CategoryManageScreenProps> = ({ onBa
 
       <FlatList
         data={data}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item: Category | Brand) => item.id}
         renderItem={renderItem}
         contentContainerClassName={cn('p-3 gap-2 pb-20')}
         showsVerticalScrollIndicator={false}

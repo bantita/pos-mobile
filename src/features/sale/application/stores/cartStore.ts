@@ -6,6 +6,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { CartItem, Discount, HoldBill, Product } from '@/features/sale/domain/sale';
 import { persistStorage } from '@/shared/infrastructure/storage/persistStorage';
+import { calcCartVat } from '@/shared/lib/vatCalc';
 
 interface CartState {
   items: CartItem[];
@@ -154,13 +155,18 @@ export const useCartStore = create<CartState>()(
   },
 
   getVatAmount: () => {
-    const afterDiscount = get().getSubtotal() - get().getDiscountTotal();
-    return afterDiscount * 0.07;
+    const items = get().items;
+    return calcCartVat(items.map(i => ({
+      subtotal: i.subtotal,
+      vatRate: i.product.vatRate || 0,
+      vatIncluded: i.product.vatIncluded || false,
+    })));
   },
 
   getGrandTotal: () => {
     const afterDiscount = get().getSubtotal() - get().getDiscountTotal();
-    return afterDiscount;
+    const vat = get().getVatAmount();
+    return afterDiscount + vat;
   },
 
   getItemCount: () => get().items.reduce((sum, i) => sum + i.qty, 0),

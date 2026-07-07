@@ -43,8 +43,8 @@ const PickerModal: React.FC<PickerModalProps> = ({ visible, title, items, select
         <Text className={cn('text-lg font-bold text-slate-950 mb-3')}>{title}</Text>
         <FlatList
           data={items}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
+          keyExtractor={(item: { id: string; name: string }) => item.id}
+          renderItem={({ item }: { item: { id: string; name: string } }) => (
             <TouchableOpacity
               className={cn('flex-row items-center justify-between py-3 border-b border-slate-200', selectedId === item.id && 'bg-rose-50 rounded-lg px-2')}
               onPress={() => { onSelect(item.id, item.name); onClose(); }}

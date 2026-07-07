@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@/shared/icons/lucideAdapter';
 import { cn } from '@/shared/lib/cn';
 import { usePromoStore } from '@/features/promotion/application/stores/promoStore';
+import { ProductMaster } from '@/features/product/domain/product';
 import { MOCK_PRODUCTS } from '@/features/product/data/mocks/mockProducts';
 import { PromoConditionTabs, ConditionProduct } from '@/features/promotion/presentation/screens/components/PromoConditionTabs';
 import { PromoRewardSection, DiscountProduct, FreeProduct } from '@/features/promotion/presentation/screens/components/PromoRewardSection';
@@ -205,8 +206,8 @@ export const StorePromoCreateScreen: React.FC<Props> = ({ onBack, onSave, promoG
           </View>
           <FlatList
             data={MOCK_PRODUCTS.filter((p) => p.status === 'active')}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
+            keyExtractor={(item: ProductMaster) => item.id}
+            renderItem={({ item }: { item: ProductMaster }) => (
               <TouchableOpacity className={cn('flex-row items-center py-2')} onPress={() => handleSelectProduct(item.id)}>
                 <View className={cn('flex-1')}>
                   <Text className={cn('text-xs font-medium text-slate-600')}>{item.code}</Text>

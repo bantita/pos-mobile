@@ -8,7 +8,7 @@ import { useWindowDimensions } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@/shared/icons/lucideAdapter';
-import { ProductMaster } from '@/features/product/domain/product';
+import { ProductMaster, Category } from '@/features/product/domain/product';
 import { MOCK_PRODUCTS, MOCK_CATEGORIES } from '@/features/product/data/mocks/mockProducts';
 import { formatCurrency } from '@/shared/lib/format';
 import { useStoreConfigStore } from '@/features/settings/application/stores/storeConfigStore';
@@ -144,9 +144,9 @@ export const ProductListScreen: React.FC<ProductListScreenProps> = ({
         data={[{ id: 'all', name: 'ทั้งหมด', productCount: products.length, status: 'active' as const }, ...MOCK_CATEGORIES]}
         horizontal
         showsHorizontalScrollIndicator={false}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item: Category) => item.id}
         contentContainerClassName={cn('px-4 gap-2 pb-2')}
-        renderItem={({ item }) => (
+        renderItem={({ item }: { item: Category }) => (
           <TouchableOpacity
             className={cn('px-3 py-1 rounded-full bg-white border border-slate-200', selectedCategory === item.id && 'bg-rose-500 border-rose-500')}
             onPress={() => setSelectedCategory(item.id)}
@@ -176,8 +176,8 @@ export const ProductListScreen: React.FC<ProductListScreenProps> = ({
           </View>
           <FlatList
             data={filtered}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => <TableRow item={item} />}
+            keyExtractor={(item: ProductMaster) => item.id}
+            renderItem={({ item }: { item: ProductMaster }) => <TableRow item={item} />}
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={<EmptyState />}
           />
@@ -186,8 +186,8 @@ export const ProductListScreen: React.FC<ProductListScreenProps> = ({
         /* Mobile: Cards */
         <FlatList
           data={filtered}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <MobileCard item={item} />}
+          keyExtractor={(item: ProductMaster) => item.id}
+          renderItem={({ item }: { item: ProductMaster }) => <MobileCard item={item} />}
           contentContainerClassName={cn('px-4 pb-[100px] gap-2')}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={<EmptyState />}

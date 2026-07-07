@@ -168,7 +168,7 @@ export const PointHistoryScreen: React.FC<Props> = ({ member, onBack, onRedeem, 
 
       <FlatList
         data={history}
-        keyExtractor={(t) => t.id}
+        keyExtractor={(t: PointTransaction) => t.id}
         renderItem={renderTransaction}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 20, gap: 8 }}
         showsVerticalScrollIndicator={false}

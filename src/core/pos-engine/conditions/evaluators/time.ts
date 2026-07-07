@@ -17,7 +17,9 @@ export class TimeConditionEvaluator implements ConditionEvaluator {
     const startMinutes = sh * 60 + sm;
     const endMinutes = eh * 60 + em;
 
-    const inRange = currentMinutes >= startMinutes && currentMinutes <= endMinutes;
+    const inRange = startMinutes <= endMinutes
+      ? (currentMinutes >= startMinutes && currentMinutes <= endMinutes)
+      : (currentMinutes >= startMinutes || currentMinutes <= endMinutes);
     if (inRange) return { passed: true };
     return { passed: false, reason: `Time ${dt.getHours()}:${dt.getMinutes()} not in range ${startTime}-${endTime}` };
   }

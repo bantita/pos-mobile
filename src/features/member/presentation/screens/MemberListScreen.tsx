@@ -105,7 +105,7 @@ export const MemberListScreen: React.FC<Props> = ({ onAddMember, onSelectMember 
 
       <FlatList
         data={filtered}
-        keyExtractor={(m) => m.id}
+        keyExtractor={(m: Member) => m.id}
         renderItem={renderMember}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100, gap: 10 }}
         showsVerticalScrollIndicator={false}
