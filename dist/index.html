@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="th">
   <head>
     <meta charset="utf-8" />
     <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-    <title>POS Mobile</title>
+    <title>Xcellence POS — ระบบขายหน้าร้าน</title>
+    <meta name="description" content="ระบบขายหน้าร้าน PWA — ชำระเงิน คูปอง สมาชิก CRM กะการขาย ใบเสร็จ รองรับออฟไลน์" />
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
     <style id="expo-reset">
       /* These styles make the body full-height */
@@ -15,24 +16,61 @@
       /* These styles disable body scrolling if you are using <ScrollView> */
       body {
         overflow: hidden;
+        background-color: #FFF9F4;
       }
       /* These styles make the root element full-height */
       #root {
         display: flex;
         height: 100%;
         flex: 1;
+        background-color: #FFF9F4;
+      }
+      /* Splash screen shown while the JS bundle loads */
+      #splash {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+        background-color: #FFF9F4;
+        z-index: 9999;
+      }
+      #splash svg {
+        animation: splash-pulse 1.2s ease-in-out infinite;
+      }
+      #splash .splash-text {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 16px;
+        color: #EA580C;
+      }
+      @keyframes splash-pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.5; transform: scale(0.92); }
       }
     </style>
-  <meta name="theme-color" content="#FF343D">
+  <meta name="theme-color" content="#EA580C">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="icon" href="/icon-pos.svg">
 <link rel="stylesheet" href="/font-fix.css"/></head>
 
   <body>
     <!-- Use static rendering with Expo Router to support running without JavaScript. -->
     <noscript>
-      You need to enable JavaScript to run this app.
+      กรุณาเปิดใช้งาน JavaScript
     </noscript>
     <!-- The root element for your Expo app. -->
-    <div id="root"></div>
-  <script src="/_expo/static/js/web/index-508998427013033578ab597b23e3ca78.js" defer></script>
+    <div id="root">
+      <div id="splash">
+        <svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Xcellence POS">
+          <rect x="8" y="8" width="80" height="80" rx="20" fill="#EA580C" />
+          <text x="48" y="60" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="40" font-weight="700" fill="#FFF9F4">X</text>
+        </svg>
+        <div class="splash-text">กำลังโหลด POS...</div>
+      </div>
+    </div>
+  <script src="/_expo/static/js/web/index-12750d73f6fcafe7fdccf02754fdf050.js" defer></script>
 </body>
 </html>

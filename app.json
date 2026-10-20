@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "POS Mobile",
+    "name": "Xcellence POS",
     "slug": "pos-mobile",
     "version": "1.0.0",
     "orientation": "default",
@@ -30,10 +30,10 @@
     "web": {
       "bundler": "metro",
       "output": "single",
-      "name": "POS Mobile",
+      "name": "Xcellence POS",
       "shortName": "POS",
-      "themeColor": "#FF343D",
-      "backgroundColor": "#FFF8F8"
+      "themeColor": "#EA580C",
+      "backgroundColor": "#FFF9F4"
     },
     "scheme": "pos-mobile",
     "extra": {
