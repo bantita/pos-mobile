@@ -13,6 +13,7 @@ import { useStoreConfigStore } from '../../store/storeConfigStore';
 import { useAuditLogStore } from '../../store/auditLogStore';
 import { WebTestTrackerScreen } from './WebTestTrackerScreen';
 import { WebAdSettingsScreen } from './WebAdSettingsScreen';
+import { WebRichMenuScreen } from './WebRichMenuScreen';
 import { useReceiptStore } from '../../store/receiptStore';
 import { WebStoreSettingsSection } from '../../components/settings/WebStoreSettingsSection';
 import { WebUserStaffScreen } from './WebUserStaffScreen';
@@ -2951,6 +2952,7 @@ export const WebSettingsScreen: React.FC = () => {
   if (subView === 'sync')       return <SimpleSubPage title="Sync Monitor" sub="ตรวจสอบสถานะ Sync — Pending / Failed / Conflict" onBack={() => setSubView(null)} />;
   if (subView === 'testtracker') return <WebTestTrackerScreenInline onBack={() => setSubView(null)} />;
   if (subView === 'posPermission') return <SettingPOSPermissionScreen onBack={() => setSubView(null)} />;
+  if (subView === 'richmenu')   return <WebRichMenuScreen       onBack={() => setSubView(null)} />;
   if (subView === 'users') return <View style={g.root}><TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 }} onPress={() => setSubView(null)}><Ionicons name="arrow-back" size={18} color={WebColors.primary} /><Text style={{ fontSize: 12, color: WebColors.primary, fontWeight: '600' }}>ตั้งค่า</Text></TouchableOpacity><WebUserStaffScreen /></View>;
 
   const cards: { icon: string; label: string; sub: string; color: string; bg: string; key: string }[] = [
@@ -2966,6 +2968,7 @@ export const WebSettingsScreen: React.FC = () => {
     { icon: 'document-text-outline', label: 'Audit Log',             sub: 'ประวัติการใช้งานระบบ',                  color: Colors.textSecondary,          bg: Colors.border,              key: 'auditlog'   },
     { icon: 'cloud-outline',         label: 'ERP Integration',       sub: 'เชื่อมต่อระบบ ERP หลังบ้าน',           color: WebColors.success,  bg: WebColors.successLight, key: 'erp'        },
     { icon: 'sync-outline',          label: 'Sync Monitor',          sub: 'ตรวจสอบการ Sync ข้อมูล',               color: WebColors.success,  bg: WebColors.successLight, key: 'sync'       },
+    { icon: 'grid-outline',          label: 'LINE Rich Menu',         sub: 'จัดการเมนู 6 ปุ่มของ LINE OA (mock)',   color: WebColors.success,  bg: WebColors.successLight, key: 'richmenu'   },
     { icon: 'clipboard-outline',     label: 'Test Tracker',           sub: 'บันทึกผลทดสอบ (Offline)',              color: WebColors.purple,   bg: WebColors.purpleLight,  key: 'testtracker' },
   ];
 

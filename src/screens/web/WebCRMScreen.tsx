@@ -113,8 +113,10 @@ const MembersPanel: React.FC = () => {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const { members, searchMembers, updateMember } = useMemberStore();
+  const { contacts, linkContactToMember } = useCommunicationStore();
   const [kw, setKw] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showLineModal, setShowLineModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
@@ -150,6 +152,18 @@ const MembersPanel: React.FC = () => {
     setEditMode(false);
   };
 
+  // 2B: ยืนยันผูกบัญชี LINE (mock — ไม่มี LIFF จริง)
+  const confirmLinkLine = () => {
+    if (!selected) return;
+    // MOCK: หา contact ที่เบอร์ตรง หรือสร้าง LINE userId จำลองขึ้นมา
+    // เมื่อปิด mock: จะได้ lineUserId จริงจาก LIFF/webhook แล้วเรียก lineApi.linkMember(...)
+    const matched = contacts.find(c => c.phone && selected.phone && c.phone === selected.phone);
+    const lineUserId = matched?.lineUserId || `Umock${selected.id.slice(0, 10)}`;
+    if (matched) linkContactToMember(matched.id, selected.id);
+    updateMember(selected.id, { isLineLinked: true, linkedLineUserId: lineUserId });
+    setShowLineModal(false);
+  };
+
   // ─── Detail View ──
   if (selected) {
     const levelCfg = MOCK_LEVEL_CONFIGS.find(c => c.level === selected.level);
@@ -177,7 +191,39 @@ const MembersPanel: React.FC = () => {
             onPress={() => { if (confirm('ลบสมาชิก ' + selected.name + '?')) { useMemberStore.getState().updateMember(selected.id, { isActive: false, status: 'suspended' }); setSelectedId(null); } }}>
             <Ionicons name="trash-outline" size={14} color={WebColors.danger} /><Text style={{ fontSize: 13, color: WebColors.danger, fontWeight: '600' }}>ลบ</Text>
           </TouchableOpacity>
+          {/* 2B: ลิงก์ LINE (QR + ยืนยัน, mock) */}
+          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: selected.isLineLinked ? WebColors.successLight : WebColors.infoLight, borderWidth: 1, borderColor: selected.isLineLinked ? WebColors.success : WebColors.info }}
+            onPress={() => setShowLineModal(true)}>
+            <Ionicons name={selected.isLineLinked ? 'checkmark-circle-outline' : 'logo-ionic'} size={14} color={selected.isLineLinked ? WebColors.success : WebColors.info} />
+            <Text style={{ fontSize: 13, color: selected.isLineLinked ? WebColors.success : WebColors.info, fontWeight: '600' }}>{selected.isLineLinked ? 'ผูก LINE แล้ว' : 'ลิงก์ LINE'}</Text>
+          </TouchableOpacity>
         </View>
+
+        {/* 2B: Modal ลิงก์ LINE (QR + ยืนยัน) */}
+        <Modal visible={showLineModal} transparent animationType="fade" onRequestClose={() => setShowLineModal(false)}>
+          <View style={cs.lineOverlay}>
+            <View style={cs.lineModal}>
+              <Text style={cs.lineModalTitle}>ลิงก์บัญชี LINE</Text>
+              <Text style={cs.lineModalSub}>ให้สมาชิกสแกน QR เพื่อผูกบัญชี LINE กับ {selected.name}</Text>
+
+              {/* QR placeholder (mock — ยังไม่มี LIFF จริง) */}
+              <View style={cs.lineQrBox}>
+                <Ionicons name="qr-code-outline" size={96} color={WebColors.text} />
+              </View>
+              <Text style={cs.lineNote}>โหมดจำลอง: ยังไม่ได้เชื่อม LINE LIFF จริง — กดยืนยันเพื่อทำเครื่องหมายว่าผูกแล้ว</Text>
+
+              <View style={cs.lineModalFooter}>
+                <TouchableOpacity style={cs.lineBtnGhost} onPress={() => setShowLineModal(false)}>
+                  <Text style={cs.lineBtnGhostText}>ยกเลิก</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={cs.primaryBtn} onPress={confirmLinkLine}>
+                  <Ionicons name="checkmark" size={14} color={WebColors.white} />
+                  <Text style={cs.primaryBtnTxt}>ยืนยันผูกบัญชี</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {/* Edit Form */}
         {editMode && (
@@ -878,9 +924,17 @@ const CampaignsPanel: React.FC = () => {
 const CommunicationPanel: React.FC = () => {
   const { stats, broadcasts, contacts, sendCouponCampaign } = useCommunicationStore();
   const { promotions } = usePromoStore();
+  const { runScheduledAutoCoupons } = useMemberStore();
   const recentBroadcasts = broadcasts.filter(b => b.status === 'sent').slice(0, 3);
   const activeCoupons = promotions.filter(p => p.status === 'active' && (p.type === 'coupon' || p.couponCode));
   const [quickCouponId, setQuickCouponId] = useState('');
+  const [autoRan, setAutoRan] = useState(false);
+
+  const handleRunAuto = () => {
+    runScheduledAutoCoupons();
+    setAutoRan(true);
+    setTimeout(() => setAutoRan(false), 2500);
+  };
 
   const handleQuickSend = () => {
     const promo = promotions.find(p => p.id === quickCouponId);
@@ -953,6 +1007,21 @@ const CommunicationPanel: React.FC = () => {
         <TouchableOpacity style={[cs.primaryBtn, { alignSelf: 'flex-start' }]} onPress={handleQuickSend}>
           <Ionicons name="send" size={14} color={WebColors.white} /><Text style={cs.primaryBtnTxt}>ส่งผ่าน LINE</Text>
         </TouchableOpacity>
+      </View>
+
+      {/* 2H: Auto-coupon triggers */}
+      <View style={cs.card}>
+        <Text style={cs.cardTitle}>🤖 คูปองอัตโนมัติ (Auto Trigger)</Text>
+        <Text style={{ fontSize: 13, color: Colors.textSecondary, marginBottom: 8 }}>
+          สมาชิกใหม่ = คูปองต้อนรับ, เลื่อนระดับ = ของรางวัล (ยิงอัตโนมัติ){'\n'}
+          กดปุ่มเพื่อรันรอบ win-back (ไม่ซื้อเกิน 30 วัน) + วันเกิดของวันนี้ (idempotent ไม่ซ้ำ)
+        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <TouchableOpacity style={[cs.primaryBtn, { alignSelf: 'flex-start' }]} onPress={handleRunAuto}>
+            <Ionicons name="flash" size={14} color={WebColors.white} /><Text style={cs.primaryBtnTxt}>รันคูปองอัตโนมัติ</Text>
+          </TouchableOpacity>
+          {autoRan && <Text style={{ fontSize: 13, color: WebColors.success, fontWeight: '600' }}>✓ รันรอบ Auto Trigger แล้ว</Text>}
+        </View>
       </View>
 
       {/* Recent Broadcasts */}
@@ -1550,4 +1619,14 @@ const cs = StyleSheet.create({
   detailItem: { minWidth: 140 },
   detailLbl: { fontSize: 13, color: Colors.textMuted },
   detailVal: { fontSize: 12, fontWeight: '600', color: Colors.text },
+  // 2B: LINE link modal
+  lineOverlay: { flex: 1, backgroundColor: Colors.overlay, alignItems: 'center', justifyContent: 'center', padding: 16 },
+  lineModal: { backgroundColor: WebColors.white, borderRadius: Radius.lg, padding: 24, width: 380, maxWidth: '100%', ...Shadow.lg },
+  lineModalTitle: { ...Font.h3, color: Colors.text },
+  lineModalSub: { fontSize: 13, color: Colors.textSecondary, marginTop: 4, marginBottom: 16 },
+  lineQrBox: { alignSelf: 'center', width: 160, height: 160, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.background, alignItems: 'center', justifyContent: 'center' },
+  lineNote: { fontSize: 12, color: Colors.textMuted, textAlign: 'center', marginTop: 12, lineHeight: 18 },
+  lineModalFooter: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 20 },
+  lineBtnGhost: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: Colors.border },
+  lineBtnGhostText: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary },
 });

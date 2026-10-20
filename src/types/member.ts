@@ -59,6 +59,10 @@ export interface Member {
   shopId: string;
   /** รหัสสาขา */
   branchId: string;
+  /** ผูกบัญชี LINE แล้วหรือยัง (mock LIFF linking) */
+  isLineLinked?: boolean;
+  /** LINE userId ที่ผูกไว้ (mock) */
+  linkedLineUserId?: string;
 }
 
 /** รายการคะแนน (ได้รับ/ใช้/หมดอายุ/ปรับ) */

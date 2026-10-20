@@ -18,6 +18,8 @@ import {
   LineMessageType,
 } from '../types/communication';
 import { persistStorage } from './persistStorage';
+import { FEATURE_FLAGS } from '../config/featureFlags';
+// import { lineApi } from '../services/api/lineApi'; // ใช้เมื่อ MOCK_LINE = false (ต่อ LINE Messaging API จริง)
 import {
   MOCK_LINE_CONTACTS,
   MOCK_MESSAGE_TEMPLATES,
@@ -74,6 +76,19 @@ interface CommunicationStore {
   sendBroadcast: (broadcastId: string) => void;
   cancelBroadcast: (broadcastId: string) => void;
   deleteBroadcast: (broadcastId: string) => void;
+
+  // ── Single Push (2A/2D) ─────────────────────────────────────────────────────
+  /** ส่งข้อความเดี่ยว (push) หา contact 1 คน — บันทึกลง outbox (sendLogs) */
+  sendSingleMessage: (data: {
+    contactId: string;
+    channel: CommChannel;
+    content: string;
+    lineMessageType?: LineMessageType;
+  }) => SendLog;
+
+  // ── Outbox / Log ────────────────────────────────────────────────────────────
+  /** กล่องส่งออก: log การส่งทั้งหมด เรียงใหม่→เก่า */
+  getOutbox: () => SendLog[];
 
   // ── Stats ───────────────────────────────────────────────────────────────────
   refreshStats: () => void;
@@ -246,6 +261,20 @@ export const useCommunicationStore = create<CommunicationStore>()(
   },
 
   sendBroadcast: (broadcastId) => {
+    const target = get().broadcasts.find(b => b.id === broadcastId);
+    // MOCK: ส่ง broadcast แบบ in-app — จำลองสถิติ + บันทึก outbox 1 รายการต่อ campaign
+    // เมื่อปิด mock: else จะเรียก lineApi.broadcast(...) ผ่าน backend แทน
+    const outboxEntry: SendLog | null = target && FEATURE_FLAGS.MOCK_LINE
+      ? {
+          id: genId(),
+          broadcastId: target.id,
+          contactId: '',
+          channel: target.channel,
+          status: 'sent',
+          sentAt: new Date().toISOString(),
+        }
+      : null;
+
     set(s => ({
       broadcasts: s.broadcasts.map(b => {
         if (b.id !== broadcastId) return b;
@@ -262,6 +291,7 @@ export const useCommunicationStore = create<CommunicationStore>()(
           clickCount,
         };
       }),
+      sendLogs: outboxEntry ? [outboxEntry, ...s.sendLogs] : s.sendLogs,
       // อัพเดท LINE quota
       lineConfig: {
         ...s.lineConfig,
@@ -287,6 +317,38 @@ export const useCommunicationStore = create<CommunicationStore>()(
     set(s => ({
       broadcasts: s.broadcasts.filter(b => b.id !== broadcastId),
     }));
+  },
+
+  // ── Single Push (2A/2D) ─────────────────────────────────────────────────────
+
+  sendSingleMessage: (data) => {
+    const log: SendLog = {
+      id: genId(),
+      broadcastId: '',          // ส่งเดี่ยว ไม่ผูกกับ broadcast
+      contactId: data.contactId,
+      channel: data.channel,
+      status: 'sent',
+      sentAt: new Date().toISOString(),
+    };
+
+    if (FEATURE_FLAGS.MOCK_LINE) {
+      // MOCK: ส่งแบบ in-app เท่านั้น — บันทึกลง outbox + จำลองสถานะ "sent"
+      set(s => ({ sendLogs: [log, ...s.sendLogs] }));
+    } else {
+      // เมื่อปิด mock: ต่อ LINE Messaging API จริงผ่าน backend
+      // const contact = get().contacts.find(c => c.id === data.contactId);
+      // if (contact) lineApi.sendMessage({ to: contact.lineUserId, messages: [{ type: 'text', text: data.content }] });
+      set(s => ({ sendLogs: [log, ...s.sendLogs] }));
+    }
+    return log;
+  },
+
+  // ── Outbox / Log ────────────────────────────────────────────────────────────
+
+  getOutbox: () => {
+    return [...get().sendLogs].sort(
+      (a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime()
+    );
   },
 
   // ── Stats ───────────────────────────────────────────────────────────────────
@@ -367,8 +429,22 @@ export const useCommunicationStore = create<CommunicationStore>()(
       createdBy: 'admin',
     };
 
+    // MOCK: ส่งคูปองแบบ in-app — บันทึก outbox 1 รายการต่อแคมเปญ
+    // เมื่อปิด mock: else จะเรียก lineApi.sendCoupon(...) ผ่าน backend แทน
+    const outboxEntry: SendLog | null = FEATURE_FLAGS.MOCK_LINE
+      ? {
+          id: genId(),
+          broadcastId: broadcast.id,
+          contactId: '',
+          channel: data.channel,
+          status: 'sent',
+          sentAt: new Date().toISOString(),
+        }
+      : null;
+
     set(s => ({
       broadcasts: [broadcast, ...s.broadcasts],
+      sendLogs: outboxEntry ? [outboxEntry, ...s.sendLogs] : s.sendLogs,
       lineConfig: data.channel === 'line'
         ? { ...s.lineConfig, broadcastUsed: s.lineConfig.broadcastUsed + 1 }
         : s.lineConfig,

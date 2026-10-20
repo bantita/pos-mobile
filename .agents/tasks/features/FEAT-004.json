@@ -1,0 +1,26 @@
+{
+  "id": "FEAT-004",
+  "type": "feat",
+  "description": "Communication / LINE mock cluster, all gated behind FEATURE_FLAGS.MOCK_LINE and in-app only (no real LINE/SMS/push): LINE/SMS/Push send + Flex preview + Broadcast succeed in-app (2A/2D), member-LINE linking via QR (2B), auto-coupon triggers (2H), and LINE Rich Menu management (2G). Independent of FEAT-002/003; builds on FEAT-001's flags module.",
+  "status": "completed",
+  "steps": [
+    "2A/2D: in src/store/communicationStore.ts add a mock send-single (push) action and ensure sendBroadcast/sendCouponCampaign record each 'sent' message to an in-app outbox/log (reuse sendLogs) under // MOCK: MOCK_LINE; simulate sent/open/click stats (already partially done). When MOCK_LINE is off, leave a commented else that would call lineApi.sendMessage/broadcast.",
+    "2A: in src/screens/web/WebCommunicationScreen.tsx add a Flex preview panel rendered from buildCouponFlexMessage/buildPointNotifyFlexMessage (src/services/api/lineApi.ts) and show the outbox/log of sent messages. Thai labels, loading/error/empty states, WebColors + tokens.",
+    "2B: add a 'ลิงก์ LINE' action (QR + confirm) in src/screens/web/WebCRMScreen.tsx (or the member detail screen) that on confirm calls communicationStore.linkContactToMember and marks the member linked (add a linkedLineUserId/isLineLinked flag on the member via memberStore.updateMember). // MOCK: no real LIFF.",
+    "2H: add in-app auto-coupon trigger hooks that create coupons/broadcasts in local stores (visible in the 2A outbox): on memberStore.addMember -> Welcome coupon; on level-up (detected in the upgrade path) -> Level-up reward; a '30-day no-buy' segment -> Win-back; birthday -> Birthday. Wire via memberStore + promoManagementStore + communicationStore; keep triggers idempotent. // MOCK: creates local entries only.",
+    "2G: add src/store/richMenuStore.ts (zustand+persist, name 'pos-rich-menu') holding a 6-button rich menu (each button: label + action type URL/message/LIFF + value). Add src/screens/web/WebRichMenuScreen.tsx with a 6-cell visual layout preview + per-button editor, Thai labels, loading/error/empty states; 'บันทึก/เผยแพร่' saves locally under // MOCK: MOCK_LINE with a UI note that real publish needs a LINE OA. Register it in src/screens/web/WebSimpleScreens.tsx WebSettingsScreen (add a cards[] entry + a `if (subView === 'richmenu') return <WebRichMenuScreen onBack={() => setSubView(null)} />;`)."
+  ],
+  "acceptance_criteria": [
+    "Single push + broadcast + coupon campaign each add an entry to the communicationStore outbox/log and update simulated stats, all gated by MOCK_LINE.",
+    "WebCommunicationScreen renders a Flex preview from the lineApi builders and lists the outbox.",
+    "A member can be marked LINE-linked via the QR/confirm action (no real LIFF).",
+    "Adding a member creates a Welcome entry; level-up/birthday/30-day triggers create their respective local coupons/broadcasts.",
+    "A Rich Menu screen with a 6-cell preview persists its config and is reachable from web settings."
+  ],
+  "verification": [
+    "npm run lint (no new tsc errors beyond baseline 13)",
+    "npm test (no non-baseline regressions)"
+  ],
+  "blocked_reason": null,
+  "findings": "All 5 steps implemented, all MOCK paths gated by FEATURE_FLAGS.MOCK_LINE with commented real-API else branches. 2A/2D: communicationStore gained sendSingleMessage (push) + getOutbox; sendBroadcast/sendCouponCampaign now append a SendLog outbox entry under MOCK_LINE. 2A: WebCommunicationScreen gained a 'Flex & Outbox' tab rendering coupon/point Flex bubble previews from buildCouponFlexMessage/buildPointNotifyFlexMessage, a test-send button, and the outbox list with loading/error/empty states. 2B: WebCRMScreen member detail gained a 'ลิงก์ LINE' action with a QR+confirm modal; confirm calls communicationStore.linkContactToMember (when a phone-matched contact exists) and memberStore.updateMember with new Member.isLineLinked/linkedLineUserId fields (added to types/member.ts). 2H: new src/services/autoCouponTriggers.ts creates coupons in promoStore + campaigns in communicationStore (visible in the 2A outbox), idempotent via AUTO-* promoCode keys; wired into memberStore.addMember (welcome + birthday-if-today) and updateMember (level-up on upward level change), plus a new runScheduledAutoCoupons() store action (win-back 30-day + birthday) reachable from WebCRMScreen CommunicationPanel. NOTE: coupons are created in promoStore (which owns the Promotion/coupon type), not promoManagementStore (which manages product-group/bundle/quantity promos only) — promoStore is the correct store for coupons that the Communication panels read. 2G: new src/store/richMenuStore.ts (persist name 'pos-rich-menu', 6-button default) + new WebRichMenuScreen.tsx (6-cell 2x3 preview, per-button editor with uri/message/liff action types, save/publish mock with LINE OA note, loading/error/empty states); registered in WebSimpleScreens.tsx WebSettingsScreen via a cards[] entry and a subView==='richmenu' route. Verification: npx tsc --noEmit = 13 errors (baseline, no new); npm test = 14 passed + 3 known baseline suite-load failures (engine.test.ts, SyncService.test.ts, branchPermissionStore.test.ts); engine self-run npx tsx = Passed 39 / Failed 0."
+}

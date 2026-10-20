@@ -3,18 +3,20 @@
  * LINE Broadcast, SMS, Push Notification, LINE OA Contacts
  */
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Modal } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Modal, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { WebColors } from '../../constants/webColors';
 import { useCommunicationStore } from '../../store/communicationStore';
 import { usePromoStore } from '../../store/promoStore';
 import { CommChannel } from '../../types/communication';
+import { buildCouponFlexMessage, buildPointNotifyFlexMessage } from '../../services/api/lineApi';
 
-type TabKey = 'dashboard' | 'broadcast' | 'contacts' | 'templates' | 'settings';
+type TabKey = 'dashboard' | 'broadcast' | 'flex' | 'contacts' | 'templates' | 'settings';
 
 const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: 'dashboard', label: 'ภาพรวม', icon: 'grid-outline' },
   { key: 'broadcast', label: 'Broadcast', icon: 'paper-plane-outline' },
+  { key: 'flex', label: 'Flex & Outbox', icon: 'sparkles-outline' },
   { key: 'contacts', label: 'Contacts', icon: 'people-outline' },
   { key: 'templates', label: 'Templates', icon: 'document-outline' },
   { key: 'settings', label: 'ตั้งค่า', icon: 'cog-outline' },
@@ -71,6 +73,7 @@ export const WebCommunicationScreen: React.FC = () => {
       <ScrollView style={st.body} contentContainerStyle={st.bodyContent}>
         {tab === 'dashboard' && <DashboardPanel />}
         {tab === 'broadcast' && <BroadcastPanel />}
+        {tab === 'flex' && <FlexOutboxPanel />}
         {tab === 'contacts' && <ContactsPanel />}
         {tab === 'templates' && <TemplatesPanel />}
         {tab === 'settings' && <SettingsPanel />}
@@ -264,6 +267,186 @@ const BroadcastPanel: React.FC = () => {
     </View>
   );
 };
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FLEX PREVIEW + OUTBOX (2A)
+// ═══════════════════════════════════════════════════════════════════════════════
+type FlexKind = 'coupon' | 'point';
+
+/** เรนเดอร์ Flex bubble แบบย่อจาก builder (coupon / point) ไว้พรีวิวในหน้าเว็บ */
+const FlexBubblePreview: React.FC<{ kind: FlexKind }> = ({ kind }) => {
+  const flex = useMemo(() => {
+    if (kind === 'coupon') {
+      return buildCouponFlexMessage({
+        shopName: 'ร้านตัวอย่าง',
+        couponCode: 'WELCOME50',
+        discount: 'ลด 50 บาท',
+        description: 'ใช้ได้ทุกรายการ เมื่อซื้อครบ 300 บาท',
+        expiryDate: '31 ธ.ค. 2567',
+      });
+    }
+    return buildPointNotifyFlexMessage({
+      shopName: 'ร้านตัวอย่าง',
+      memberName: 'คุณลูกค้า',
+      pointsEarned: 120,
+      totalPoints: 1540,
+      level: 'Gold',
+    });
+  }, [kind]);
+
+  if (kind === 'coupon') {
+    return (
+      <View style={st.flexBubble}>
+        <View style={st.flexCouponHeader}>
+          <Text style={st.flexCouponHeaderTitle}>🎫 คูปองส่วนลด</Text>
+          <Text style={st.flexCouponHeaderSub}>ร้านตัวอย่าง</Text>
+        </View>
+        <View style={st.flexBody}>
+          <Text style={st.flexDiscount}>ลด 50 บาท</Text>
+          <Text style={st.flexDesc}>ใช้ได้ทุกรายการ เมื่อซื้อครบ 300 บาท</Text>
+          <View style={st.flexSep} />
+          <View style={st.flexKV}>
+            <Text style={st.flexKVKey}>รหัส:</Text>
+            <Text style={st.flexKVVal}>WELCOME50</Text>
+          </View>
+          <View style={st.flexKV}>
+            <Text style={st.flexKVKey}>หมดอายุ:</Text>
+            <Text style={[st.flexKVVal, { color: '#FF6B6B' }]}>31 ธ.ค. 2567</Text>
+          </View>
+        </View>
+        <View style={st.flexFooterBtn}>
+          <Text style={st.flexFooterBtnText}>ใช้คูปอง</Text>
+        </View>
+        <Text style={st.flexAlt} numberOfLines={1}>altText: {flex.altText}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={st.flexBubble}>
+      <View style={st.flexBody}>
+        <Text style={st.flexPointTitle}>⭐ +120 คะแนน</Text>
+        <Text style={st.flexDesc}>สวัสดีคุณ คุณลูกค้า</Text>
+        <View style={st.flexSep} />
+        <View style={st.flexKV}>
+          <Text style={st.flexKVKey}>คะแนนรวม:</Text>
+          <Text style={st.flexKVVal}>1,540 pts</Text>
+        </View>
+        <View style={st.flexKV}>
+          <Text style={st.flexKVKey}>ระดับ:</Text>
+          <Text style={[st.flexKVVal, { color: '#F5A623' }]}>Gold</Text>
+        </View>
+      </View>
+      <Text style={st.flexAlt} numberOfLines={1}>altText: {flex.altText}</Text>
+    </View>
+  );
+};
+
+const FlexOutboxPanel: React.FC = () => {
+  const { getOutbox, broadcasts, contacts, sendSingleMessage } = useCommunicationStore();
+  const [kind, setKind] = useState<FlexKind>('coupon');
+  // loading/error เป็น state ของหน้าจอ (mock ส่งแบบ in-app จึงสำเร็จทันที)
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const outbox = getOutbox();
+
+  const broadcastName = (id: string) => broadcasts.find(b => b.id === id)?.name;
+  const contactName = (id: string) => contacts.find(c => c.id === id)?.displayName;
+
+  const handleSendTest = () => {
+    setError('');
+    const firstFriend = contacts.find(c => c.status === 'friend');
+    if (!firstFriend) {
+      setError('ยังไม่มีผู้ติดต่อสำหรับทดสอบส่ง');
+      return;
+    }
+    setLoading(true);
+    try {
+      sendSingleMessage({
+        contactId: firstFriend.id,
+        channel: 'line',
+        content: kind === 'coupon' ? 'ส่งคูปองทดสอบ (Flex)' : 'แจ้งคะแนนทดสอบ (Flex)',
+        lineMessageType: 'flex',
+      });
+    } catch {
+      setError('ส่งข้อความทดสอบไม่สำเร็จ');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <View>
+      <Text style={st.heading}>Flex Message & Outbox</Text>
+      <Text style={st.subheading}>พรีวิวข้อความ Flex และกล่องส่งออก (โหมดจำลองในแอป)</Text>
+
+      {error ? (
+        <View style={st.errorBox}>
+          <Ionicons name="alert-circle-outline" size={15} color={WebColors.danger} />
+          <Text style={st.errorText}>{error}</Text>
+        </View>
+      ) : null}
+
+      {/* Flex type switch */}
+      <View style={[st.pillRow, { marginBottom: 16 }]}>
+        {([['coupon', 'คูปอง'], ['point', 'แจ้งคะแนน']] as [FlexKind, string][]).map(([k, label]) => (
+          <TouchableOpacity key={k} style={[st.filterPill, kind === k && st.filterPillActive]} onPress={() => setKind(k)}>
+            <Text style={[st.filterPillText, kind === k && st.filterPillTextActive]}>{label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <View style={st.flexRow}>
+        <FlexBubblePreview kind={kind} />
+        <View style={st.flexSide}>
+          <Text style={st.sectionLabelSm}>ทดสอบส่ง</Text>
+          <Text style={st.flexHint}>ส่งข้อความทดสอบเข้ากล่องส่งออก (in-app mock)</Text>
+          <TouchableOpacity style={[st.btnPrimary, { alignSelf: 'flex-start', marginTop: 8 }]} onPress={handleSendTest} disabled={loading}>
+            <Ionicons name="paper-plane" size={15} color="#FFF" />
+            <Text style={st.btnPrimaryText}>{loading ? 'กำลังส่ง...' : 'ส่งทดสอบ'}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Outbox log */}
+      <Text style={st.sectionLabel}>กล่องส่งออก (Outbox)</Text>
+      <View style={st.card}>
+        {loading && (
+          <View style={st.loadingRow}>
+            <ActivityIndicator size="small" color={WebColors.primary} />
+            <Text style={st.loadingText}>กำลังโหลด...</Text>
+          </View>
+        )}
+        {!loading && outbox.map((log, i) => {
+          const cm = channelMeta(log.channel);
+          const title = log.broadcastId
+            ? (broadcastName(log.broadcastId) || `แคมเปญ ${log.broadcastId}`)
+            : (contactName(log.contactId) ? `ส่งเดี่ยว · ${contactName(log.contactId)}` : 'ส่งเดี่ยว');
+          return (
+            <View key={log.id} style={[st.listRow, i < outbox.length - 1 && st.listRowBorder]}>
+              <View style={[st.dot, { backgroundColor: cm.color }]} />
+              <View style={{ flex: 1 }}>
+                <Text style={st.listTitle}>{title}</Text>
+                <Text style={st.listMeta}>{cm.label} · สถานะ {statusLabel(log.status)}</Text>
+              </View>
+              <Text style={st.listDate}>{fmtDate(log.sentAt)}</Text>
+            </View>
+          );
+        })}
+        {!loading && outbox.length === 0 && (
+          <View style={st.emptyBox}>
+            <Ionicons name="file-tray-outline" size={28} color={WebColors.gray300} />
+            <Text style={st.empty}>ไม่มีข้อมูล</Text>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+};
+
+const statusLabel = (s: 'sent' | 'delivered' | 'read' | 'failed') =>
+  s === 'sent' ? 'ส่งแล้ว' : s === 'delivered' ? 'ถึงแล้ว' : s === 'read' ? 'อ่านแล้ว' : 'ล้มเหลว';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONTACTS
@@ -526,4 +709,32 @@ const st = StyleSheet.create({
 
   // Empty
   empty: { fontSize: 13, color: '#CBD5E1', textAlign: 'center', paddingVertical: 24 },
+  emptyBox: { alignItems: 'center', paddingVertical: 24, gap: 6 },
+
+  // Loading / Error states
+  loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 24, justifyContent: 'center' },
+  loadingText: { fontSize: 13, color: WebColors.textSecondary },
+  errorBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: WebColors.dangerLight, borderRadius: 8, padding: 12, marginBottom: 16 },
+  errorText: { fontSize: 13, color: WebColors.danger, fontWeight: '500', flex: 1 },
+
+  // Flex preview
+  sectionLabelSm: { fontSize: 13, fontWeight: '600', color: WebColors.text, marginBottom: 4 },
+  flexRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 20, marginBottom: 8 },
+  flexSide: { flex: 1, minWidth: 200 },
+  flexHint: { fontSize: 13, color: WebColors.textSecondary, lineHeight: 18 },
+  flexBubble: { width: 280, backgroundColor: '#FFF', borderRadius: 14, borderWidth: 1, borderColor: WebColors.gray100, overflow: 'hidden' },
+  flexCouponHeader: { backgroundColor: '#FFF5F5', padding: 16 },
+  flexCouponHeaderTitle: { fontSize: 15, fontWeight: '700', color: '#FF6B6B' },
+  flexCouponHeaderSub: { fontSize: 12, color: '#AAAAAA', marginTop: 2 },
+  flexBody: { padding: 16 },
+  flexDiscount: { fontSize: 24, fontWeight: '700', color: '#FF6B6B', textAlign: 'center' },
+  flexPointTitle: { fontSize: 18, fontWeight: '700', color: '#F5A623' },
+  flexDesc: { fontSize: 13, color: '#666666', textAlign: 'center', marginTop: 8 },
+  flexSep: { height: 1, backgroundColor: '#EEEEEE', marginVertical: 12 },
+  flexKV: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
+  flexKVKey: { fontSize: 13, color: '#999999' },
+  flexKVVal: { fontSize: 13, fontWeight: '600', color: '#333333' },
+  flexFooterBtn: { backgroundColor: '#FF6B6B', margin: 12, borderRadius: 8, paddingVertical: 10, alignItems: 'center' },
+  flexFooterBtnText: { fontSize: 13, fontWeight: '600', color: '#FFF' },
+  flexAlt: { fontSize: 12, color: WebColors.gray300, padding: 10, borderTopWidth: 1, borderTopColor: WebColors.gray100 },
 });

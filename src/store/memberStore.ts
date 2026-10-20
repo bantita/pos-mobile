@@ -4,11 +4,20 @@
  */
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { Member, PointTransaction, PointConfig } from '../types/member';
+import { Member, PointTransaction, PointConfig, MemberLevel } from '../types/member';
 import { MOCK_MEMBERS, MOCK_POINT_TRANSACTIONS, MOCK_POINT_CONFIG } from '../data/mockMembers';
 import { logAction } from './auditLogStore';
 import { isFreshStore } from './freshStore';
 import { persistStorage } from './persistStorage';
+import {
+  triggerWelcomeCoupon,
+  triggerLevelUpReward,
+  triggerBirthdayCoupon,
+  triggerWinBackCoupon,
+} from '../services/autoCouponTriggers';
+
+// ลำดับระดับสมาชิก ใช้ตรวจว่าเป็นการ "เลื่อนขึ้น" จริง (2H level-up trigger)
+const LEVEL_ORDER: MemberLevel[] = ['member', 'silver', 'gold', 'platinum', 'vip'];
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -30,6 +39,8 @@ interface MemberStore {
   redeemPoints: (memberId: string, points: number, saleNo: string, createdBy: string) => PointTransaction;
   getPointHistory: (memberId: string) => PointTransaction[];
   getMemberById: (id: string) => Member | undefined;
+  /** 2H: สแกนสมาชิกทั้งหมด แล้วยิง trigger ตามเงื่อนไข (win-back 30 วัน + วันเกิด) — idempotent */
+  runScheduledAutoCoupons: () => void;
 }
 
 export const useMemberStore = create<MemberStore>()(
@@ -61,6 +72,9 @@ export const useMemberStore = create<MemberStore>()(
     };
     set(s => ({ members: [...s.members, newMember] }));
     logAction('CRM', 'เพิ่มสมาชิก', `เพิ่มสมาชิก ${newMember.name} (${newMember.memberNo})`, { memberId: newMember.id, phone: newMember.phone });
+    // 2H: สมาชิกใหม่ -> คูปองต้อนรับ (+ คูปองวันเกิดถ้าสมัครตรงวันเกิด) — idempotent ในตัว trigger
+    triggerWelcomeCoupon(newMember);
+    triggerBirthdayCoupon(newMember);
     return newMember;
   },
 
@@ -73,6 +87,15 @@ export const useMemberStore = create<MemberStore>()(
         : s.selectedMember,
     }));
     logAction('CRM', 'แก้ไขสมาชิก', `แก้ไขข้อมูล ${member?.name || id}`, { memberId: id, changes: data });
+    // 2H: ตรวจการเลื่อนระดับ (level-up) -> ของรางวัลเลื่อนระดับ
+    if (member && data.level && data.level !== member.level) {
+      const prevIdx = LEVEL_ORDER.indexOf(member.level);
+      const nextIdx = LEVEL_ORDER.indexOf(data.level);
+      if (nextIdx > prevIdx) {
+        const updated = get().members.find(m => m.id === id);
+        if (updated) triggerLevelUpReward(updated, data.level);
+      }
+    }
   },
 
   selectMember: (member) => set({ selectedMember: member }),
@@ -151,6 +174,15 @@ export const useMemberStore = create<MemberStore>()(
 
   getMemberById: (id) => {
     return get().members.find(m => m.id === id);
+  },
+
+  runScheduledAutoCoupons: () => {
+    // 2H: ยิง win-back (ไม่ซื้อเกิน 30 วัน) + birthday (วันเกิดวันนี้) — trigger idempotent ในตัว
+    get().members.forEach(m => {
+      if (!m.isActive) return;
+      triggerWinBackCoupon(m);
+      triggerBirthdayCoupon(m);
+    });
   },
     }),
     { name: 'pos-members', storage: createJSONStorage(() => persistStorage) }
