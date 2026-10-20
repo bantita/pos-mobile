@@ -6,7 +6,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { logAction } from './auditLogStore';
 import { persistStorage } from './persistStorage';
-import { CartItem, Payment, Discount } from '../types/sale';
+import { CartItem, Payment, Discount, OrderType, OrderDetails } from '../types/sale';
 import { isFreshStore } from './freshStore';
 
 export interface SaleRecord {
@@ -30,6 +30,10 @@ export interface SaleRecord {
   branchName?: string;
   status: 'completed' | 'voided' | 'returned';
   returnedItems?: { productId: string; qty: number; amount: number }[];
+  /** ประเภทการสั่งซื้อ (ปกติ/สั่งจอง/เดลิเวอรี/ทานที่ร้าน) — ไม่บังคับเพื่อ backward-compat กับบิลเก่า */
+  orderType?: OrderType;
+  /** รายละเอียดเฉพาะประเภทการสั่งซื้อ */
+  orderDetails?: OrderDetails;
   createdAt: Date;
 }
 

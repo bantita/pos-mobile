@@ -69,6 +69,39 @@ export interface SaleOrder {
   status: 'pending' | 'completed' | 'cancelled';
 }
 
+// ─── Order Type (ประเภทการสั่งซื้อ) ────────────────────────────────────────────
+// แยกจาก saleMode (ช่องทางรับออเดอร์: ปุ่ม/สแกน) — orderType คือ "รูปแบบการขาย"
+export type OrderType = 'normal' | 'preorder' | 'delivery' | 'dinein';
+
+export interface OrderDetails {
+  /** สั่งจอง — วันที่นัดรับสินค้า (ISO string) */
+  readyDate?: string;
+  /** เดลิเวอรี — ที่อยู่จัดส่ง */
+  address?: string;
+  /** เดลิเวอรี — เบอร์ติดต่อ */
+  phone?: string;
+  /** เดลิเวอรี — หมายเหตุ */
+  note?: string;
+  /** ทานที่ร้าน — เลขโต๊ะ */
+  tableNo?: string;
+  /** ทานที่ร้าน — โซน */
+  zone?: string;
+}
+
+export const ORDER_TYPE_LABELS: Record<OrderType, string> = {
+  normal: 'ปกติ',
+  preorder: 'สั่งจอง',
+  delivery: 'เดลิเวอรี',
+  dinein: 'ทานที่ร้าน',
+};
+
+export const ORDER_TYPE_ICONS: Record<OrderType, string> = {
+  normal: 'cart-outline',
+  preorder: 'calendar-outline',
+  delivery: 'bicycle-outline',
+  dinein: 'restaurant-outline',
+};
+
 export type PaymentMethod = Payment['method'];
 
 export const PAYMENT_LABELS: Record<PaymentMethod, string> = {

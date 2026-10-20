@@ -1,0 +1,25 @@
+{
+  "id": "FEAT-003",
+  "type": "feat",
+  "description": "Sale ORDER TYPES (1C): normal / pre-order / delivery / dine-in, which are missing entirely. Introduce orderType WITHOUT overloading the existing saleMode (which is an input method: button/scan/both). Pre-order must NOT deduct stock at sale time. Depends on FEAT-001 (shares cartStore + PaymentScreen + saleHistoryStore edits).",
+  "status": "completed",
+  "steps": [
+    "Add OrderType = 'normal' | 'preorder' | 'delivery' | 'dinein' plus per-mode detail fields to src/types/sale.ts (e.g. OrderDetails: preorder {readyDate: string}, delivery {address: string, phone?: string, note?: string}, dinein {tableNo: string, zone?: string}). Add orderType + orderDetails to SaleRecord in src/store/saleHistoryStore.ts.",
+    "Extend src/store/cartStore.ts: add orderType (default 'normal') and orderDetails to state + a setOrderType/setOrderDetails action; include them in partialize so they persist; reset them in clearCart.",
+    "Add a selector UI on src/screens/sale/POSSaleScreen.tsx: a small inline control or modal with Thai labels (ปกติ / สั่งจอง / เดลิเวอรี / ทานที่ร้าน) that sets cartStore.orderType and collects the per-mode fields (date for preorder, address/phone/note for delivery, table/zone for dine-in). Use the screen's existing token/StyleSheet convention.",
+    "In src/screens/sale/PaymentScreen.tsx handleConfirmPayment: when orderType === 'preorder', do NOT call deductStock (// preorder: จองไม่ตัดสต๊อก); all other types keep current stock behavior. Pass orderType/orderDetails into the SaleRecord created for saleHistoryStore.addSale.",
+    "Reflect orderType on src/screens/sale/ReceiptScreen.tsx (Thai label badge) and in sale history display if trivial. Ensure void/return paths still work (they read SaleRecord; just carry the new optional fields)."
+  ],
+  "acceptance_criteria": [
+    "orderType/orderDetails exist on cartStore (persisted, reset on clearCart) and on SaleRecord, distinct from saleMode.",
+    "POSSaleScreen has a Thai order-type selector capturing per-mode fields.",
+    "Pre-order payment does NOT deduct stock; normal/delivery/dine-in deduct as before.",
+    "ReceiptScreen shows the order type; void/return still function."
+  ],
+  "verification": [
+    "npm run lint (no new tsc errors beyond baseline 13)",
+    "npm test (no non-baseline regressions)"
+  ],
+  "blocked_reason": null,
+  "findings": "Added OrderType ('normal'|'preorder'|'delivery'|'dinein') + OrderDetails interface + ORDER_TYPE_LABELS/ICONS to src/types/sale.ts, kept fully separate from saleMode (input method). cartStore gained orderType (default 'normal') + orderDetails state, setOrderType/setOrderDetails actions, both persisted via partialize and reset in clearCart (setOrderDetails replaces, not merges, so switching to 'normal' clears per-mode fields). POSSaleScreen: added a Thai order-type chip in the top bar opening an OrderTypeModal (ปกติ/สั่งจอง/เดลิเวอรี/ทานที่ร้าน) that collects per-mode fields (preorder readyDate; delivery address/phone/note; dine-in tableNo/zone) with required-field validation, using the screen's local StyleSheet + Colors/Typography/Spacing tokens and 44px touch targets. PaymentScreen.handleConfirmPayment now skips deductStock when orderType==='preorder' (// preorder: จองไม่ตัดสต๊อก) and carries orderType/orderDetails into the SaleRecord passed to addSale. ReceiptScreen shows a Thai order-type badge + per-mode detail lines (pulled from cartStore, which still holds them until clearCart on new sale). SaleRecord.orderType/orderDetails are optional so void/return paths and existing MOCK_SALES remain valid. Skipped the optional WebSaleHistory display (web screen uses different WebColors conventions; not required by AC). Verification: npm run lint = 13 baseline tsc errors, 0 new; npm test = 14 passed + the 3 known pre-existing suite-load failures only; engine self-test 39 passed / 0 failed."
+}

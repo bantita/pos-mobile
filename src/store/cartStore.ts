@@ -4,15 +4,19 @@
  */
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { CartItem, Discount, HoldBill, Product } from '../types/sale';
+import { CartItem, Discount, HoldBill, Product, OrderType, OrderDetails } from '../types/sale';
 import { persistStorage } from './persistStorage';
 
 interface CartState {
   items: CartItem[];
   discount: Discount | null;
   holdBills: HoldBill[];
+  orderType: OrderType;
+  orderDetails: OrderDetails;
 
   // Actions
+  setOrderType: (orderType: OrderType) => void;
+  setOrderDetails: (details: OrderDetails) => void;
   addItem: (product: Product, qty?: number) => void;
   addServiceItem: (product: Product, technicianId: string, technicianName: string) => void;
   removeItem: (productId: string) => void;
@@ -46,6 +50,11 @@ export const useCartStore = create<CartState>()(
   items: [],
   discount: null,
   holdBills: [],
+  orderType: 'normal',
+  orderDetails: {},
+
+  setOrderType: (orderType) => set({ orderType }),
+  setOrderDetails: (details) => set({ orderDetails: details }),
 
   addItem: (product, qty = 1) => {
     set((state) => {
@@ -113,7 +122,7 @@ export const useCartStore = create<CartState>()(
 
   setDiscount: (discount) => set({ discount }),
 
-  clearCart: () => set({ items: [], discount: null }),
+  clearCart: () => set({ items: [], discount: null, orderType: 'normal', orderDetails: {} }),
 
   holdBill: (customerRef, remark) =>
     set((state) => {
@@ -168,7 +177,7 @@ export const useCartStore = create<CartState>()(
     {
       name: 'pos-cart',
       storage: createJSONStorage(() => persistStorage),
-      partialize: (state) => ({ items: state.items, discount: state.discount, holdBills: state.holdBills }),
+      partialize: (state) => ({ items: state.items, discount: state.discount, holdBills: state.holdBills, orderType: state.orderType, orderDetails: state.orderDetails }),
     }
   )
 );

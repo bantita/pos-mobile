@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useCartStore } from '../../store/cartStore';
 import { useSaleModeStore } from '../../store/saleModeStore';
-import { Product } from '../../types/sale';
+import { Product, OrderType, OrderDetails, ORDER_TYPE_LABELS, ORDER_TYPE_ICONS } from '../../types/sale';
 import { ProductUOM } from '../../types/product';
 import { useNavigation } from '@react-navigation/native';
 import { useKioskStore } from '../../store/kioskStore';
@@ -187,6 +187,199 @@ const sfStyles = StyleSheet.create({
   price: { ...Typography.h4, color: Colors.white },
 });
 
+// ─── Order Type Selector Modal ──────────────────────────────────────────────────
+const ORDER_TYPES: OrderType[] = ['normal', 'preorder', 'delivery', 'dinein'];
+
+interface OrderTypeModalProps {
+  visible: boolean;
+  orderType: OrderType;
+  orderDetails: OrderDetails;
+  onApply: (orderType: OrderType, details: OrderDetails) => void;
+  onClose: () => void;
+}
+
+const OrderTypeModal: React.FC<OrderTypeModalProps> = ({ visible, orderType, orderDetails, onApply, onClose }) => {
+  const [selected, setSelected] = useState<OrderType>(orderType);
+  const [details, setDetails] = useState<OrderDetails>(orderDetails);
+
+  // sync เมื่อเปิด modal ใหม่
+  React.useEffect(() => {
+    if (visible) {
+      setSelected(orderType);
+      setDetails(orderDetails);
+    }
+  }, [visible, orderType, orderDetails]);
+
+  const updateField = (field: keyof OrderDetails, value: string) =>
+    setDetails((d) => ({ ...d, [field]: value }));
+
+  // ตรวจความครบของข้อมูลตามประเภท
+  const isValid =
+    selected === 'normal' ? true :
+    selected === 'preorder' ? !!details.readyDate?.trim() :
+    selected === 'delivery' ? !!details.address?.trim() :
+    selected === 'dinein' ? !!details.tableNo?.trim() :
+    true;
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={otStyles.overlay}>
+        <View style={otStyles.sheet}>
+          <View style={otStyles.handle} />
+          <Text style={otStyles.title}>ประเภทการสั่งซื้อ</Text>
+
+          {/* ตัวเลือกประเภท */}
+          <View style={otStyles.typeGrid}>
+            {ORDER_TYPES.map((t) => {
+              const active = selected === t;
+              return (
+                <TouchableOpacity
+                  key={t}
+                  style={[otStyles.typeCard, active && otStyles.typeCardActive]}
+                  onPress={() => setSelected(t)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name={ORDER_TYPE_ICONS[t] as any}
+                    size={22}
+                    color={active ? Colors.white : Colors.primary}
+                  />
+                  <Text style={[otStyles.typeText, active && { color: Colors.white }]}>
+                    {ORDER_TYPE_LABELS[t]}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* ฟิลด์เฉพาะประเภท */}
+          {selected === 'preorder' && (
+            <View style={otStyles.fieldGroup}>
+              <Text style={otStyles.fieldLabel}>วันที่นัดรับ *</Text>
+              <TextInput
+                style={otStyles.input}
+                placeholder="เช่น 2024-07-01"
+                placeholderTextColor={Colors.gray400}
+                value={details.readyDate ?? ''}
+                onChangeText={(v) => updateField('readyDate', v)}
+              />
+            </View>
+          )}
+
+          {selected === 'delivery' && (
+            <>
+              <View style={otStyles.fieldGroup}>
+                <Text style={otStyles.fieldLabel}>ที่อยู่จัดส่ง *</Text>
+                <TextInput
+                  style={[otStyles.input, otStyles.inputMultiline]}
+                  placeholder="บ้านเลขที่ / ถนน / แขวง / เขต"
+                  placeholderTextColor={Colors.gray400}
+                  value={details.address ?? ''}
+                  onChangeText={(v) => updateField('address', v)}
+                  multiline
+                />
+              </View>
+              <View style={otStyles.fieldGroup}>
+                <Text style={otStyles.fieldLabel}>เบอร์ติดต่อ</Text>
+                <TextInput
+                  style={otStyles.input}
+                  placeholder="เบอร์โทรผู้รับ"
+                  placeholderTextColor={Colors.gray400}
+                  value={details.phone ?? ''}
+                  onChangeText={(v) => updateField('phone', v)}
+                  keyboardType="phone-pad"
+                />
+              </View>
+              <View style={otStyles.fieldGroup}>
+                <Text style={otStyles.fieldLabel}>หมายเหตุ</Text>
+                <TextInput
+                  style={otStyles.input}
+                  placeholder="หมายเหตุการจัดส่ง"
+                  placeholderTextColor={Colors.gray400}
+                  value={details.note ?? ''}
+                  onChangeText={(v) => updateField('note', v)}
+                />
+              </View>
+            </>
+          )}
+
+          {selected === 'dinein' && (
+            <>
+              <View style={otStyles.fieldGroup}>
+                <Text style={otStyles.fieldLabel}>เลขโต๊ะ *</Text>
+                <TextInput
+                  style={otStyles.input}
+                  placeholder="เช่น A12"
+                  placeholderTextColor={Colors.gray400}
+                  value={details.tableNo ?? ''}
+                  onChangeText={(v) => updateField('tableNo', v)}
+                />
+              </View>
+              <View style={otStyles.fieldGroup}>
+                <Text style={otStyles.fieldLabel}>โซน</Text>
+                <TextInput
+                  style={otStyles.input}
+                  placeholder="เช่น ชั้น 2 / ริมหน้าต่าง"
+                  placeholderTextColor={Colors.gray400}
+                  value={details.zone ?? ''}
+                  onChangeText={(v) => updateField('zone', v)}
+                />
+              </View>
+            </>
+          )}
+
+          <TouchableOpacity
+            style={[otStyles.applyBtn, !isValid && otStyles.applyBtnDisabled]}
+            onPress={() => {
+              // ประเภทปกติ — ล้างรายละเอียดเดิมทิ้ง
+              onApply(selected, selected === 'normal' ? {} : details);
+              onClose();
+            }}
+            disabled={!isValid}
+            activeOpacity={0.85}
+          >
+            <Text style={otStyles.applyText}>ยืนยัน</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={otStyles.cancelBtn} onPress={onClose}>
+            <Text style={otStyles.cancelText}>ยกเลิก</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+const otStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: Colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: Spacing.lg, gap: Spacing.sm },
+  handle: { width: 40, height: 4, backgroundColor: Colors.gray200, borderRadius: 2, alignSelf: 'center', marginBottom: Spacing.xs },
+  title: { ...Typography.h4, color: Colors.text },
+  typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  typeCard: {
+    flex: 1, minWidth: '45%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: Spacing.xs, paddingVertical: Spacing.md, borderRadius: BorderRadius.md,
+    backgroundColor: Colors.gray100, borderWidth: 1.5, borderColor: Colors.border,
+  },
+  typeCardActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  typeText: { ...Typography.label, color: Colors.text, fontWeight: '700' },
+  fieldGroup: { gap: 4, marginTop: Spacing.xs },
+  fieldLabel: { ...Typography.caption, color: Colors.textSecondary },
+  input: {
+    minHeight: 44, backgroundColor: Colors.gray100, borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
+    ...Typography.body2, color: Colors.text, borderWidth: 1, borderColor: Colors.border,
+  },
+  inputMultiline: { minHeight: 64, textAlignVertical: 'top' },
+  applyBtn: {
+    marginTop: Spacing.md, backgroundColor: Colors.primary, borderRadius: BorderRadius.md,
+    minHeight: 44, alignItems: 'center', justifyContent: 'center',
+  },
+  applyBtnDisabled: { backgroundColor: Colors.gray300 },
+  applyText: { ...Typography.button, color: Colors.white },
+  cancelBtn: { alignItems: 'center', paddingVertical: Spacing.sm },
+  cancelText: { ...Typography.button, color: Colors.danger },
+});
+
 // ─── Main Component ────────────────────────────────────────────────────────────
 export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
   onOpenCart, onOpenScanner, onOpenHoldBill,
@@ -194,8 +387,11 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
   cashierName = 'พนักงาน', posName = 'POS 1',
 }) => {
   const navigation = useNavigation();
-  const { addItem, getItemCount, getGrandTotal } = useCartStore();
+  const { addItem, getItemCount, getGrandTotal, orderType, orderDetails, setOrderType, setOrderDetails } = useCartStore();
   const { mode, gridColumns, autoOpenCamera, beepOnScan } = useSaleModeStore();
+
+  // ── Order Type selector (ประเภทการสั่งซื้อ) ──
+  const [showOrderTypeModal, setShowOrderTypeModal] = useState(false);
 
   // UI State
   const [selectedCategory, setSelectedCategory] = useState('ทั้งหมด');
@@ -463,6 +659,17 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
           <Text style={styles.cashierName}>{cashierName}</Text>
         </View>
 
+        {/* ตัวเลือกประเภทการสั่งซื้อ */}
+        <TouchableOpacity
+          style={styles.orderTypeChip}
+          onPress={() => setShowOrderTypeModal(true)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name={ORDER_TYPE_ICONS[orderType] as any} size={14} color={Colors.primary} />
+          <Text style={styles.orderTypeChipText}>{ORDER_TYPE_LABELS[orderType]}</Text>
+          <Ionicons name="chevron-down" size={12} color={Colors.primary} />
+        </TouchableOpacity>
+
         {/* Mode switcher (compact) — แสดงเฉพาะ mode=both */}
         {mode === 'both' && (
           <View style={styles.tabSwitcher}>
@@ -581,6 +788,15 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
         }}
       />
 
+      {/* ── Order Type Modal ── */}
+      <OrderTypeModal
+        visible={showOrderTypeModal}
+        orderType={orderType}
+        orderDetails={orderDetails}
+        onApply={(t, d) => { setOrderType(t); setOrderDetails(d); }}
+        onClose={() => setShowOrderTypeModal(false)}
+      />
+
       {/* ── Sale Mode Settings Modal ── */}
       <Modal visible={showModeSettings} animationType="slide" transparent>
         <View style={styles.modeModalOverlay}>
@@ -608,6 +824,13 @@ const styles = StyleSheet.create({
   },
   posName: { ...Typography.label, color: Colors.white, fontWeight: '700' },
   cashierName: { ...Typography.caption, color: 'rgba(255,255,255,0.7)' },
+
+  orderTypeChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: Colors.white, borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.sm, paddingVertical: 5,
+  },
+  orderTypeChipText: { ...Typography.caption, color: Colors.primary, fontWeight: '700' },
 
   tabSwitcher: {
     flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.2)',

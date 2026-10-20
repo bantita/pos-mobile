@@ -55,7 +55,7 @@ const PAYMENT_METHODS: {
 const QUICK_CASH = [20, 50, 100, 500, 1000];
 
 export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) => {
-  const { getGrandTotal, getSubtotal, getDiscountTotal, getVatAmount, items, discount } = useCartStore();
+  const { getGrandTotal, getSubtotal, getDiscountTotal, getVatAmount, items, discount, orderType, orderDetails } = useCartStore();
   const grandTotalBase = getGrandTotal();
 
   // ── Service Charge ──
@@ -223,10 +223,13 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
     }
 
     // ── ตัดสต๊อก ──
-    const { deductStock } = useProductStore.getState();
-    items.forEach((item) => {
-      deductStock(item.product.id, item.qty);
-    });
+    // preorder: จองไม่ตัดสต๊อก (ตัดสต๊อกตอนส่งมอบจริงภายหลัง) — ประเภทอื่นตัดสต๊อกตามปกติ
+    if (orderType !== 'preorder') {
+      const { deductStock } = useProductStore.getState();
+      items.forEach((item) => {
+        deductStock(item.product.id, item.qty);
+      });
+    }
 
     // ── บันทึกยอดกะ ──
     const { addCashSale, isShiftOpen } = useShiftStore.getState();
@@ -254,6 +257,8 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
       cashierName: 'แคชเชียร์',
       posName: 'POS 1',
       status: 'completed',
+      orderType,
+      orderDetails,
       createdAt: new Date(),
     });
 

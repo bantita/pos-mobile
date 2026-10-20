@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useCartStore } from '../../store/cartStore';
-import { Payment, PaymentMethod, PAYMENT_LABELS } from '../../types/sale';
+import { Payment, PaymentMethod, PAYMENT_LABELS, ORDER_TYPE_LABELS, ORDER_TYPE_ICONS } from '../../types/sale';
 import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
 import { Spacing, BorderRadius } from '../../constants/spacing';
@@ -50,7 +50,7 @@ export const ReceiptScreen: React.FC<ReceiptScreenProps> = ({
   cashierName = 'พนักงาน',
   posName = 'POS 1',
 }) => {
-  const { items, discount, getSubtotal, getDiscountTotal, getVatAmount, getGrandTotal, clearCart } = useCartStore();
+  const { items, discount, getSubtotal, getDiscountTotal, getVatAmount, getGrandTotal, clearCart, orderType, orderDetails } = useCartStore();
   const [showPrinterModal, setShowPrinterModal] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [printedBy, setPrintedBy] = useState<string | null>(null);
@@ -133,6 +133,34 @@ export const ReceiptScreen: React.FC<ReceiptScreenProps> = ({
               </View>
             ))}
           </View>
+
+          {/* ประเภทการสั่งซื้อ — แสดง badge + รายละเอียดเมื่อไม่ใช่แบบปกติ */}
+          {orderType && orderType !== 'normal' && (
+            <>
+              <View style={styles.dottedLine} />
+              <View style={styles.orderTypeSection}>
+                <View style={styles.orderTypeBadge}>
+                  <Ionicons name={ORDER_TYPE_ICONS[orderType] as any} size={13} color={Colors.primary} />
+                  <Text style={styles.orderTypeBadgeText}>{ORDER_TYPE_LABELS[orderType]}</Text>
+                </View>
+                {orderType === 'preorder' && orderDetails?.readyDate ? (
+                  <Text style={styles.orderTypeDetail}>วันที่นัดรับ: {orderDetails.readyDate}</Text>
+                ) : null}
+                {orderType === 'delivery' ? (
+                  <>
+                    {orderDetails?.address ? <Text style={styles.orderTypeDetail}>จัดส่ง: {orderDetails.address}</Text> : null}
+                    {orderDetails?.phone ? <Text style={styles.orderTypeDetail}>เบอร์ติดต่อ: {orderDetails.phone}</Text> : null}
+                    {orderDetails?.note ? <Text style={styles.orderTypeDetail}>หมายเหตุ: {orderDetails.note}</Text> : null}
+                  </>
+                ) : null}
+                {orderType === 'dinein' ? (
+                  <Text style={styles.orderTypeDetail}>
+                    โต๊ะ: {orderDetails?.tableNo ?? '-'}{orderDetails?.zone ? ` · โซน ${orderDetails.zone}` : ''}
+                  </Text>
+                ) : null}
+              </View>
+            </>
+          )}
 
           <View style={styles.dottedLine} />
 
@@ -318,6 +346,14 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', justifyContent: 'space-between' },
   infoLabel: { ...Typography.caption, color: Colors.textSecondary },
   infoValue: { ...Typography.caption, color: Colors.text, fontWeight: '500' },
+  orderTypeSection: { gap: 4 },
+  orderTypeBadge: {
+    flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 4,
+    backgroundColor: Colors.primaryLight, borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.sm, paddingVertical: 2,
+  },
+  orderTypeBadgeText: { ...Typography.caption, color: Colors.primary, fontWeight: '700' },
+  orderTypeDetail: { ...Typography.caption, color: Colors.textSecondary },
   itemsSection: { gap: Spacing.xs },
   itemsHeader: { ...Typography.label, color: Colors.textSecondary, marginBottom: Spacing.xs },
   receiptItem: { gap: 2 },
