@@ -1,0 +1,29 @@
+{
+  "id": "FEAT-004",
+  "type": "feat",
+  "description": "Web Sync settings screen: the web settings 'sync' subView is a SimpleSubPage placeholder, while syncStore has a working MOCK_SYNC queue (pending→syncing→success/conflict, persisted). Build the real screen bound to useSyncStore and replace the placeholder. Stays mock (gated by FEATURE_FLAGS.MOCK_SYNC); no real server. Independent of the other FEATs.",
+  "status": "completed",
+  "steps": [
+    "Create src/screens/web/WebSyncSettingsScreen.tsx (props: { onBack: () => void }) bound to useSyncStore from ../../store/syncStore. Mirror the store wiring of src/screens/sync/SyncQueueScreen.tsx (it is already store-bound — reuse its STATUS config/labels and item rendering, adapted to WebColors/web layout). Do NOT copy src/screens/settings/SyncMonitorScreen.tsx data wiring (it uses its own local MOCK_SYNC, not the store).",
+    "Render live queue stats from getStats(): total + pending/syncing/success/failed/conflict counts as summary badges (Thai labels: รอ/กำลังซิงค์/สำเร็จ/ล้มเหลว/ขัดแย้ง). Show lastSyncAt ('ซิงค์ล่าสุด: ...' via utils/format formatDateTime, or 'ยังไม่เคยซิงค์' when null) and online/sync status (isOnline, isSyncing).",
+    "List queued + failed (and conflict) items from store.transactions with documentNo, description, deviceName, status badge, and errorMessage for failed items.",
+    "Add a 'ซิงค์ทันที' (force sync) button that calls startSync(); disable/spinner while isSyncing. Optionally also surface retryAllFailed() when getStats().failed > 0 ('ลองใหม่ทั้งหมด').",
+    "When getStats().conflict > 0, surface a conflicts section/button that lets the user resolve: either embed/navigate to src/screens/sync/ConflictResolutionScreen.tsx (props { onBack, onResolved }) via a local sub-view state, or provide an inline resolver per conflict calling resolveConflict(id, 'server_wins'|'client_wins', manualValue?). Reuse the existing ConflictResolution types/labels.",
+    "Thai labels throughout; include loading (brief), empty state ('ไม่มีรายการในคิว') and an error/failed treatment. Keep it mock-consistent: do not call any network; preserve FEATURE_FLAGS.MOCK_SYNC gating already inside the store.",
+    "Replace the placeholder in src/screens/web/WebSimpleScreens.tsx: where subView === 'sync' currently returns <SimpleSubPage title=\"Sync Monitor\" ... />, import WebSyncSettingsScreen and return <WebSyncSettingsScreen onBack={() => setSubView(null)} /> instead. Keep the existing settings tile (key: 'sync') that routes to this subView."
+  ],
+  "acceptance_criteria": [
+    "src/screens/web/WebSyncSettingsScreen.tsx is bound to useSyncStore (not a local mock) and shows live stats, the queued/failed item list, last-synced time, and sync status.",
+    "The 'ซิงค์ทันที' button triggers startSync() and the UI reflects pending→syncing→success/conflict as the store updates.",
+    "When conflicts exist, the user can reach a conflict resolver (ConflictResolutionScreen or inline) that calls resolveConflict and the item leaves conflict state.",
+    "ตั้งค่า → Sync Monitor tile opens the real screen (placeholder removed); screen remains mock-only with FEATURE_FLAGS.MOCK_SYNC gating intact.",
+    "`npm run lint` shows no new tsc errors; `npm test` shows no new failures."
+  ],
+  "verification": [
+    "Run `npm run lint` and confirm no new tsc errors in WebSyncSettingsScreen.tsx / WebSimpleScreens.tsx.",
+    "Run `npm test` and confirm no new failing suites (note SyncService.test.ts already fails to load at baseline — must stay unchanged).",
+    "Manual: ตั้งค่า → Sync Monitor opens the real screen; counts match the seeded queue; press ซิงค์ทันที and watch pending→syncing→success/conflict; open the resolver for a conflict item and resolve it."
+  ],
+  "blocked_reason": null,
+  "findings": "Built src/screens/web/WebSyncSettingsScreen.tsx (props { onBack }) bound to useSyncStore (store จริง, ไม่ใช่ local mock). Mirrors SyncQueueScreen STATUS_CFG labels/icons adapted to WebColors. Shows: online/offline chip, lastSyncAt via formatDateTime ('ซิงค์ล่าสุด: ...' / 'ยังไม่เคยซิงค์', with a toDate() guard since persist can rehydrate the Date as a string), live summary badges for pending/syncing/success/failed/conflict from getStats(), and a queue list (pending+syncing+failed+conflict) with documentNo, description, deviceName, status badge, errorMessage for failed, and conflict-type hint. Actions: 'ซิงค์ทันที' calls startSync() (disabled + spinner while isSyncing / offline), 'ลองใหม่ทั้งหมด (n)' calls retryAllFailed() when failed>0, per-item 'ลองใหม่' calls retryTransaction(id), and an inline per-conflict resolver (client/server/manual compare + RESOLUTION_OPTIONS) calling resolveConflict(id, resolution, manualValue?). Empty state 'ไม่มีรายการในคิว'; error treatment via failed errorMessage + danger badge. Replaced the subView==='sync' SimpleSubPage placeholder in WebSimpleScreens.tsx with <WebSyncSettingsScreen onBack={...} /> and added its import; the existing 'sync' settings tile still routes here. Stays mock: only store methods used (store gates FEATURE_FLAGS.MOCK_SYNC internally), no network. Verification: npm run lint = 13 tsc errors (unchanged baseline, none in the new/edited files); npm test = 24 passed, 3 suites fail to load (engine.test.ts, SyncService.test.ts, branchPermissionStore.test.ts) — all pre-existing baseline, no new failures."
+}

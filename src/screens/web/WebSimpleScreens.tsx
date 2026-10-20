@@ -16,6 +16,7 @@ import { WebAdSettingsScreen } from './WebAdSettingsScreen';
 import { WebRichMenuScreen } from './WebRichMenuScreen';
 import { WebErpSettingsScreen } from './WebErpSettingsScreen';
 import { WebCrmConfigScreen } from './WebCrmConfigScreen';
+import { WebSyncSettingsScreen } from './WebSyncSettingsScreen';
 import { useReceiptStore } from '../../store/receiptStore';
 import { WebStoreSettingsSection } from '../../components/settings/WebStoreSettingsSection';
 import { WebUserStaffScreen } from './WebUserStaffScreen';
@@ -2952,7 +2953,7 @@ export const WebSettingsScreen: React.FC = () => {
   if (subView === 'auditlog')   return <SimpleSubPage title="Audit Log" sub="ประวัติการใช้งานระบบ — ใคร ทำอะไร เมื่อไหร่" onBack={() => setSubView(null)} />;
   if (subView === 'erp')        return <WebErpSettingsScreen    onBack={() => setSubView(null)} />;
   if (subView === 'crmConfig')  return <WebCrmConfigScreen      onBack={() => setSubView(null)} />;
-  if (subView === 'sync')       return <SimpleSubPage title="Sync Monitor" sub="ตรวจสอบสถานะ Sync — Pending / Failed / Conflict" onBack={() => setSubView(null)} />;
+  if (subView === 'sync')       return <WebSyncSettingsScreen   onBack={() => setSubView(null)} />;
   if (subView === 'testtracker') return <WebTestTrackerScreenInline onBack={() => setSubView(null)} />;
   if (subView === 'posPermission') return <SettingPOSPermissionScreen onBack={() => setSubView(null)} />;
   if (subView === 'richmenu')   return <WebRichMenuScreen       onBack={() => setSubView(null)} />;
