@@ -16,6 +16,8 @@ export interface ReceiptConfig {
   footerText:  string;   // ข้อความท้ายบิล
   showLogo:    boolean;
   copies:      number;
+  /** เปิด/ปิดการออกใบกำกับภาษี (ค่าเริ่มต้น: เปิด) */
+  taxInvoiceEnabled?: boolean;
 }
 
 interface ReceiptStoreState {
@@ -36,6 +38,7 @@ const DEFAULT: ReceiptConfig = {
   footerText: 'ขอบคุณที่ใช้บริการ 🙏',
   showLogo:   true,
   copies:     1,
+  taxInvoiceEnabled: true,
 };
 
 export const useReceiptStore = create<ReceiptStoreState>((set) => ({

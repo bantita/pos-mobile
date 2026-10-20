@@ -13,6 +13,9 @@ import { WebPromotionScreen } from '../screens/web/WebPromotionScreen';
 import { WebUserStaffScreen } from '../screens/web/WebUserStaffScreen';
 import { WebPricingModuleScreen } from '../screens/web/WebPricingModuleScreen';
 import { WebSuperAdminScreen } from '../screens/web/WebSuperAdminScreen';
+import { WebLicenseScreen }   from '../screens/web/WebLicenseScreen';
+import { WebDocumentSettingsScreen } from '../screens/web/WebDocumentSettingsScreen';
+import { WebBranchManageScreen } from '../screens/web/WebBranchManageScreen';
 import { useAuthStore }       from '../store/authStore';
 import { canAccess }          from '../constants/rolePermissions';
 
@@ -29,6 +32,9 @@ const PAGE_NAMES: Record<string, string> = {
   team:                       'จัดการทีม',
   auditlog:                   'Audit Log',
   settings:                   'ตั้งค่า',
+  licenses:                   'ใบอนุญาต',
+  documents:                  'ตั้งค่า › เอกสาร',
+  branches:                   'สาขา',
   report_sales_main:          'รายงาน › รายงานการขาย',
   report_sales_summary:       'รายงาน › สรุปการขาย',
   report_daily_summary:       'รายงาน › สรุปประจำวัน',
@@ -100,8 +106,11 @@ export const WebNavigator: React.FC = () => {
   }
 
   const navigate = (r: string) => {
-    // sub-report routes ถือว่า canAccess 'reports'
-    const accessKey = r.startsWith('report_') ? 'reports' : r;
+    // sub-report routes ถือว่า canAccess 'reports';
+    // licenses/documents/branches ไม่มี key ใน rolePermissions → ใช้สิทธิ์ 'settings'
+    const accessKey = r.startsWith('report_')
+      ? 'reports'
+      : (['documents', 'licenses', 'branches'].includes(r) ? 'settings' : r);
     if (canAccess(user.role, accessKey)) {
       setRoute(r);
     } else {
@@ -110,7 +119,8 @@ export const WebNavigator: React.FC = () => {
   };
 
   const isReportRoute = route === 'reports' || route.startsWith('report_');
-  if (!isReportRoute && !canAccess(user.role, route)) {
+  const routeAccessKey = ['documents', 'licenses', 'branches'].includes(route) ? 'settings' : route;
+  if (!isReportRoute && !canAccess(user.role, routeAccessKey)) {
     setTimeout(() => setRoute('dashboard'), 0);
   }
 
@@ -130,6 +140,9 @@ export const WebNavigator: React.FC = () => {
       case 'team':      return <WebUserStaffScreen />;
       case 'auditlog':  return <WebAuditLogScreen />;
       case 'settings':  return <WebSettingsScreen />;
+      case 'licenses':  return <WebLicenseScreen />;
+      case 'documents': return <WebDocumentSettingsScreen />;
+      case 'branches':  return <WebBranchManageScreen />;
       case 'superadmin': return <WebSuperAdminScreen />;
       default:          return <WebDashboardScreen />;
     }
