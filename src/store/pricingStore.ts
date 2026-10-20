@@ -30,7 +30,7 @@ const MOCK_DOCS: PricingDocument[] = [
   },
   {
     id: 'prc-002', docNo: 'PRC-20260615-001', name: 'โปรซัมเมอร์ สาขาหลัก',
-    description: 'ราคาพิเศษช่วงซัมเมอร์ เฉพาะสาขาหลัก', scope: 'branch', branchId: 'branch-01', branchName: 'สาขาหลัก',
+    description: 'ราคาพิเศษช่วงซัมเมอร์ เฉพาะสาขาหลัก', scope: 'branch', branchId: 'b1', branchName: 'สาขาหลัก',
     duration: 'temporary', effectiveDate: '2026-06-15', expiryDate: '2026-07-15', status: 'active',
     items: [
       { productId: 'P001', productCode: 'P001', productName: 'น้ำดื่มสิงห์ 600ml', unit: 'ขวด', costPrice: 6, originalPrice: 12, newPrice: 9, remark: 'ลดราคาซัมเมอร์' },
@@ -40,7 +40,7 @@ const MOCK_DOCS: PricingDocument[] = [
   },
   {
     id: 'prc-003', docNo: 'PRC-20260620-001', name: 'ราคาสาขาท่องเที่ยว',
-    description: 'ราคาพิเศษสำหรับสาขาที่ตั้งในแหล่งท่องเที่ยว', scope: 'branch', branchId: 'branch-02', branchName: 'สาขา เกาะสมุย',
+    description: 'ราคาพิเศษสำหรับสาขาที่ตั้งในแหล่งท่องเที่ยว', scope: 'branch', branchId: 'b2', branchName: 'สาขา 1',
     duration: 'permanent', effectiveDate: '2026-06-20', status: 'active',
     items: [
       { productId: 'P001', productCode: 'P001', productName: 'น้ำดื่มสิงห์ 600ml', unit: 'ขวด', costPrice: 6, originalPrice: 12, newPrice: 15, remark: 'ราคาท่องเที่ยว' },

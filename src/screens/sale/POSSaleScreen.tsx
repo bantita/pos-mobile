@@ -5,7 +5,7 @@
  *   scan_only    → Scanner เท่านั้น
  *   both         → สลับ/แบ่ง Grid + Scanner ได้
  */
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   FlatList, TextInput, Modal, Animated, Vibration, Dimensions,
@@ -24,9 +24,13 @@ import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
 import { Spacing, BorderRadius } from '../../constants/spacing';
 import { formatCurrency } from '../../utils/format';
-import { findProductByBarcode, MOCK_PRODUCTS } from '../../data/mockProducts';
+import { findProductByBarcode } from '../../data/mockProducts';
+import { ProductMaster } from '../../types/product';
 import { MOCK_TECHNICIANS } from '../../data/mockStaff';
 import { useStoreConfigStore } from '../../store/storeConfigStore';
+import { useProductStore } from '../../store/productStore';
+import { useBranchGuard } from '../../hooks/useBranchGuard';
+import { resolveCartPrice } from '../../utils/priceResolver';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -34,24 +38,21 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CATEGORIES = ['ทั้งหมด', 'เครื่องดื่ม', 'อาหาร', 'ขนม', 'ของใช้'];
 
 // แปลง ProductMaster → Product ตาม UOM ที่เลือก
-const toCartProduct = (master: typeof MOCK_PRODUCTS[0], uom: ProductUOM): Product => ({
+// ราคาในตะกร้า resolve ตามสาขาที่ active (ราคาสาขา/ราคากลาง × ratio) ผ่าน resolveCartPrice
+// ถ้าไม่มีเอกสารราคา จะ fallback เป็น uom.salePrice ตามเดิม
+const toCartProduct = (master: ProductMaster, uom: ProductUOM, branchId?: string): Product => ({
   id: `${master.id}_${uom.id}`,
   code: master.code,
   barcode: uom.barcodes[0] ?? master.barcode,
   name: uom.ratio > 1 ? `${master.name} (${uom.unit})` : master.name,
   category: master.categoryName,
-  price: uom.salePrice,
+  price: resolveCartPrice(master, uom, branchId).price,
   cost: uom.costPrice,
   vatIncluded: master.vatIncluded,
   vatRate: master.vatRate,
   unit: uom.unit,
   stockQty: Math.floor(master.stockQty / uom.ratio),
 });
-
-// Flat list สินค้า + UOM ทุกตัว
-const ALL_CART_PRODUCTS: Product[] = MOCK_PRODUCTS.flatMap((m) =>
-  m.uoms.map((uom) => toCartProduct(m, uom))
-);
 
 // ─── Props ─────────────────────────────────────────────────────────────────────
 interface POSSaleScreenProps {
@@ -67,12 +68,13 @@ interface POSSaleScreenProps {
 // ─── UOM Selector Sheet ────────────────────────────────────────────────────────
 interface UOMSelectorProps {
   visible: boolean;
-  masterProduct: typeof MOCK_PRODUCTS[0] | null;
+  masterProduct: ProductMaster | null;
+  branchId?: string;
   onSelect: (product: Product) => void;
   onClose: () => void;
 }
 
-const UOMSelector: React.FC<UOMSelectorProps> = ({ visible, masterProduct, onSelect, onClose }) => {
+const UOMSelector: React.FC<UOMSelectorProps> = ({ visible, masterProduct, branchId, onSelect, onClose }) => {
   if (!masterProduct) return null;
   return (
     <Modal visible={visible} animationType="slide" transparent>
@@ -82,7 +84,7 @@ const UOMSelector: React.FC<UOMSelectorProps> = ({ visible, masterProduct, onSel
           <Text style={uomStyles.title}>{masterProduct.name}</Text>
           <Text style={uomStyles.subtitle}>เลือกหน่วยที่ต้องการขาย</Text>
           {masterProduct.uoms.map((uom) => {
-            const cartProduct = toCartProduct(masterProduct, uom);
+            const cartProduct = toCartProduct(masterProduct, uom, branchId);
             return (
               <TouchableOpacity
                 key={uom.id}
@@ -112,7 +114,7 @@ const UOMSelector: React.FC<UOMSelectorProps> = ({ visible, masterProduct, onSel
                   </View>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={uomStyles.price}>฿{formatCurrency(uom.salePrice)}</Text>
+                  <Text style={uomStyles.price}>฿{formatCurrency(cartProduct.price)}</Text>
                   {uom.isDefault && (
                     <View style={uomStyles.defaultBadge}>
                       <Ionicons name="star" size={9} color={Colors.white} />
@@ -389,6 +391,8 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
   const navigation = useNavigation();
   const { addItem, getItemCount, getGrandTotal, orderType, orderDetails, setOrderType, setOrderDetails } = useCartStore();
   const { mode, gridColumns, autoOpenCamera, beepOnScan } = useSaleModeStore();
+  const { products } = useProductStore();
+  const { activeBranchId } = useBranchGuard();
 
   // ── Order Type selector (ประเภทการสั่งซื้อ) ──
   const [showOrderTypeModal, setShowOrderTypeModal] = useState(false);
@@ -403,7 +407,7 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
 
   // UOM selector
   const [showUOMSelector, setShowUOMSelector] = useState(false);
-  const [selectedMaster, setSelectedMaster] = useState<typeof MOCK_PRODUCTS[0] | null>(null);
+  const [selectedMaster, setSelectedMaster] = useState<ProductMaster | null>(null);
 
   // Service Staff popup
   const [showStaffPopup, setShowStaffPopup] = useState(false);
@@ -420,8 +424,14 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
   const itemCount = getItemCount();
   const grandTotal = getGrandTotal();
 
+  // ── Flat list สินค้า + UOM ทุกตัว (reactive: productStore + สาขาที่ active) ──
+  const allCartProducts = useMemo<Product[]>(
+    () => products.flatMap((m) => m.uoms.map((uom) => toCartProduct(m, uom, activeBranchId))),
+    [products, activeBranchId],
+  );
+
   // ── Filtered products ──
-  const filteredProducts = ALL_CART_PRODUCTS.filter((p) => {
+  const filteredProducts = allCartProducts.filter((p) => {
     const matchCat = selectedCategory === 'ทั้งหมด' || p.category === selectedCategory;
     const matchSearch = !searchText ||
       p.name.toLowerCase().includes(searchText.toLowerCase()) ||
@@ -433,7 +443,7 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
   // ── Add product (จาก grid) ──
   const handleProductPress = useCallback((product: Product) => {
     // Check if this is a SERVICE product → show staff popup
-    const master = MOCK_PRODUCTS.find((m) => product.id.startsWith(m.id + '_'));
+    const master = products.find((m) => product.id.startsWith(m.id + '_'));
     if (master && master.productType === 'service') {
       setServiceProduct(product);
       setShowStaffPopup(true);
@@ -447,27 +457,27 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
     }
     // default UOM → เพิ่มเลย
     addItem(product);
-  }, [addItem]);
+  }, [addItem, products]);
 
   const handleProductLongPress = useCallback((product: Product) => {
     // Long press → เลือก UOM เสมอ
-    const master = MOCK_PRODUCTS.find((m) => product.id.startsWith(m.id + '_'));
+    const master = products.find((m) => product.id.startsWith(m.id + '_'));
     if (master && master.uoms.length > 1) {
       setSelectedMaster(master);
       setShowUOMSelector(true);
     } else {
       addItem(product);
     }
-  }, [addItem]);
+  }, [addItem, products]);
 
   // ── Scan barcode ──
   const handleScan = useCallback((barcode: string) => {
     if (!barcode.trim()) return;
     if (scanFeedbackTimer.current) clearTimeout(scanFeedbackTimer.current);
 
-    const result = findProductByBarcode(barcode.trim(), MOCK_PRODUCTS);
+    const result = findProductByBarcode(barcode.trim(), products);
     if (result) {
-      const cartProduct = toCartProduct(result.product, result.uom);
+      const cartProduct = toCartProduct(result.product, result.uom, activeBranchId);
       addItem(cartProduct);
       setScanResult({ name: cartProduct.name, price: cartProduct.price });
       setScanStatus('found');
@@ -479,7 +489,7 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
     }
     setManualBarcode('');
     scanFeedbackTimer.current = setTimeout(() => setScanStatus('idle'), 1800);
-  }, [addItem, beepOnScan]);
+  }, [addItem, beepOnScan, products, activeBranchId]);
 
   // ── Card width ──
   const cardWidth = (SCREEN_WIDTH - Spacing.md * 2 - Spacing.xs * (gridColumns - 1)) / gridColumns;
@@ -487,7 +497,7 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
   // ── Product Card ──
   const renderProduct = ({ item }: { item: Product }) => {
     const isLargeUnit = !item.unit.match(/^(ชิ้น|ขวด|กระป๋อง|ซอง|ถุง|ก้อน)$/);
-    const master = MOCK_PRODUCTS.find((m) => item.id.startsWith(m.id + '_'));
+    const master = products.find((m) => item.id.startsWith(m.id + '_'));
     const isService = master?.productType === 'service';
     return (
       <TouchableOpacity
@@ -766,6 +776,7 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
       <UOMSelector
         visible={showUOMSelector}
         masterProduct={selectedMaster}
+        branchId={activeBranchId}
         onSelect={(p) => addItem(p)}
         onClose={() => setShowUOMSelector(false)}
       />

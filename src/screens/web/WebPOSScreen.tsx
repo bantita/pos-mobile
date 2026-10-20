@@ -17,6 +17,8 @@ import { MOCK_PRODUCTS } from '../../data/mockProducts';
 import { useCartStore } from '../../store/cartStore';
 import { useCustomerDisplayStore } from '../../store/customerDisplayStore';
 import { useProductStore } from '../../store/productStore';
+import { useBranchGuard } from '../../hooks/useBranchGuard';
+import { resolveCartPrice } from '../../utils/priceResolver';
 import { useMemberStore } from '../../store/memberStore';
 import { usePromoStore } from '../../store/promoStore';
 import { useWalletStore } from '../../store/walletStore';
@@ -119,10 +121,12 @@ const DEFAULT_PAY_TYPES: PaymentType[] = [
 const CATS = ['ทั้งหมด', 'เครื่องดื่ม', 'อาหาร', 'ขนม', 'ของใช้'];
 const fmt = (n: number) => n.toLocaleString('th-TH', { minimumFractionDigits: 2 });
 
-const toCartProduct = (m: typeof MOCK_PRODUCTS[0], uom: ProductUOM): Product => ({
+// ราคาในตะกร้า resolve ตามสาขาที่ active (ราคาสาขา/ราคากลาง × ratio) ผ่าน resolveCartPrice
+// ถ้าไม่มีเอกสารราคา จะ fallback เป็น uom.salePrice ตามเดิม
+const toCartProduct = (m: typeof MOCK_PRODUCTS[0], uom: ProductUOM, branchId?: string): Product => ({
   id: `${m.id}_${uom.id}`, code: m.code, barcode: uom.barcodes[0] ?? m.barcode,
   name: uom.ratio > 1 ? `${m.name} (${uom.unit})` : m.name,
-  category: m.categoryName, price: uom.salePrice, cost: uom.costPrice,
+  category: m.categoryName, price: resolveCartPrice(m, uom, branchId).price, cost: uom.costPrice,
   vatIncluded: m.vatIncluded, vatRate: m.vatRate, unit: uom.unit,
   stockQty: Math.floor(m.stockQty / uom.ratio),
 });
@@ -1373,6 +1377,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
   const { items, addItem, addServiceItem, removeItem, updateQty, clearCart, holdBill, recallBill, holdBills } = useCartStore();
   const { mode: displayMode, setMode: setDisplayMode } = useCustomerDisplayStore();
   const { products: masterProducts } = useProductStore();
+  const { activeBranchId, activeBranch } = useBranchGuard();
   const shift = useShiftStore();
   const posPerms = usePOSPermissionStore();
   const [showOpenShift, setShowOpenShift] = useState(!shift.isShiftOpen());
@@ -1417,10 +1422,10 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
     setPinInput('');
   };
 
-  // ALL_BASE reactive — อัปเดตเมื่อ productStore เปลี่ยน
+  // ALL_BASE reactive — อัปเดตเมื่อ productStore หรือสาขาที่ active เปลี่ยน (ราคาตามสาขา)
   const ALL_BASE = useMemo(() =>
-    masterProducts.map(m => toCartProduct(m, m.uoms[0]))
-  , [masterProducts]);
+    masterProducts.map(m => toCartProduct(m, m.uoms[0], activeBranchId))
+  , [masterProducts, activeBranchId]);
   const [posTab, setPosTab]           = useState<'pos' | 'invoice'>('pos'); // tab หลัก
   const [search, setSearch]           = useState('');
   const [cat, setCat]                 = useState('ทั้งหมด');
@@ -1460,7 +1465,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
       for (const master of masterProducts) {
         for (const uom of master.uoms) {
           if (uom.barcodes.includes(trimmed)) {
-            return toCartProduct(master, uom);
+            return toCartProduct(master, uom, activeBranchId);
           }
         }
       }
@@ -1481,7 +1486,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
       setSearch(trimmed);
     }
     setTimeout(() => searchRef.current?.focus(), 80);
-  }, [handleProductTap]);
+  }, [handleProductTap, masterProducts, ALL_BASE, activeBranchId]);
 
   // Per-item overrides
   const [itemDiscounts, setItemDiscounts] = useState<Record<string, number>>({});   // disc per unit
@@ -2326,6 +2331,10 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
           <View style={s.cartHeaderLeft}>
             <Ionicons name="cart-outline" size={18} color={WebColors.text} />
             <Text style={s.cartTitle}>ตะกร้าสินค้า</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: WebColors.primaryLight, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 }}>
+              <Ionicons name="business-outline" size={11} color={WebColors.primary} />
+              <Text style={{ fontSize: 11, fontWeight: '700', color: WebColors.primary }}>{activeBranch?.name ?? 'สาขาหลัก'}</Text>
+            </View>
           </View>
           <View style={{ flexDirection: 'row', gap: 6 }}>
             {/* จอที่ 2 toggle */}
@@ -3214,7 +3223,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
               const baseId = uomPickerProduct?.id?.split('_')[0];
               const master = masterProducts.find(mp => mp.id === baseId);
               return master?.uoms.map(uom => {
-                const prod = toCartProduct(master, uom);
+                const prod = toCartProduct(master, uom, activeBranchId);
                 return (
                   <TouchableOpacity
                     key={uom.id}

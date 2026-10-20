@@ -11,16 +11,16 @@ export const MOCK_RETAIL_TERMINALS: Terminal[] = [
 
 // ENTERPRISE Demo: 3 branches × 2 terminals = 6 total
 export const MOCK_BRANCHES: Branch[] = [
-  { id: 'branch-001', name: 'สาขาสยาม', address: '999 ถ.พระราม 1 ปทุมวัน กรุงเทพฯ', contactPhone: '02-111-1111' },
-  { id: 'branch-002', name: 'สาขาเซ็นทรัลเวิลด์', address: '4 ถ.ราชดำริ ปทุมวัน กรุงเทพฯ', contactPhone: '02-222-2222' },
-  { id: 'branch-003', name: 'สาขาเมกาบางนา', address: '39 ถ.บางนา-ตราด บางพลี สมุทรปราการ', contactPhone: '02-333-3333' },
+  { id: 'b1', name: 'สาขาหลัก', address: '999 ถ.พระราม 1 ปทุมวัน กรุงเทพฯ', contactPhone: '02-111-1111' },
+  { id: 'b2', name: 'สาขา 1', address: '4 ถ.ราชดำริ ปทุมวัน กรุงเทพฯ', contactPhone: '02-222-2222' },
+  { id: 'b3', name: 'สาขา เชียงใหม่', address: '39 ถ.บางนา-ตราด บางพลี สมุทรปราการ', contactPhone: '02-333-3333' },
 ];
 
 export const MOCK_ENTERPRISE_TERMINALS: Terminal[] = [
-  { id: 'terminal-e1', branchId: 'branch-001', name: 'POS 1', status: 'active' },
-  { id: 'terminal-e2', branchId: 'branch-001', name: 'POS 2', status: 'active' },
-  { id: 'terminal-e3', branchId: 'branch-002', name: 'POS 1', status: 'active' },
-  { id: 'terminal-e4', branchId: 'branch-002', name: 'POS 2', status: 'active' },
-  { id: 'terminal-e5', branchId: 'branch-003', name: 'POS 1', status: 'active' },
-  { id: 'terminal-e6', branchId: 'branch-003', name: 'POS 2', status: 'inactive' },
+  { id: 'terminal-e1', branchId: 'b1', name: 'POS 1', status: 'active' },
+  { id: 'terminal-e2', branchId: 'b1', name: 'POS 2', status: 'active' },
+  { id: 'terminal-e3', branchId: 'b2', name: 'POS 1', status: 'active' },
+  { id: 'terminal-e4', branchId: 'b2', name: 'POS 2', status: 'active' },
+  { id: 'terminal-e5', branchId: 'b3', name: 'POS 1', status: 'active' },
+  { id: 'terminal-e6', branchId: 'b3', name: 'POS 2', status: 'inactive' },
 ];
