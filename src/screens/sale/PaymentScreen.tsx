@@ -3,7 +3,7 @@
  * FR-SALE-006: รับชำระเงิน — Cash, Credit Card, QR Code, Other
  * รองรับ Split Payment (จ่ายหลายช่องทาง)
  */
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   TextInput, ScrollView, Modal, Image,
@@ -17,8 +17,10 @@ import { usePromoStore } from '../../store/promoStore';
 import { useProductStore } from '../../store/productStore';
 import { useShiftStore } from '../../store/shiftStore';
 import { useStoreConfigStore } from '../../store/storeConfigStore';
+import { useSaleHistoryStore } from '../../store/saleHistoryStore';
 import { Payment, PaymentMethod } from '../../types/sale';
 import { Member } from '../../types/member';
+import { runCartPromotions } from '../../engine/adapter/cartAdapter';
 import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
 import { Spacing, BorderRadius } from '../../constants/spacing';
@@ -59,7 +61,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
 
   // ── CRM & Promotion state ─────────────────────────────────────────────────
   const { members, selectedMember, selectMember, searchMembers, earnPoints, redeemPoints, pointConfig } = useMemberStore();
-  const { validateCoupon, applyCoupon } = usePromoStore();
+  const { validateCoupon, applyCoupon, getActivePromotions } = usePromoStore();
   const [showMemberModal, setShowMemberModal] = useState(false);
   const [memberSearch, setMemberSearch]       = useState('');
   const [couponCode, setCouponCode]           = useState('');
@@ -74,24 +76,39 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
     ? searchMembers(memberSearch).filter((m: Member) => m.isActive)
     : members.filter((m: Member) => m.isActive);
 
-  const grandTotal = Math.max(0, grandTotalWithSC - couponDiscount - pointDiscount);
+  // ── Promotion Engine: รันโปรทั้งหมด (7 ประเภท) ตอนเข้าหน้าชำระเงิน ──
+  // คูปองจะถูกส่งเข้า engine เฉพาะเมื่อผ่านการ validate แล้ว (appliedCouponCode)
+  const [appliedCouponCode, setAppliedCouponCode] = useState('');
+  const engineResult = useMemo(() => {
+    return runCartPromotions({
+      cartItems: items,
+      subtotal: getSubtotal(),
+      member: selectedMember ? { id: selectedMember.id, level: selectedMember.level } : undefined,
+      promotions: getActivePromotions(),
+      businessDateTime: new Date().toISOString(),
+      storeCode: 'STORE-001',
+      couponCode: appliedCouponCode || undefined,
+    });
+  }, [items, selectedMember, appliedCouponCode, getActivePromotions, getSubtotal]);
+
+  // ส่วนลดรวมจากโปรทั้งหมด (รายการ + บิล) แทนที่การคิดคูปองใบเดียวแบบเดิม
+  const promotionDiscount = engineResult.totalDiscount;
+  const appliedPromotions = engineResult.appliedBenefits;
+
+  // grandTotal = (ยอดหลังโปรจาก engine) + service charge − แลกคะแนน
+  const grandTotal = Math.max(0, engineResult.finalPayable + scAmount - pointDiscount);
 
   const handleValidateCoupon = () => {
     if (!couponCode.trim()) return;
-    const result = validateCoupon(couponCode, grandTotalBase, selectedMember?.level);
+    const result = validateCoupon(couponCode, getSubtotal(), selectedMember?.level);
     if (result.valid && result.promotion) {
-      const promo = result.promotion;
-      let disc = 0;
-      if (promo.discountPercent) {
-        disc = grandTotalBase * (promo.discountPercent / 100);
-        if (promo.maxDiscount && disc > promo.maxDiscount) disc = promo.maxDiscount;
-      } else if (promo.discountAmount) {
-        disc = promo.discountAmount;
-      }
-      setCouponDiscount(disc);
-      setCouponPromoName(promo.name);
+      // ส่งคูปองเข้า engine เพื่อให้คำนวณร่วมกับโปรอื่น
+      setAppliedCouponCode(couponCode);
+      setCouponPromoName(result.promotion.name);
+      setCouponDiscount(1); // ใช้เป็น flag ว่าใช้คูปองแล้ว (ยอดจริงมาจาก engine)
       setCouponError('');
     } else {
+      setAppliedCouponCode('');
       setCouponDiscount(0);
       setCouponPromoName('');
       setCouponError(result.error || 'คูปองไม่ถูกต้อง');
@@ -149,6 +166,9 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
   const handleConfirmPayment = () => {
     if (!isFullyPaid) return;
     const saleNo = `INV${Date.now().toString().slice(-8)}`;
+    const pointsEarned = selectedMember
+      ? Math.floor(grandTotal / (pointConfig.earnRate || 1))
+      : 0;
 
     // ── CRM: Earn points + apply coupon ──
     if (selectedMember) {
@@ -168,8 +188,14 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
         }
       }
     }
-    if (couponDiscount > 0 && couponCode) {
-      applyCoupon(couponCode, saleNo, couponDiscount, selectedMember?.id);
+    // บันทึกการใช้คูปอง — มูลค่าส่วนลดจริงดึงจากโปรที่ engine นำมาใช้
+    if (appliedCouponCode) {
+      const couponBenefit = appliedPromotions.find(
+        (b) => b.promotionName === couponPromoName
+      );
+      if (couponBenefit) {
+        applyCoupon(appliedCouponCode, saleNo, couponBenefit.value, selectedMember?.id);
+      }
     }
 
     // ── ตัดสต๊อก ──
@@ -183,6 +209,29 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
     if (isShiftOpen()) {
       addCashSale(grandTotal);
     }
+
+    // ── บันทึกประวัติการขาย (SaleRecord) ──
+    useSaleHistoryStore.getState().addSale({
+      id: saleNo,
+      saleNo,
+      items,
+      payments,
+      discount,
+      subtotal: getSubtotal(),
+      discountTotal: getDiscountTotal() + promotionDiscount,
+      serviceCharge: scAmount,
+      vatAmount: getVatAmount(),
+      grandTotal,
+      receivedAmount: totalPaid,
+      changeAmount,
+      memberId: selectedMember?.id,
+      memberName: selectedMember?.name,
+      pointsEarned,
+      cashierName: 'แคชเชียร์',
+      posName: 'POS 1',
+      status: 'completed',
+      createdAt: new Date(),
+    });
 
     // Animate success
     Animated.sequence([
@@ -238,12 +287,27 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
                 </Text>
               </View>
             )}
-            {couponDiscount > 0 && (
-              <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: Colors.category1 }]}>คูปอง ({couponPromoName})</Text>
-                <Text style={[styles.summaryValue, { color: Colors.category1 }]}>
-                  -฿{formatCurrency(couponDiscount)}
+            {/* รายการโปรโมชันที่ถูกนำมาใช้ (จาก promotion engine) */}
+            {appliedPromotions.map((promo) => (
+              <View style={styles.summaryRow} key={promo.promotionId}>
+                <Text style={[styles.summaryLabel, { color: Colors.category1 }]} numberOfLines={1}>
+                  {promo.freeGifts && promo.freeGifts.length > 0 ? 'ของแถม' : 'โปรฯ'} · {promo.promotionName}
                 </Text>
+                {promo.freeGifts && promo.freeGifts.length > 0 ? (
+                  <Text style={[styles.summaryValue, { color: Colors.category1 }]}>
+                    ×{promo.freeGifts.reduce((s, g) => s + g.quantity, 0)}
+                  </Text>
+                ) : (
+                  <Text style={[styles.summaryValue, { color: Colors.category1 }]}>
+                    -฿{formatCurrency(promo.value)}
+                  </Text>
+                )}
+              </View>
+            ))}
+            {scAmount > 0 && (
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Service Charge</Text>
+                <Text style={styles.summaryValue}>฿{formatCurrency(scAmount)}</Text>
               </View>
             )}
             {pointDiscount > 0 && (
@@ -317,9 +381,9 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
               <View style={[styles.couponFeedback, { backgroundColor: Colors.successLight }]}>
                 <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
                 <Text style={[styles.couponFeedbackText, { color: Colors.success }]}>
-                  ลด ฿{formatCurrency(couponDiscount)} ({couponPromoName})
+                  ใช้คูปองแล้ว ({couponPromoName})
                 </Text>
-                <TouchableOpacity onPress={() => { setCouponDiscount(0); setCouponCode(''); setCouponPromoName(''); }}>
+                <TouchableOpacity onPress={() => { setCouponDiscount(0); setCouponCode(''); setCouponPromoName(''); setAppliedCouponCode(''); }}>
                   <Ionicons name="close-circle" size={16} color={Colors.gray400} />
                 </TouchableOpacity>
               </View>

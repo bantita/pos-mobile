@@ -128,6 +128,26 @@ export const MOCK_PROMOTIONS: Promotion[] = [
     createdBy: 'admin',
     shopId: 'shop-01',
   },
+  {
+    id: 'promo-007',
+    promoCode: 'MIXSNACK60',
+    name: 'จัดเซ็ตขนม ลด 60 บาท',
+    description: 'ซื้อสินค้าหมวดขนมครบ 3 ชิ้น รับส่วนลดทันที 60 บาท',
+    type: 'mix_match',
+    status: 'active',
+    startDate: '2026-01-01',
+    endDate: '2026-06-30',
+    applicableCategories: ['ขนม'],
+    buyQty: 3,
+    discountAmount: 60,
+    stackable: true,
+    priority: 2,
+    usageCount: 42,
+    totalDiscountGiven: 2520,
+    createdAt: '2025-12-28',
+    createdBy: 'admin',
+    shopId: 'shop-01',
+  },
 ];
 
 // ==================== Mock Coupon Usages ====================
