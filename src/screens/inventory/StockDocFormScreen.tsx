@@ -15,6 +15,7 @@ import { DocType, StockDocItem, StockDocument } from '../../types/stockDocument'
 import { useStockDocStore } from '../../store/stockDocStore';
 import { ProductSearchDropdown, SelectedProductUOM } from '../../components/inventory/ProductSearchDropdown';
 import { MOCK_WAREHOUSES, MOCK_SUPPLIERS } from '../../data/mockInventory';
+import * as supplierStore from '../../store/supplierStore';
 import { MOCK_PRODUCTS } from '../../data/mockProducts';
 import { findProductByBarcode } from '../../data/mockProducts';
 import { Colors } from '../../constants/colors';
@@ -218,7 +219,8 @@ export const StockDocFormScreen: React.FC<Props> = ({ docType, editDocId, onBack
   const [lastScan, setLastScan]     = useState<{ name: string; qty: number; status: 'ok' | 'err' } | null>(null);
 
   const warehouseName = MOCK_WAREHOUSES.find(w => w.id === warehouseId)?.name ?? '';
-  const supplierName  = MOCK_SUPPLIERS.find(s => s.id === supplierId)?.name ?? '';
+  const suppliers     = supplierStore.getSuppliers();
+  const supplierName  = suppliers.find(s => s.id === supplierId)?.name ?? '';
   const toWarehouseName = MOCK_WAREHOUSES.find(w => w.id === toWarehouseId)?.name ?? '';
 
   const warehouses = MOCK_WAREHOUSES.filter(w => isReceive ? w.type === 'main' : true);
@@ -687,7 +689,7 @@ export const StockDocFormScreen: React.FC<Props> = ({ docType, editDocId, onBack
       />
       <SimplePickerModal
         visible={showSupplierPicker} title="เลือก Supplier"
-        items={[{ id: '', name: '— ไม่ระบุ —' }, ...MOCK_SUPPLIERS.map(s => ({ id: s.id, name: s.name, sub: s.phone }))]}
+        items={[{ id: '', name: '— ไม่ระบุ —' }, ...suppliers.map(s => ({ id: s.id, name: s.name, sub: s.phone }))]}
         selectedId={supplierId}
         onSelect={setSupplierId}
         onClose={() => setShowSupplierPicker(false)}

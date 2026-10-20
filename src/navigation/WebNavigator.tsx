@@ -16,6 +16,7 @@ import { WebSuperAdminScreen } from '../screens/web/WebSuperAdminScreen';
 import { WebLicenseScreen }   from '../screens/web/WebLicenseScreen';
 import { WebDocumentSettingsScreen } from '../screens/web/WebDocumentSettingsScreen';
 import { WebBranchManageScreen } from '../screens/web/WebBranchManageScreen';
+import { WebSupplierScreen }   from '../screens/web/WebSupplierScreen';
 import { useAuthStore }       from '../store/authStore';
 import { canAccess }          from '../constants/rolePermissions';
 
@@ -26,6 +27,7 @@ const PAGE_NAMES: Record<string, string> = {
   salehistory:                'ประวัติขาย',
   products:                   'สินค้า',
   pricing:                    'กำหนดราคา',
+  suppliers:                  'ผู้จำหน่าย',
   reports:                    'รายงาน',
   crm:                        'CRM',
   promotions:                 'โปรโมชั่น',
@@ -110,7 +112,8 @@ export const WebNavigator: React.FC = () => {
     // licenses/documents/branches ไม่มี key ใน rolePermissions → ใช้สิทธิ์ 'settings'
     const accessKey = r.startsWith('report_')
       ? 'reports'
-      : (['documents', 'licenses', 'branches'].includes(r) ? 'settings' : r);
+      : (['documents', 'licenses', 'branches'].includes(r) ? 'settings'
+        : (r === 'suppliers' ? 'products' : r));
     if (canAccess(user.role, accessKey)) {
       setRoute(r);
     } else {
@@ -119,7 +122,8 @@ export const WebNavigator: React.FC = () => {
   };
 
   const isReportRoute = route === 'reports' || route.startsWith('report_');
-  const routeAccessKey = ['documents', 'licenses', 'branches'].includes(route) ? 'settings' : route;
+  const routeAccessKey = ['documents', 'licenses', 'branches'].includes(route) ? 'settings'
+    : (route === 'suppliers' ? 'products' : route);
   if (!isReportRoute && !canAccess(user.role, routeAccessKey)) {
     setTimeout(() => setRoute('dashboard'), 0);
   }
@@ -143,6 +147,7 @@ export const WebNavigator: React.FC = () => {
       case 'licenses':  return <WebLicenseScreen />;
       case 'documents': return <WebDocumentSettingsScreen />;
       case 'branches':  return <WebBranchManageScreen />;
+      case 'suppliers': return <WebSupplierScreen />;
       case 'superadmin': return <WebSuperAdminScreen />;
       default:          return <WebDashboardScreen />;
     }

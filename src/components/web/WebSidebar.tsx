@@ -36,6 +36,7 @@ const NAV_ITEMS = [
   { route: 'salehistory', icon: 'receipt-outline',         label: 'ประวัติขาย' },
   { route: 'products',    icon: 'cube-outline',            label: 'สินค้า'    },
   { route: 'pricing',     icon: 'cash-outline',            label: 'กำหนดราคา' },
+  { route: 'suppliers',   icon: 'business-outline',        label: 'ผู้จำหน่าย' },
   { route: 'reports',     icon: 'bar-chart-outline',       label: 'รายงาน' },
   { route: 'crm',         icon: 'people-circle-outline',   label: 'CRM' },
   { route: 'promotions',  icon: 'pricetag-outline',        label: 'โปรโมชั่น' },
@@ -82,8 +83,9 @@ export const WebSidebar: React.FC<Props> = ({
     if (item.route === 'team' && !features.staffManagement) return false;
     // CRM toggle (super admin controls)
     if (item.route === 'crm' && !getStoreConfig().crmEnabled) return false;
-    // Role-based access
-    if (user && !canAccess(user.role, item.route === 'reports' ? 'reports' : item.route)) return false;
+    // Role-based access ('suppliers' ใช้สิทธิ์ร่วมกับ 'products')
+    const accessKey = item.route === 'reports' ? 'reports' : (item.route === 'suppliers' ? 'products' : item.route);
+    if (user && !canAccess(user.role, accessKey)) return false;
     return true;
   });
 
