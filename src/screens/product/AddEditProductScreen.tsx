@@ -11,7 +11,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ProductMaster } from '../../types/product';
-import { MOCK_CATEGORIES, MOCK_BRANDS, UNITS } from '../../data/mockProducts';
+import { MOCK_CATEGORIES, UNITS } from '../../data/mockProducts';
+import * as brandStore from '../../store/brandStore';
 import { UOMManager } from '../../components/product/UOMManager';
 import type { ProductUOM } from '../../types/product';
 import { logAction } from '../../store/auditLogStore';
@@ -538,7 +539,7 @@ export const AddEditProductScreen: React.FC<AddEditProductScreenProps> = ({
       />
       <PickerModal
         visible={showBrandPicker} title="เลือก Brand"
-        items={[{ id: '', name: '— ไม่ระบุ —' }, ...MOCK_BRANDS.filter((b) => b.status === 'active')]}
+        items={[{ id: '', name: '— ไม่ระบุ —' }, ...brandStore.getBrands().filter((b) => b.status === 'active')]}
         selectedId={brandId}
         onSelect={(id, nm) => { setBrandId(id); setBrandName(id ? nm : ''); }}
         onClose={() => setShowBrandPicker(false)}

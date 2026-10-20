@@ -13,9 +13,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { WebColors } from '../../constants/webColors';
 import { Colors, Space, Radius, Shadow, Font } from '../../design-system/tokens';
-import { MOCK_PRODUCTS, MOCK_CATEGORIES, MOCK_BRANDS, UNITS } from '../../data/mockProducts';
+import { MOCK_PRODUCTS, MOCK_CATEGORIES, UNITS } from '../../data/mockProducts';
 import { ProductMaster, ProductUOM } from '../../types/product';
 import { useProductStore } from '../../store/productStore';
+import * as brandStore from '../../store/brandStore';
 
 const fmt = (n: number) => n.toLocaleString('th-TH', { minimumFractionDigits: 2 });
 
@@ -507,7 +508,7 @@ const ProductFormModal: React.FC<{
       categoryId: catId,
       categoryName: MOCK_CATEGORIES.find(c => c.id === catId)?.name ?? '',
       brandId: brandId || undefined,
-      brandName: MOCK_BRANDS.find(b => b.id === brandId)?.name,
+      brandName: brandStore.getBrand(brandId)?.name,
       unit: baseUnit,
       costPrice: defaultUOM?.costPrice ?? 0,
       salePrice: defaultUOM?.salePrice ?? 0,
@@ -669,7 +670,7 @@ const ProductFormModal: React.FC<{
                       onPress={() => setShowBrandDropdown(!showBrandDropdown)}
                     >
                       <Text style={{ fontSize: 12, color: brandId ? Colors.text : '#9CA3AF' }}>
-                        {brandId ? MOCK_BRANDS.find(b => b.id === brandId)?.name : 'ไม่ระบุ'}
+                        {brandId ? brandStore.getBrand(brandId)?.name : 'ไม่ระบุ'}
                       </Text>
                       <Ionicons name="chevron-down" size={14} color="#9CA3AF" />
                     </TouchableOpacity>
@@ -679,7 +680,7 @@ const ProductFormModal: React.FC<{
                           <TouchableOpacity style={{ paddingVertical: 9, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: '#F5F5F5', backgroundColor: !brandId ? WebColors.primaryLight : '#fff' }} onPress={() => { setBrandId(''); setShowBrandDropdown(false); }}>
                             <Text style={{ fontSize: 12, color: !brandId ? WebColors.primary : Colors.text }}>ไม่ระบุ</Text>
                           </TouchableOpacity>
-                          {MOCK_BRANDS.filter(b => b.status === 'active').map(b => (
+                          {brandStore.getBrands().filter(b => b.status === 'active').map(b => (
                             <TouchableOpacity key={b.id} style={{ paddingVertical: 9, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: '#F5F5F5', backgroundColor: brandId === b.id ? WebColors.primaryLight : '#fff' }} onPress={() => { setBrandId(b.id); setShowBrandDropdown(false); }}>
                               <Text style={{ fontSize: 12, color: brandId === b.id ? WebColors.primary : Colors.text }}>{b.name}</Text>
                             </TouchableOpacity>
@@ -918,44 +919,51 @@ const MasterScreen: React.FC<{ allProducts: typeof MOCK_PRODUCTS }> = ({ allProd
     setEditingUnit(null);
   };
 
-  // ── Brand state ──
-  const [brands, setBrands] = useState<BrandItem[]>([...MOCK_BRANDS]);
+  // ── Brand state (brandStore เป็น single source of truth) ──
+  const [brandRefreshKey, setBrandRefreshKey] = useState(0);
   const [showAddBrand, setShowAddBrand] = useState(false);
   const [newBrandName, setNewBrandName] = useState('');
   const [newBrandStatus, setNewBrandStatus] = useState<'active' | 'inactive'>('active');
   const [editingBrand, setEditingBrand] = useState<string | null>(null);
   const [editingBrandName, setEditingBrandName] = useState('');
 
+  // อ่านจาก store ตรง ๆ — brandRefreshKey บังคับ re-render หลัง mutation
+  void brandRefreshKey;
+  const brands: BrandItem[] = brandStore.getBrands().map(b => ({
+    id: b.id,
+    name: b.name,
+    productCount: brandStore.getBrandProductCount(b.id),
+    status: b.status,
+  }));
+
   const handleAddBrand = () => {
     const name = newBrandName.trim();
     if (!name) return;
-    const newB: BrandItem = {
-      id: `b_${Date.now()}`,
-      name,
-      productCount: 0,
-      status: newBrandStatus,
-    };
-    setBrands(prev => [...prev, newB]);
+    brandStore.addBrand({ name, status: newBrandStatus });
     setNewBrandName('');
     setNewBrandStatus('active');
     setShowAddBrand(false);
+    setBrandRefreshKey(k => k + 1);
   };
 
   const handleSaveEditBrand = (id: string) => {
     const name = editingBrandName.trim();
     if (!name) { setEditingBrand(null); return; }
-    setBrands(prev => prev.map(b => b.id === id ? { ...b, name } : b));
+    brandStore.updateBrand(id, { name });
     setEditingBrand(null);
+    setBrandRefreshKey(k => k + 1);
   };
 
   const handleDeleteBrand = (id: string) => {
-    setBrands(prev => prev.filter(b => b.id !== id));
+    brandStore.deleteBrand(id);
+    setBrandRefreshKey(k => k + 1);
   };
 
   const handleToggleBrandStatus = (id: string) => {
-    setBrands(prev => prev.map(b =>
-      b.id === id ? { ...b, status: b.status === 'active' ? 'inactive' : 'active' } : b
-    ));
+    const current = brandStore.getBrand(id);
+    if (!current) return;
+    brandStore.updateBrand(id, { status: current.status === 'active' ? 'inactive' : 'active' });
+    setBrandRefreshKey(k => k + 1);
   };
 
   // ── Category state ──
