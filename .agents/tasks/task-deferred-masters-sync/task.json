@@ -1,0 +1,7 @@
+{
+  "task_id": "task-deferred-masters-sync",
+  "task_description": "Implement four deferred features in the Expo/React Native Web POS CRM worktree: (1) Supplier master store + web CRUD screen + wire stock-receive picker to the store; (2) Brand store + web CRUD screen + make product brand pickers read from the store; (3) persist the mobile product add/edit flow into productStore; (4) build the real web Sync settings screen bound to syncStore and replace the placeholder. All UI in Thai, design-system tokens honored, mock-only (no real server), product-variant matrix explicitly out of scope.",
+  "status": "completed",
+  "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003", "FEAT-004"],
+  "blocked_reason": null
+}
