@@ -1,0 +1,25 @@
+{
+  "id": "FEAT-003",
+  "type": "fix",
+  "description": "Mobile product persist: the mobile AddProduct/EditProduct flow builds a ProductMaster and passes it to onSaved, but src/navigation/ProductNavigator.tsx wires onSaved to only navigation.goBack() — so mobile edits never reach productStore (the web flow via WebProductScreen already persists). Wire onSaved to persist exactly once. Small, self-contained; independent of the other FEATs.",
+  "status": "completed",
+  "steps": [
+    "Confirm the contract: src/screens/product/AddEditProductScreen.tsx handleSave builds `saved: ProductMaster` and calls onSaved(saved) (prop type onSaved: (product: ProductMaster) => void). Persistence must happen in exactly ONE place — the navigator — not inside the screen.",
+    "In src/navigation/ProductNavigator.tsx, import useProductStore from '../store/productStore'. For the AddProduct screen, change onSaved to: (saved) => { useProductStore.getState().addProduct(saved); props.navigation.goBack(); }. For the EditProduct screen, change onSaved to: (saved) => { useProductStore.getState().updateProduct(saved.id, saved); props.navigation.goBack(); }.",
+    "Leave the web flow (WebProductScreen) completely untouched — it already persists; do not add a second persist call anywhere.",
+    "Verify ProductListScreen reads from useProductStore so the list reflects the change after returning (it should already; if it reads MOCK_PRODUCTS statically, note it in findings but do NOT expand scope beyond confirming the list updates — the store is the source the list must use)."
+  ],
+  "acceptance_criteria": [
+    "Adding a product through the mobile ProductList → AddProduct flow results in the product existing in useProductStore and appearing in the product list after goBack.",
+    "Editing a product through EditProduct updates the same productStore record (no duplicate) and the list reflects the change.",
+    "The web product flow is unchanged and products are persisted in exactly one place (the navigator) for the mobile flow.",
+    "`npm run lint` shows no new tsc errors; `npm test` shows no new failures."
+  ],
+  "verification": [
+    "Run `npm run lint` and confirm no new tsc errors in ProductNavigator.tsx.",
+    "Run `npm test` and confirm no new failing suites.",
+    "Manual: on a mobile/narrow viewport, add a product and confirm it appears in the list on return; edit its name/price and confirm the single record updates."
+  ],
+  "blocked_reason": null,
+  "findings": "Wired persist in exactly ONE place (src/navigation/ProductNavigator.tsx): imported useProductStore from '../store/productStore'; AddProduct onSaved -> useProductStore.getState().addProduct(saved) then goBack; EditProduct onSaved -> useProductStore.getState().updateProduct(saved.id, saved) then goBack. AddEditProductScreen.handleSave only builds `saved: ProductMaster` and calls onSaved(saved) (and logAction for price changes on edit) — it does NOT persist, so no double-persist. Web flow (WebProductScreen) left untouched. productStore API confirmed: addProduct(product) and updateProduct(id, data). CAVEAT (noted, NOT fixed per scope): ProductListScreen.tsx does NOT read from useProductStore — it does `const [products] = useState<ProductMaster[]>(MOCK_PRODUCTS)` reading MOCK_PRODUCTS statically. So the store now holds the correct data after add/edit, but the mobile ProductListScreen will not reflect the change until it is switched to read from useProductStore. This is out of FEAT-003 scope (store is now the correct source of truth for the mobile persist path). lint: 13 pre-existing tsc errors in 6 files (baseline, unchanged) — ZERO new errors; ProductNavigator.tsx is clean. test: 24 pass, 3 suites fail to load (engine.test.ts, SyncService.test.ts, branchPermissionStore.test.ts) — all pre-existing baseline, no new failures."
+}

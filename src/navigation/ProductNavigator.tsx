@@ -9,6 +9,7 @@ import { AddEditProductScreen } from '../screens/product/AddEditProductScreen';
 import { ImportExportScreen } from '../screens/product/ImportExportScreen';
 import { CategoryManageScreen } from '../screens/product/CategoryManageScreen';
 import { ProductMaster } from '../types/product';
+import { useProductStore } from '../store/productStore';
 
 export type ProductStackParamList = {
   ProductList: undefined;
@@ -37,7 +38,10 @@ export const ProductNavigator: React.FC = () => (
       {(props) => (
         <AddEditProductScreen
           onBack={() => props.navigation.goBack()}
-          onSaved={() => props.navigation.goBack()}
+          onSaved={(saved) => {
+            useProductStore.getState().addProduct(saved);
+            props.navigation.goBack();
+          }}
         />
       )}
     </Stack.Screen>
@@ -47,7 +51,10 @@ export const ProductNavigator: React.FC = () => (
         <AddEditProductScreen
           product={props.route.params.product}
           onBack={() => props.navigation.goBack()}
-          onSaved={() => props.navigation.goBack()}
+          onSaved={(saved) => {
+            useProductStore.getState().updateProduct(saved.id, saved);
+            props.navigation.goBack();
+          }}
         />
       )}
     </Stack.Screen>
