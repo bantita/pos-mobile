@@ -1,0 +1,7 @@
+{
+  "task_id": "task-xcellence-pos-parity",
+  "task_description": "Make local Expo (RN Web) source at d:\\pos-mobile match the deployed Xcellence POS web app: (1) rebrand app.json/manifest/index.html metadata + PWA, (2) add 6 missing screens (TaxInvoice, DocumentCancellation, ShiftGate, LicenseActivation, WebLicense, WebDocumentSettings) with navigation wiring (SaleNavigator, WebNavigator) and a native license gate in App.tsx. Work on branch main; do not commit or push.",
+  "status": "completed",
+  "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003"],
+  "blocked_reason": null
+}

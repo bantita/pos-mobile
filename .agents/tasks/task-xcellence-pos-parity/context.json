@@ -1,0 +1,33 @@
+{
+  "project_type": "Expo SDK 51 React Native app (iOS/Android/Web via react-native-web + Metro). Web uses a custom state-based router (src/navigation/WebNavigator.tsx), native uses React Navigation stacks. NOT expo-router.",
+  "language": "TypeScript (strict-ish), React 18, zustand for state, react-hook-form + zod available.",
+  "build_system": "Expo + Metro. Web build: `npm run web:build` (expo export --platform web). No webpack (webpack.config.js is a stub). No HTML template override exists (public/templates has only a CSV); dist/index.html title+theme are injected from app.json expo.web at export time.",
+  "test_framework": "vitest (happy-dom). Tests live under src/engine/__tests__ and src/store/__tests__.",
+  "build_command": "npx tsc --noEmit  (this is the repo's `npm run lint`; there is no separate compile step for web beyond expo export)",
+  "test_command": "npm run test   (vitest run)",
+  "verification_instructions": "IMPORTANT: `npx tsc --noEmit` has 13 PRE-EXISTING errors unrelated to this task (src/components/ui/BranchSelector.tsx, src/components/ui/DatePicker.tsx, src/screens/settings/PermissionMatrixScreen.tsx, src/screens/settings/RoleManageScreen.tsx, src/screens/web/WebUserStaffScreen.tsx 'Platform', src/services/errorTracking.ts). The acceptance bar is: total tsc error count stays <= 13 AND no error references any file created/edited by this task. Also run `npm run test` and confirm no new failures. For Part-1 metadata, use the node one-liner checks in each FEAT.",
+  "snapshot_or_generated_files": "dist/ is a committed Expo web export (dist/index.html, dist/manifest.json, dist/_expo/static/js/web/index-<hash>.js). We hand-edit dist/index.html HEAD and dist/manifest.json to match the live site; we must NOT touch the hashed /_expo/static/js/web/index-*.js script tag or any /_expo asset. A true regenerate is `npm run web:build`.",
+  "environment_constraints": "Windows + PowerShell shell. Work directly in the worktree on branch main. Do NOT commit or push. Deployed reference site: https://dist-pos-rho.vercel.app/ (brand Xcellence POS).",
+  "contribution_requirements": "Design-system steering in .kiro/steering applies to src/screens/**: use tokens from src/constants (Colors/Typography/Spacing/BorderRadius/Shadow), no hardcoded colors/fonts/spacing, Thai UI text, loading/error/empty states, TypeScript interfaces (no `any` abuse), 44px min touch targets (ComponentSize.button.md). NOTE: the steering doc names some tokens/components that DO NOT EXIST (headlineMedium/bodySmall/titleMedium, Table/Badge/Chip/Alert/Textarea/StatCard/FAB). Use the REAL exported tokens/components (see key_patterns) and match sibling screens, not the steering's idealized API.",
+  "key_patterns": "TOKENS (real): Colors.* (primary,primaryLight,primaryDark,background,backgroundSecondary,surface,text,textSecondary,textDisabled,border,success,successLight,warning,warningLight,danger,dangerLight,info,infoLight,white,black,gray100..gray800,gray400); Typography.* (h1,h2,h3,h4,body1,body2,subtitle1,subtitle2,caption,label,button,price,kpiValue,displayMedium,displaySmall); Spacing.* (xs4 sm8 md12 lg16 xl20 xxl/2xl24 3xl32 4xl40 5xl48); BorderRadius.* (sm8 md12 lg16 xl20 full9999); Shadow.* (none/xs/sm/md/lg/xl/glow); ComponentSize.button {sm36,md44,lg52}; Container.full/center. UI COMPONENTS (real, from src/components/ui): Button (prop is `title` NOT `label`; variant primary|secondary|outline|ghost|danger; size sm|md|lg; loading; fullWidth; onPress), Input (label,error,hint,leftIcon,rightIcon,isPassword + TextInputProps; use `multiline` for textarea), Card, GradientBox, DatePicker, BranchSelector. NO Table/Badge/Chip/Alert/Textarea/StatCard/FAB. SALE/AUTH screen shape: SafeAreaView(from react-native-safe-area-context) + colored header bar with Ionicons back button + ScrollView + StyleSheet.create using tokens; cross-platform confirm/notify helpers (see ShiftScreen.confirmAction/notify). WEB screen shape: web-only, uses WebColors (src/constants/webColors.ts) + design-system/tokens (Colors,Space,Radius,Shadow,Font), window.alert/window.confirm, local StyleSheet, FlatList/ScrollView (see WebSimpleScreens.tsx, WebBranchManageScreen.tsx). Print pattern: HTML string -> web window.open(...).print(); native Print.printToFileAsync + Sharing (see src/utils/exportReport.ts). NO plan-tier helpers exist (getPlanTier/getFeaturesByPlan NOT FOUND) -> WebLicenseScreen uses local mock data. Permissions: canAccess(role,key) in src/constants/rolePermissions.ts; keys licenses/documents/branches do NOT exist -> gate all three under existing 'settings' key.",
+  "relevant_files": [
+    "app.json (edit: expo.name + expo.web)",
+    "public/manifest.json (replace), dist/manifest.json (mirror)",
+    "dist/index.html (hand-edit head), public/index.html (new doc template)",
+    "src/screens/sale/ReceiptScreen.tsx (pattern + add optional onTaxInvoice)",
+    "src/screens/sale/ShiftScreen.tsx (pattern + confirm/notify helpers)",
+    "src/screens/auth/AuthLayout.tsx, src/screens/auth/LoginScreen.tsx (auth pattern)",
+    "src/screens/web/WebSimpleScreens.tsx, src/screens/web/WebBranchManageScreen.tsx (web pattern)",
+    "src/store/shiftStore.ts (useShiftStore openShift/isShiftOpen/getExpectedCash)",
+    "src/store/saleHistoryStore.ts (useSaleHistoryStore getSaleByNo/voidSale; SaleRecord)",
+    "src/store/storeConfigStore.ts (add license fields; storeName/address/taxId)",
+    "src/store/receiptStore.ts (useReceiptStore config/setConfig for doc settings)",
+    "src/store/kioskStore.ts",
+    "src/navigation/SaleNavigator.tsx, src/navigation/WebNavigator.tsx, App.tsx",
+    "src/constants/colors.ts, typography.ts, spacing.ts, webColors.ts, rolePermissions.ts",
+    "src/components/ui/Button.tsx, Input.tsx, index.ts",
+    "src/components/web/WebSidebar.tsx (data-driven NAV_ITEMS; do NOT modify)",
+    "src/utils/exportReport.ts (print pattern), src/types/sale.ts (Payment/CartItem)"
+  ],
+  "directory_structure": "src/screens/{sale,auth,web,...} = screen components; src/navigation/* = React Navigation stacks (mobile) + WebNavigator (web router); src/store/* = zustand stores (persist via persistStorage); src/constants/* = design tokens (colors/typography/spacing) + webColors + rolePermissions; src/components/ui/* = shared mobile UI (Button/Input/Card...); src/components/web/* = web chrome (WebLayout/WebSidebar/WebTopBar); src/design-system/tokens = web token aliases; dist/ = committed Expo web export; public/ = static web assets (manifest.json, icons, sw.js)."
+}
