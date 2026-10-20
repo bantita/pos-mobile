@@ -24,11 +24,19 @@ interface RegisteredUser extends AuthUser {
 interface AuthState {
   user: AuthUser | null;
   registeredUsers: RegisteredUser[];
+  /** OTP ที่ออกล่าสุดแบบ mock (เบอร์ -> รหัส 6 หลัก) */
+  pendingOTPs: Record<string, string>;
   login: (username: string, password: string) => boolean;
   logout: () => void;
   register: (data: { phone: string; name: string; password: string; shopName: string }) => AuthUser;
   setShopName: (name: string) => void;
   setShopLogo: (uri: string) => void;
+  /** ขอ OTP (mock) — สร้างรหัส 6 หลักแล้วเก็บไว้ใน state คืนค่ารหัสเพื่อโชว์ตอน dev */
+  requestOTP: (phone: string) => string;
+  /** ยืนยัน OTP (mock) — ถ้าถูกต้อง login ด้วยบัญชีที่ผูกเบอร์นั้น (หรือสร้าง session เจ้าของ) */
+  verifyOTP: (phone: string, otp: string) => boolean;
+  /** รีเซ็ตรหัสผ่านของ user ที่ตรง username/เบอร์ */
+  resetPassword: (username: string, newPassword: string) => boolean;
 }
 
 // Demo users (ใช้ทดสอบ)
@@ -44,6 +52,7 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       user: null,
       registeredUsers: DEMO_USERS,
+      pendingOTPs: {},
 
       login: (username, password) => {
         // Super Admin hardcoded — เข้าได้เสมอไม่ว่า persist state จะเป็นอะไร
@@ -105,6 +114,53 @@ export const useAuthStore = create<AuthState>()(
 
       setShopLogo: (shopLogo) =>
         set((s) => ({ user: s.user ? { ...s.user, shopLogo } : s.user })),
+
+      requestOTP: (phone) => {
+        const normalized = phone.replace(/-/g, '');
+        // MOCK: สร้าง OTP 6 หลักแบบ mock แทนการยิง SMS gateway จริง
+        // เมื่อต่อ backend จริง: ให้เรียก src/services/api/* ส่ง SMS แล้วไม่ต้องเก็บรหัสฝั่ง client
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        set((s) => ({ pendingOTPs: { ...s.pendingOTPs, [normalized]: otp } }));
+        return otp;
+      },
+
+      verifyOTP: (phone, otp) => {
+        const normalized = phone.replace(/-/g, '');
+        // MOCK: ตรวจ OTP จาก state ภายใน (ยังไม่ต่อ OTP service จริง)
+        const expected = get().pendingOTPs[normalized];
+        if (!expected || expected !== otp.trim()) return false;
+        // ล้าง OTP ที่ใช้แล้ว
+        set((s) => {
+          const rest = { ...s.pendingOTPs };
+          delete rest[normalized];
+          return { pendingOTPs: rest };
+        });
+        // ผูก session: หา user ที่ username ตรงเบอร์ ไม่พบ -> ใช้บัญชีเจ้าของ demo
+        const found = get().registeredUsers.find(
+          (u) => u.username === normalized || u.username === phone
+        );
+        if (found) {
+          const { password: _pw, ...user } = found;
+          set({ user });
+        } else {
+          set({ user: { id: 'u-otp', name: 'ผู้ใช้ OTP', username: normalized, role: 'owner' } });
+        }
+        return true;
+      },
+
+      resetPassword: (username, newPassword) => {
+        const normalized = username.replace(/-/g, '');
+        const found = get().registeredUsers.find(
+          (u) => u.username === username || u.username === normalized
+        );
+        if (!found) return false;
+        set((s) => ({
+          registeredUsers: s.registeredUsers.map((u) =>
+            u.id === found.id ? { ...u, password: newPassword } : u
+          ),
+        }));
+        return true;
+      },
     }),
     {
       name: 'pos-auth',

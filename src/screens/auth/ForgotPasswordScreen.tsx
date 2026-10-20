@@ -17,12 +17,14 @@ import { Spacing, BorderRadius } from '../../constants/spacing';
 interface ForgotPasswordScreenProps {
   onResetSuccess: () => void;
   onBack: () => void;
+  /** รีเซ็ตรหัสผ่านจริงที่ store (คืน true ถ้าสำเร็จ) */
+  onReset?: (phone: string, newPassword: string) => boolean;
 }
 
 type Step = 'phone' | 'otp' | 'new-password' | 'success';
 
 export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({
-  onResetSuccess, onBack,
+  onResetSuccess, onBack, onReset,
 }) => {
   const [step, setStep] = useState<Step>('phone');
   const [phone, setPhone] = useState('');
@@ -51,6 +53,11 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({
   const handleReset = () => {
     if (!newPassword || newPassword.length < 4) { setError('รหัสผ่านต้องมีอย่างน้อย 4 ตัว'); return; }
     if (newPassword !== confirmPassword) { setError('รหัสผ่านไม่ตรงกัน'); return; }
+    // อัปเดตรหัสผ่านจริงที่ store — ถ้าไม่พบบัญชีที่ตรงเบอร์ ให้แจ้งผู้ใช้
+    if (onReset && !onReset(phone.trim(), newPassword)) {
+      setError('ไม่พบบัญชีที่ผูกกับเบอร์นี้');
+      return;
+    }
     setError('');
     setStep('success');
   };

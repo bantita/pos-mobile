@@ -10,6 +10,7 @@ import {
 } from '../types/sync';
 import { isFreshStore } from './freshStore';
 import { persistStorage } from './persistStorage';
+import { FEATURE_FLAGS } from '../config/featureFlags';
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
 const now = new Date();
@@ -85,6 +86,22 @@ const MOCK_DEVICES: DeviceSyncInfo[] = [
   { deviceId: 'dev003', deviceName: 'คลังหลัก (Android)', platform: 'Android 14',   appVersion: '1.0.0', lastOnlineAt: ago(0),  isOnline: true,  pendingCount: 0 },
 ];
 
+// MOCK: จำลองผลลัพธ์การ sync 1 รายการ — ส่วนใหญ่สำเร็จ แต่บางครั้งเกิด conflict
+// (ใช้เมื่อ FEATURE_FLAGS.MOCK_SYNC = true; ถ้าปิด flag จะ sync สำเร็จทั้งหมดแบบ deterministic)
+const simulateSyncOutcome = (): 'success' | 'conflict' => {
+  if (!FEATURE_FLAGS.MOCK_SYNC) return 'success';
+  // ~20% โอกาสเกิด conflict เพื่อให้เดโมเห็นเส้นทาง ConflictResolution ได้
+  return Math.random() < 0.2 ? 'conflict' : 'success';
+};
+
+// MOCK: ข้อมูล conflict จำลองเมื่อการ sync ชนกับข้อมูลฝั่ง server
+const mockConflictData = () => ({
+  field: 'stockQty',
+  conflictType: 'stock_changed' as const,
+  clientValue: 'ค่าจากเครื่องนี้ (ยังไม่ sync)',
+  serverValue: 'ค่าจาก Server (มีการแก้ไขระหว่างนั้น)',
+});
+
 // ─── Store ────────────────────────────────────────────────────────────────────
 interface SyncState {
   transactions: LocalTransaction[];
@@ -133,12 +150,17 @@ export const useSyncStore = create<SyncState>()(
           : t
       ),
     }));
-    // simulate async sync
+    // MOCK: จำลอง sync แบบ async — อาจสำเร็จหรือเกิด conflict (gated ด้วย MOCK_SYNC)
     setTimeout(() => {
+      const outcome = simulateSyncOutcome();
       set(s => ({
-        transactions: s.transactions.map(t =>
-          t.id === id ? { ...t, status: 'success' as SyncStatus, syncedAt: new Date() } : t
-        ),
+        transactions: s.transactions.map(t => {
+          if (t.id !== id) return t;
+          if (outcome === 'conflict') {
+            return { ...t, status: 'conflict' as SyncStatus, conflictData: t.conflictData ?? mockConflictData() };
+          }
+          return { ...t, status: 'success' as SyncStatus, syncedAt: new Date() };
+        }),
         lastSyncAt: new Date(),
       }));
     }, 1500);
@@ -153,15 +175,17 @@ export const useSyncStore = create<SyncState>()(
           : t
       ),
     }));
+    // MOCK: จบการ sync ทั้งหมด — แต่ละรายการสุ่มผลสำเร็จ/ชน (gated ด้วย MOCK_SYNC)
     setTimeout(() => {
       set(s => ({
         isSyncing: false,
         lastSyncAt: new Date(),
-        transactions: s.transactions.map(t =>
-          t.status === 'syncing'
-            ? { ...t, status: 'success' as SyncStatus, syncedAt: new Date() }
-            : t
-        ),
+        transactions: s.transactions.map(t => {
+          if (t.status !== 'syncing') return t;
+          return simulateSyncOutcome() === 'conflict'
+            ? { ...t, status: 'conflict' as SyncStatus, conflictData: t.conflictData ?? mockConflictData() }
+            : { ...t, status: 'success' as SyncStatus, syncedAt: new Date() };
+        }),
       }));
     }, 2000);
   },
@@ -220,14 +244,24 @@ export const useSyncStore = create<SyncState>()(
   setOnlineStatus: (online) => set({ isOnline: online }),
 
   startSync: () => {
-    set({ isSyncing: true });
+    // queue -> syncing: ย้ายรายการ pending เข้าสถานะกำลัง sync
+    set(s => ({
+      isSyncing: true,
+      transactions: s.transactions.map(t =>
+        t.status === 'pending' ? { ...t, status: 'syncing' as SyncStatus } : t
+      ),
+    }));
+    // MOCK: syncing -> success/conflict (gated ด้วย MOCK_SYNC — ปิด flag = สำเร็จทั้งหมด)
     setTimeout(() => {
       set(s => ({
         isSyncing: false,
         lastSyncAt: new Date(),
-        transactions: s.transactions.map(t =>
-          t.status === 'pending' ? { ...t, status: 'success' as SyncStatus, syncedAt: new Date() } : t
-        ),
+        transactions: s.transactions.map(t => {
+          if (t.status !== 'syncing') return t;
+          return simulateSyncOutcome() === 'conflict'
+            ? { ...t, status: 'conflict' as SyncStatus, conflictData: t.conflictData ?? mockConflictData() }
+            : { ...t, status: 'success' as SyncStatus, syncedAt: new Date() };
+        }),
       }));
     }, 2500);
   },

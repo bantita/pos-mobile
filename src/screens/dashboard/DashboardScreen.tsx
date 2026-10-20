@@ -14,28 +14,9 @@ import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
 import { Spacing, BorderRadius, Shadow } from '../../constants/spacing';
 import { formatCurrency, formatDate } from '../../utils/format';
-
-// ─── Mock Data ───────────────────────────────────────────────────────────────
-const MOCK: DashboardSummary = {
-  todaySales: 15420,
-  todayBillCount: 47,
-  todayProfit: 4230,
-  monthSales: 328000,
-  topProducts: [
-    { name: 'น้ำดื่มสิงห์ 600ml', qty: 85, amount: 850 },
-    { name: 'เลย์ รสออริจินัล', qty: 60, amount: 1200 },
-    { name: 'มาม่า หมูสับ', qty: 55, amount: 385 },
-    { name: 'น้ำอัดลม Pepsi', qty: 48, amount: 720 },
-    { name: 'กาแฟ Nescafe', qty: 42, amount: 504 },
-  ],
-  lowStockProducts: [
-    { name: 'สบู่ Dove', stockQty: 3, minStock: 10 },
-    { name: 'แชมพู Head & Shoulders', stockQty: 2, minStock: 5 },
-    { name: 'ยาสีฟัน Colgate', stockQty: 4, minStock: 8 },
-  ],
-  syncStatus: 'pending',
-  pendingCount: 3,
-};
+import { useSaleHistoryStore } from '../../store/saleHistoryStore';
+import { useMemberStore } from '../../store/memberStore';
+import { useProductStore } from '../../store/productStore';
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
 interface KpiCardProps {
@@ -84,11 +65,57 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   branchName = 'สาขาหลัก',
   userName = 'เจ้าของร้าน',
 }) => {
-  const [data] = useState<DashboardSummary>(MOCK);
   const [refreshing, setRefreshing] = useState(false);
   const { width } = useWindowDimensions();
   const isWide = width >= 900;
   const today = new Date();
+
+  // ── ข้อมูลจริงจาก store ──
+  const getSalesToday = useSaleHistoryStore((st) => st.getSalesToday);
+  const salesAll = useSaleHistoryStore((st) => st.sales);
+  const members = useMemberStore((st) => st.members);
+  const products = useProductStore((st) => st.products);
+
+  const data: DashboardSummary = React.useMemo(() => {
+    // ยอดขาย/จำนวนบิลวันนี้ — เฉพาะบิลที่ completed
+    const todayCompleted = getSalesToday().filter((s) => s.status === 'completed');
+    const todaySales = todayCompleted.reduce((sum, s) => sum + s.grandTotal, 0);
+    const todayBillCount = todayCompleted.length;
+
+    // สินค้าขายดี — รวมจำนวน/ยอดจากรายการในบิลที่ completed วันนี้
+    const productAgg = new Map<string, { name: string; qty: number; amount: number }>();
+    todayCompleted.forEach((sale) => {
+      sale.items.forEach((item) => {
+        const name = item.product.name;
+        const prev = productAgg.get(name) ?? { name, qty: 0, amount: 0 };
+        prev.qty += item.qty;
+        prev.amount += item.subtotal;
+        productAgg.set(name, prev);
+      });
+    });
+    const topProducts = [...productAgg.values()]
+      .sort((a, b) => b.qty - a.qty)
+      .slice(0, 5);
+
+    // สินค้าสต๊อกต่ำ — stockQty <= minStock
+    const lowStockProducts = products
+      .filter((p) => p.stockQty <= p.minStock)
+      .map((p) => ({ name: p.name, stockQty: p.stockQty, minStock: p.minStock }));
+
+    return {
+      todaySales,
+      todayBillCount,
+      todayProfit: 0,
+      monthSales: 0,
+      topProducts,
+      lowStockProducts,
+      syncStatus: 'pending',
+      pendingCount: 0,
+    };
+  // salesAll อยู่ใน dep เพื่อให้ re-compute เมื่อมีบิลใหม่
+  }, [getSalesToday, salesAll, products]);
+
+  const memberCount = members.length;
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -147,6 +174,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         <Text style={s.sectionTitle}>สินค้าขายดี</Text>
         <Ionicons name="trophy-outline" size={16} color={Colors.warning} />
       </View>
+      {data.topProducts.length === 0 && (
+        <View style={s.emptyBox}>
+          <Ionicons name="cube-outline" size={28} color={Colors.gray400} />
+          <Text style={s.emptyText}>ยังไม่มีข้อมูลการขายวันนี้</Text>
+        </View>
+      )}
       {data.topProducts.map((p, i) => (
         <View key={i} style={s.topRow}>
           <View style={[s.rankBadge, i < 3 ? s.rankTop : null]}>
@@ -169,6 +202,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           <Text style={s.alertBadgeText}>{data.lowStockProducts.length}</Text>
         </View>
       </View>
+      {data.lowStockProducts.length === 0 && (
+        <View style={s.emptyBox}>
+          <Ionicons name="checkmark-circle-outline" size={28} color={Colors.success} />
+          <Text style={s.emptyText}>ไม่มีสินค้าสต๊อกต่ำ</Text>
+        </View>
+      )}
       {data.lowStockProducts.map((p, i) => (
         <View key={i} style={s.stockRow}>
           <Ionicons name="alert-circle-outline" size={16} color={Colors.warning} />
@@ -199,7 +238,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         <View style={[s.kpiGrid, isWide && s.kpiGridWide]}>
           <KpiCard label="ยอดขายวันนี้" value={`฿${formatCurrency(data.todaySales)}`} icon="cash-outline" color={Colors.primary} bgColor={Colors.primaryLight} trend={12} />
           <KpiCard label="จำนวนบิล" value={`${data.todayBillCount} บิล`} icon="receipt-outline" color={Colors.success} bgColor={Colors.successLight} trend={5} />
-          <KpiCard label="ลูกค้าวันนี้" value="32 คน" icon="people-outline" color={Colors.info} bgColor={Colors.infoLight} trend={8} />
+          <KpiCard label="สมาชิกทั้งหมด" value={`${memberCount} คน`} icon="people-outline" color={Colors.info} bgColor={Colors.infoLight} />
           <KpiCard label="สต๊อกต่ำ" value={`${data.lowStockProducts.length} รายการ`} icon="alert-circle-outline" color={Colors.warning} bgColor={Colors.warningLight} />
         </View>
 
@@ -288,6 +327,8 @@ const s = StyleSheet.create({
   },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.xs },
   sectionTitle: { ...Typography.subtitle2, color: Colors.text },
+  emptyBox: { alignItems: 'center', gap: Spacing.xs, paddingVertical: Spacing.lg },
+  emptyText: { ...Typography.caption, color: Colors.textSecondary },
 
   // Top products
   topRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.xs },

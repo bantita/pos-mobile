@@ -19,6 +19,9 @@ import { Typography } from '../../constants/typography';
 import { Spacing, BorderRadius } from '../../constants/spacing';
 import { Card } from '../../components/ui/Card';
 import { formatCurrency, formatNumber } from '../../utils/format';
+import { useSaleHistoryStore } from '../../store/saleHistoryStore';
+import { useMemberStore } from '../../store/memberStore';
+import { useProductStore } from '../../store/productStore';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface TopProduct {
@@ -67,12 +70,6 @@ const TOP_PRODUCTS: TopProduct[] = [
   { id: '5', name: 'โคโค่นมสด', qty: 55,    revenue: 4125, rank: 5 },
 ];
 
-const LOW_STOCK: LowStockItem[] = [
-  { id: '1', name: 'กาแฟสด 250g', stock: 3, minStock: 10, unit: 'ถุง' },
-  { id: '2', name: 'นมสด 1L', stock: 5, minStock: 20, unit: 'กล่อง' },
-  { id: '3', name: 'น้ำตาลทราย 1kg', stock: 2, minStock: 5, unit: 'ถุง' },
-];
-
 // ─── Component ────────────────────────────────────────────────────────────────
 export const MainDashboardScreen: React.FC<MainDashboardScreenProps> = ({
   onNavigate,
@@ -80,9 +77,58 @@ export const MainDashboardScreen: React.FC<MainDashboardScreenProps> = ({
   const [period, setPeriod] = useState<FilterPeriod>('today');
   const [refreshing, setRefreshing] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
-  const [pendingSync] = useState(3);
+  const [pendingSync] = useState(0);
 
-  const stats = MOCK_STATS[period];
+  // ── ข้อมูลจริงจาก store ──
+  const getSalesToday = useSaleHistoryStore((st) => st.getSalesToday);
+  const salesAll = useSaleHistoryStore((st) => st.sales);
+  const members = useMemberStore((st) => st.members);
+  const products = useProductStore((st) => st.products);
+
+  // today = ข้อมูลจริง, week/month = mock (ยังไม่มี historical aggregation จริง)
+  const stats = React.useMemo(() => {
+    if (period !== 'today') return MOCK_STATS[period];
+    const todayCompleted = getSalesToday().filter((s) => s.status === 'completed');
+    const sales = todayCompleted.reduce((sum, s) => sum + s.grandTotal, 0);
+    const profit = todayCompleted.reduce(
+      (sum, s) =>
+        sum + s.items.reduce((p, it) => p + (it.unitPrice - (it.product.cost ?? 0)) * it.qty, 0),
+      0
+    );
+    return { sales, bills: todayCompleted.length, profit, monthly: 0 };
+  }, [period, getSalesToday, salesAll]);
+
+  // สินค้าขายดี Top 5 — รวมจากบิล completed ทั้งหมด
+  const topProducts: TopProduct[] = React.useMemo(() => {
+    const agg = new Map<string, { name: string; qty: number; revenue: number }>();
+    salesAll
+      .filter((s) => s.status === 'completed')
+      .forEach((sale) =>
+        sale.items.forEach((it) => {
+          const name = it.product.name;
+          const prev = agg.get(name) ?? { name, qty: 0, revenue: 0 };
+          prev.qty += it.qty;
+          prev.revenue += it.subtotal;
+          agg.set(name, prev);
+        })
+      );
+    return [...agg.values()]
+      .sort((a, b) => b.qty - a.qty)
+      .slice(0, 5)
+      .map((p, i) => ({ id: String(i + 1), name: p.name, qty: p.qty, revenue: p.revenue, rank: i + 1 }));
+  }, [salesAll]);
+
+  // สินค้าใกล้หมด — stockQty <= minStock
+  const lowStock: LowStockItem[] = React.useMemo(
+    () =>
+      products
+        .filter((p) => p.stockQty <= p.minStock)
+        .map((p) => ({ id: p.id, name: p.name, stock: p.stockQty, minStock: p.minStock, unit: p.unit })),
+    [products]
+  );
+
+  const memberCount = members.length;
+
   const chartData = CHART_DATA[period];
   const maxVal = Math.max(...chartData);
 
@@ -172,6 +218,14 @@ export const MainDashboardScreen: React.FC<MainDashboardScreenProps> = ({
             color={Colors.warning}
             bgColor={Colors.warningLight}
           />
+          <StatCard
+            icon="people-outline"
+            label="สมาชิกทั้งหมด"
+            value={formatNumber(memberCount)}
+            subValue="คน"
+            color={Colors.info}
+            bgColor={Colors.infoLight}
+          />
           {period === 'month' && (
             <StatCard
               icon="calendar-outline"
@@ -208,8 +262,14 @@ export const MainDashboardScreen: React.FC<MainDashboardScreenProps> = ({
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>สินค้าขายดี Top 5</Text>
         </View>
+        {topProducts.length === 0 ? (
+          <Card style={styles.emptyCard} padding="md">
+            <Ionicons name="cube-outline" size={28} color={Colors.gray400} />
+            <Text style={styles.emptyText}>ยังไม่มีข้อมูลการขาย</Text>
+          </Card>
+        ) : (
         <FlatList
-          data={TOP_PRODUCTS}
+          data={topProducts}
           horizontal
           showsHorizontalScrollIndicator={false}
           keyExtractor={(item) => item.id}
@@ -228,6 +288,7 @@ export const MainDashboardScreen: React.FC<MainDashboardScreenProps> = ({
             </Card>
           )}
         />
+        )}
 
         {/* Low Stock */}
         <View style={styles.sectionHeader}>
@@ -237,27 +298,34 @@ export const MainDashboardScreen: React.FC<MainDashboardScreenProps> = ({
           </TouchableOpacity>
         </View>
         <Card padding="none" style={styles.lowStockCard}>
-          {LOW_STOCK.map((item, idx) => (
-            <View key={item.id}>
-              <View style={styles.lowStockRow}>
-                <View style={styles.lowStockIcon}>
-                  <Ionicons name="warning-outline" size={18} color={Colors.warning} />
-                </View>
-                <View style={styles.lowStockInfo}>
-                  <Text style={styles.lowStockName}>{item.name}</Text>
-                  <Text style={styles.lowStockSub}>
-                    คงเหลือ {item.stock} {item.unit} (ต่ำกว่า {item.minStock})
-                  </Text>
-                </View>
-                <View style={[styles.stockLevel, { backgroundColor: Colors.warningLight }]}>
-                  <Text style={[styles.stockLevelText, { color: Colors.warning }]}>
-                    {item.stock} {item.unit}
-                  </Text>
-                </View>
-              </View>
-              {idx < LOW_STOCK.length - 1 && <View style={styles.divider} />}
+          {lowStock.length === 0 ? (
+            <View style={styles.emptyRow}>
+              <Ionicons name="checkmark-circle-outline" size={22} color={Colors.success} />
+              <Text style={styles.emptyText}>ไม่มีสินค้าใกล้หมด</Text>
             </View>
-          ))}
+          ) : (
+            lowStock.map((item, idx) => (
+              <View key={item.id}>
+                <View style={styles.lowStockRow}>
+                  <View style={styles.lowStockIcon}>
+                    <Ionicons name="warning-outline" size={18} color={Colors.warning} />
+                  </View>
+                  <View style={styles.lowStockInfo}>
+                    <Text style={styles.lowStockName}>{item.name}</Text>
+                    <Text style={styles.lowStockSub}>
+                      คงเหลือ {item.stock} {item.unit} (ต่ำกว่า {item.minStock})
+                    </Text>
+                  </View>
+                  <View style={[styles.stockLevel, { backgroundColor: Colors.warningLight }]}>
+                    <Text style={[styles.stockLevelText, { color: Colors.warning }]}>
+                      {item.stock} {item.unit}
+                    </Text>
+                  </View>
+                </View>
+                {idx < lowStock.length - 1 && <View style={styles.divider} />}
+              </View>
+            ))
+          )}
         </Card>
       </ScrollView>
     </SafeAreaView>
@@ -421,4 +489,7 @@ const styles = StyleSheet.create({
   },
   stockLevelText: { ...Typography.caption, fontWeight: '600' },
   divider: { height: 1, backgroundColor: Colors.border, marginHorizontal: Spacing.md },
+  emptyCard: { marginHorizontal: Spacing.md, marginBottom: Spacing.md, alignItems: 'center', gap: Spacing.xs },
+  emptyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, paddingVertical: Spacing.lg },
+  emptyText: { ...Typography.caption, color: Colors.textSecondary },
 });

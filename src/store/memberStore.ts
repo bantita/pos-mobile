@@ -4,8 +4,8 @@
  */
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { Member, PointTransaction, PointConfig, MemberLevel } from '../types/member';
-import { MOCK_MEMBERS, MOCK_POINT_TRANSACTIONS, MOCK_POINT_CONFIG } from '../data/mockMembers';
+import { Member, PointTransaction, PointConfig, MemberLevel, MemberLevelConfig } from '../types/member';
+import { MOCK_MEMBERS, MOCK_POINT_TRANSACTIONS, MOCK_POINT_CONFIG, MOCK_LEVEL_CONFIGS } from '../data/mockMembers';
 import { logAction } from './auditLogStore';
 import { isFreshStore } from './freshStore';
 import { persistStorage } from './persistStorage';
@@ -29,9 +29,17 @@ interface MemberStore {
   selectedMember: Member | null;
   pointTransactions: PointTransaction[];
   pointConfig: PointConfig;
+  /** ตั้งค่าระดับสมาชิก (threshold/ส่วนลด/ตัวคูณคะแนน) — แก้ได้จากหน้า CRM config */
+  levelConfigs: MemberLevelConfig[];
 
   // Actions
   searchMembers: (keyword: string) => Member[];
+  /** 3B: อัปเดตการตั้งค่าคะแนน (earn/redeem/min/expire) */
+  setPointConfig: (config: Partial<PointConfig>) => void;
+  /** 3B: อัปเดตการตั้งค่าระดับสมาชิกทั้งชุด */
+  setLevelConfigs: (configs: MemberLevelConfig[]) => void;
+  /** 3B: อัปเดตระดับเดียวตาม level key */
+  updateLevelConfig: (level: MemberLevel, data: Partial<MemberLevelConfig>) => void;
   addMember: (data: Omit<Member, 'id' | 'memberNo' | 'pointBalance' | 'totalSpent' | 'joinDate'>) => Member;
   updateMember: (id: string, data: Partial<Member>) => void;
   selectMember: (member: Member | null) => void;
@@ -50,6 +58,24 @@ export const useMemberStore = create<MemberStore>()(
   selectedMember: null,
   pointTransactions: isFreshStore() ? [] : MOCK_POINT_TRANSACTIONS,
   pointConfig: MOCK_POINT_CONFIG,
+  levelConfigs: MOCK_LEVEL_CONFIGS,
+
+  setPointConfig: (config) => {
+    set(s => ({ pointConfig: { ...s.pointConfig, ...config } }));
+    logAction('CRM', 'ตั้งค่าคะแนน', 'อัปเดตการตั้งค่าระบบคะแนนสะสม', { config });
+  },
+
+  setLevelConfigs: (configs) => {
+    set({ levelConfigs: configs });
+    logAction('CRM', 'ตั้งค่าระดับสมาชิก', 'อัปเดตการตั้งค่าระดับสมาชิก', { count: configs.length });
+  },
+
+  updateLevelConfig: (level, data) => {
+    set(s => ({
+      levelConfigs: s.levelConfigs.map(c => c.level === level ? { ...c, ...data } : c),
+    }));
+    logAction('CRM', 'ตั้งค่าระดับสมาชิก', `แก้ไขระดับ ${level}`, { level, changes: data });
+  },
 
   searchMembers: (keyword) => {
     const k = keyword.toLowerCase().trim();

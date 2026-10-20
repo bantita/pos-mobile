@@ -14,6 +14,8 @@ import { useAuditLogStore } from '../../store/auditLogStore';
 import { WebTestTrackerScreen } from './WebTestTrackerScreen';
 import { WebAdSettingsScreen } from './WebAdSettingsScreen';
 import { WebRichMenuScreen } from './WebRichMenuScreen';
+import { WebErpSettingsScreen } from './WebErpSettingsScreen';
+import { WebCrmConfigScreen } from './WebCrmConfigScreen';
 import { useReceiptStore } from '../../store/receiptStore';
 import { WebStoreSettingsSection } from '../../components/settings/WebStoreSettingsSection';
 import { WebUserStaffScreen } from './WebUserStaffScreen';
@@ -2948,7 +2950,8 @@ export const WebSettingsScreen: React.FC = () => {
   if (subView === 'display')    return <SettingDisplaySection   onBack={() => setSubView(null)} />;
   if (subView === 'payment')    return <SettingPaymentSection   onBack={() => setSubView(null)} />;
   if (subView === 'auditlog')   return <SimpleSubPage title="Audit Log" sub="ประวัติการใช้งานระบบ — ใคร ทำอะไร เมื่อไหร่" onBack={() => setSubView(null)} />;
-  if (subView === 'erp')        return <SimpleSubPage title="ERP Integration" sub="เชื่อมต่อระบบ ERP หลังบ้าน (สต๊อก / บัญชี)" onBack={() => setSubView(null)} />;
+  if (subView === 'erp')        return <WebErpSettingsScreen    onBack={() => setSubView(null)} />;
+  if (subView === 'crmConfig')  return <WebCrmConfigScreen      onBack={() => setSubView(null)} />;
   if (subView === 'sync')       return <SimpleSubPage title="Sync Monitor" sub="ตรวจสอบสถานะ Sync — Pending / Failed / Conflict" onBack={() => setSubView(null)} />;
   if (subView === 'testtracker') return <WebTestTrackerScreenInline onBack={() => setSubView(null)} />;
   if (subView === 'posPermission') return <SettingPOSPermissionScreen onBack={() => setSubView(null)} />;
@@ -2967,6 +2970,7 @@ export const WebSettingsScreen: React.FC = () => {
     { icon: 'lock-closed-outline',   label: 'ความปลอดภัย',          sub: 'Password / PIN / Timeout',              color: WebColors.warning,  bg: WebColors.warningLight, key: 'security'   },
     { icon: 'document-text-outline', label: 'Audit Log',             sub: 'ประวัติการใช้งานระบบ',                  color: Colors.textSecondary,          bg: Colors.border,              key: 'auditlog'   },
     { icon: 'cloud-outline',         label: 'ERP Integration',       sub: 'เชื่อมต่อระบบ ERP หลังบ้าน',           color: WebColors.success,  bg: WebColors.successLight, key: 'erp'        },
+    { icon: 'ribbon-outline',        label: 'ตั้งค่า CRM (คะแนน/ระดับ)', sub: 'คะแนนสะสม / ระดับสมาชิก / ส่วนลด',   color: WebColors.purple,   bg: WebColors.purpleLight,  key: 'crmConfig'  },
     { icon: 'sync-outline',          label: 'Sync Monitor',          sub: 'ตรวจสอบการ Sync ข้อมูล',               color: WebColors.success,  bg: WebColors.successLight, key: 'sync'       },
     { icon: 'grid-outline',          label: 'LINE Rich Menu',         sub: 'จัดการเมนู 6 ปุ่มของ LINE OA (mock)',   color: WebColors.success,  bg: WebColors.successLight, key: 'richmenu'   },
     { icon: 'clipboard-outline',     label: 'Test Tracker',           sub: 'บันทึกผลทดสอบ (Offline)',              color: WebColors.purple,   bg: WebColors.purpleLight,  key: 'testtracker' },

@@ -170,9 +170,9 @@ export const MOCK_POINT_CONFIG: PointConfig = {
 export const MOCK_LEVEL_CONFIGS: MemberLevelConfig[] = [
   { level: 'member', label: 'Member', minSpent: 0, minBills: 0, discountPercent: 0, earnMultiplier: 1, expireDays: 0, color: '#9E9E9E' },
   { level: 'silver', label: 'Silver', minSpent: 5000, minBills: 3, discountPercent: 2, earnMultiplier: 1, expireDays: 365, color: '#78909C' },
-  { level: 'gold', label: 'Gold', minSpent: 30000, minBills: 15, discountPercent: 5, earnMultiplier: 1.5, expireDays: 365, color: '#FFB300' },
-  { level: 'platinum', label: 'Platinum', minSpent: 100000, minBills: 40, discountPercent: 8, earnMultiplier: 2, expireDays: 730, color: '#5C6BC0' },
-  { level: 'vip', label: 'VIP', minSpent: 250000, minBills: 80, discountPercent: 12, earnMultiplier: 3, expireDays: 0, color: '#AB47BC' },
+  { level: 'gold', label: 'Gold', minSpent: 15000, minBills: 10, discountPercent: 5, earnMultiplier: 1.5, expireDays: 365, color: '#FFB300' },
+  { level: 'platinum', label: 'Platinum', minSpent: 50000, minBills: 25, discountPercent: 8, earnMultiplier: 2, expireDays: 730, color: '#5C6BC0' },
+  { level: 'vip', label: 'VIP', minSpent: 100000, minBills: 50, discountPercent: 12, earnMultiplier: 3, expireDays: 0, color: '#AB47BC' },
 ];
 
 // ==================== Mock Segments ====================

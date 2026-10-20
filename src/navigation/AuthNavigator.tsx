@@ -9,6 +9,7 @@ import { LoginScreen } from '../screens/auth/LoginScreen';
 import { OTPLoginScreen } from '../screens/auth/OTPLoginScreen';
 import { ForgotPasswordScreen } from '../screens/auth/ForgotPasswordScreen';
 import { RegisterShopScreen } from '../screens/auth/RegisterShopScreen';
+import { useAuthStore } from '../store/authStore';
 
 export type AuthStackParamList = {
   Welcome: undefined;
@@ -40,7 +41,9 @@ export const AuthNavigator: React.FC<AuthNavigatorProps> = ({ onAuthSuccess }) =
         {(props) => (
           <LoginScreen
             onLogin={async (credential, password) => {
-              // TODO: connect to auth store / API
+              // ตรวจ credential จริงผ่าน authStore — login คืน false เมื่อไม่ถูกต้อง
+              const ok = useAuthStore.getState().login(credential, password);
+              if (!ok) throw new Error('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
               onAuthSuccess();
             }}
             onOTPLogin={() => props.navigation.navigate('OTPLogin')}
@@ -53,9 +56,17 @@ export const AuthNavigator: React.FC<AuthNavigatorProps> = ({ onAuthSuccess }) =
       <Stack.Screen name="OTPLogin">
         {(props) => (
           <OTPLoginScreen
-            onRequestOTP={async (phone) => { /* call API */ }}
+            onRequestOTP={async (phone) => {
+              // MOCK: ขอ OTP จาก store (ยังไม่ต่อ SMS gateway จริง)
+              const otp = useAuthStore.getState().requestOTP(phone);
+              // แสดงรหัสให้ผู้ทดสอบเห็น (mock เท่านั้น — จริงจะส่งทาง SMS)
+              if (typeof window !== 'undefined' && window.alert) {
+                window.alert(`รหัส OTP (ทดสอบ): ${otp}`);
+              }
+            }}
             onVerifyOTP={async (phone, otp) => {
-              // TODO: connect to auth store / API
+              const ok = useAuthStore.getState().verifyOTP(phone, otp);
+              if (!ok) throw new Error('รหัส OTP ไม่ถูกต้อง');
               onAuthSuccess();
             }}
             onBack={() => props.navigation.goBack()}
@@ -66,6 +77,9 @@ export const AuthNavigator: React.FC<AuthNavigatorProps> = ({ onAuthSuccess }) =
       <Stack.Screen name="ForgotPassword">
         {(props) => (
           <ForgotPasswordScreen
+            onReset={(phone, newPassword) =>
+              useAuthStore.getState().resetPassword(phone, newPassword)
+            }
             onResetSuccess={() => props.navigation.navigate('Login')}
             onBack={() => props.navigation.goBack()}
           />

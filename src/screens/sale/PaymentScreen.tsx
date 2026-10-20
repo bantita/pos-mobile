@@ -200,15 +200,21 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
       if (pointDiscount > 0) {
         redeemPoints(selectedMember.id, parseInt(pointsToUse) || 0, saleNo, 'แคชเชียร์');
       }
-      // ── Auto-upgrade level ──
+      // ── Auto-upgrade level (multi-tier: ข้ามระดับได้ถ้ายอดซื้อสูงพอ) ──
       const { getMemberById, updateMember } = useMemberStore.getState();
       const updatedMember = getMemberById(selectedMember.id);
       if (updatedMember) {
         const { MOCK_LEVEL_CONFIGS } = require('../../data/mockMembers');
-        const currentIdx = MOCK_LEVEL_CONFIGS.findIndex((c: any) => c.level === updatedMember.level);
-        const nextLevel = MOCK_LEVEL_CONFIGS[currentIdx + 1];
-        if (nextLevel && updatedMember.totalSpent >= nextLevel.minSpent) {
-          updateMember(updatedMember.id, { level: nextLevel.level });
+        // เลือกระดับสูงสุดที่ minSpent <= ยอดซื้อสะสม — รองรับการกระโดดข้ามหลายระดับในครั้งเดียว
+        const eligible = [...MOCK_LEVEL_CONFIGS]
+          .filter((c: any) => updatedMember.totalSpent >= c.minSpent)
+          .sort((a: any, b: any) => b.minSpent - a.minSpent)[0];
+        if (eligible && eligible.level !== updatedMember.level) {
+          const order = ['member', 'silver', 'gold', 'platinum', 'vip'];
+          // อัปเกรดเฉพาะเมื่อเป็นการเลื่อนขึ้นจริง (กันกรณี config ปรับย้อนหลัง)
+          if (order.indexOf(eligible.level) > order.indexOf(updatedMember.level)) {
+            updateMember(updatedMember.id, { level: eligible.level });
+          }
         }
       }
     }
