@@ -44,6 +44,33 @@ const recalcItem = (item: CartItem): CartItem => {
   return { ...item, discountAmount: discAmt, subtotal: netPrice * item.qty };
 };
 
+/**
+ * คำนวณ VAT ราย "บรรทัดสินค้า" โดยอิง vatIncluded/vatRate ของสินค้าแต่ละตัว
+ * - lineNet = ยอดบรรทัดหลังส่วนลดรายสินค้า แล้วเฉลี่ยส่วนลดระดับบิลตามสัดส่วน
+ *   (จึงได้ sum(lineNet) = subtotal - discountTotal พอดี)
+ * - สินค้า VAT นอก (exclusive): VAT = lineNet * rate/100  → ต้องบวกเพิ่มในยอดชำระ
+ * - สินค้า VAT ใน (inclusive): VAT = lineNet - lineNet/(1+rate/100) → ฝังในราคาแล้ว
+ * - rate 0 → ไม่มี VAT
+ */
+interface LineVat {
+  /** VAT ของบรรทัดนี้ (บาท) */
+  vat: number;
+  /** true เมื่อเป็น VAT นอก (ต้องบวกเพิ่มในยอดชำระ) */
+  exclusive: boolean;
+}
+
+const computeLineVats = (items: CartItem[], billDiscountRatio: number): LineVat[] =>
+  items.map((item) => {
+    const rate = item.product.vatRate || 0;
+    // เฉลี่ยส่วนลดระดับบิลตามสัดส่วนของยอดบรรทัด
+    const lineNet = item.subtotal * billDiscountRatio;
+    if (rate <= 0) return { vat: 0, exclusive: false };
+    if (item.product.vatIncluded) {
+      return { vat: lineNet - lineNet / (1 + rate / 100), exclusive: false };
+    }
+    return { vat: lineNet * (rate / 100), exclusive: true };
+  });
+
 export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
@@ -163,13 +190,22 @@ export const useCartStore = create<CartState>()(
   },
 
   getVatAmount: () => {
-    const afterDiscount = get().getSubtotal() - get().getDiscountTotal();
-    return afterDiscount * 0.07;
+    const subtotal = get().getSubtotal();
+    if (subtotal <= 0) return 0;
+    // สัดส่วนที่เหลือหลังหักส่วนลดระดับบิล (เฉลี่ยลงแต่ละบรรทัด)
+    const ratio = (subtotal - get().getDiscountTotal()) / subtotal;
+    return computeLineVats(get().items, ratio).reduce((sum, l) => sum + l.vat, 0);
   },
 
   getGrandTotal: () => {
-    const afterDiscount = get().getSubtotal() - get().getDiscountTotal();
-    return afterDiscount;
+    const subtotal = get().getSubtotal();
+    const afterDiscount = subtotal - get().getDiscountTotal();
+    if (subtotal <= 0) return afterDiscount;
+    const ratio = afterDiscount / subtotal;
+    // VAT ใน = ฝังในราคาอยู่แล้ว (ไม่บวกซ้ำ); VAT นอก = ต้องบวกเพิ่มในยอดชำระ
+    const exclusiveVat = computeLineVats(get().items, ratio)
+      .reduce((sum, l) => sum + (l.exclusive ? l.vat : 0), 0);
+    return afterDiscount + exclusiveVat;
   },
 
   getItemCount: () => get().items.reduce((sum, i) => sum + i.qty, 0),

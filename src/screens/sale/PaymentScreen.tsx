@@ -58,6 +58,18 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
   const { getGrandTotal, getSubtotal, getDiscountTotal, getVatAmount, items, discount, orderType, orderDetails } = useCartStore();
   const grandTotalBase = getGrandTotal();
 
+  // ── ป้ายกำกับ VAT: รองรับกรณี VAT ผสม (ใน/นอก/อัตราต่างกัน) ──
+  // ถ้าสินค้าที่มีภาษีทุกบรรทัดเป็น VAT ใน อัตราเดียวกัน → แสดง "VAT x% (รวมแล้ว)"
+  // ถ้าไม่เป็นแบบนั้น → ใช้ป้ายกลาง "ภาษีมูลค่าเพิ่ม (VAT)"
+  const vatLabel = useMemo(() => {
+    const taxed = items.filter((i) => (i.product.vatRate || 0) > 0);
+    if (taxed.length === 0) return 'ภาษีมูลค่าเพิ่ม (VAT)';
+    const allInclusive = taxed.every((i) => i.product.vatIncluded);
+    const rates = Array.from(new Set(taxed.map((i) => i.product.vatRate)));
+    if (allInclusive && rates.length === 1) return `VAT ${rates[0]}% (รวมแล้ว)`;
+    return 'ภาษีมูลค่าเพิ่ม (VAT)';
+  }, [items]);
+
   // ── Service Charge ──
   const { serviceCharge } = useStoreConfigStore();
   const scAmount = serviceCharge.enabled
@@ -402,7 +414,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
               </View>
             )}
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>VAT 7% (รวมแล้ว)</Text>
+              <Text style={styles.summaryLabel}>{vatLabel}</Text>
               <Text style={styles.summaryValue}>฿{formatCurrency(getVatAmount())}</Text>
             </View>
           </View>
