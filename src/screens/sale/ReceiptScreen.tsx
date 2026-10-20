@@ -22,6 +22,7 @@ interface ReceiptScreenProps {
   isReprint?: boolean;
   onNewSale: () => void;
   onPrintDone?: () => void;
+  onTaxInvoice?: () => void;
   shopName?: string;
   shopAddress?: string;
   shopTaxId?: string;
@@ -42,6 +43,7 @@ export const ReceiptScreen: React.FC<ReceiptScreenProps> = ({
   isReprint = false,
   onNewSale,
   onPrintDone,
+  onTaxInvoice,
   shopName = 'ร้านค้าตัวอย่าง',
   shopAddress = '123 ถนนสุขุมวิท กรุงเทพฯ',
   shopTaxId = '0105563123456',
@@ -231,6 +233,13 @@ export const ReceiptScreen: React.FC<ReceiptScreenProps> = ({
             <Text style={styles.printBtnText}>{printing ? 'กำลังพิมพ์...' : 'พิมพ์ใบเสร็จ'}</Text>
           </TouchableOpacity>
 
+          {onTaxInvoice && (
+            <TouchableOpacity style={styles.taxInvoiceBtn} onPress={onTaxInvoice} activeOpacity={0.85}>
+              <Ionicons name="document-text-outline" size={20} color={Colors.primary} />
+              <Text style={styles.taxInvoiceBtnText}>ออกใบกำกับภาษีเต็มรูป</Text>
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity style={styles.newSaleBtn} onPress={handleNewSale} activeOpacity={0.85}>
             <Ionicons name="add-circle-outline" size={20} color={Colors.white} />
             <Text style={styles.newSaleBtnText}>ขายรายการถัดไป</Text>
@@ -356,6 +365,13 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: Colors.primary,
   },
   printBtnText: { ...Typography.button, color: Colors.primary },
+  taxInvoiceBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: Spacing.sm, backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md, paddingVertical: Spacing.md,
+    borderWidth: 1.5, borderColor: Colors.primary,
+  },
+  taxInvoiceBtnText: { ...Typography.button, color: Colors.primary },
   newSaleBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: Spacing.sm, backgroundColor: Colors.primary,

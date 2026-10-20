@@ -56,6 +56,8 @@ if (Platform.OS === 'web') {
 // ─── Mobile imports ───────────────────────────────────────────────────────────
 import { AuthNavigator } from './src/navigation/AuthNavigator';
 import { MainNavigator } from './src/navigation/MainNavigator';
+import { LicenseActivationScreen } from './src/screens/auth/LicenseActivationScreen';
+import { getStoreConfig } from './src/store/storeConfigStore';
 import { Colors } from './src/constants/colors';
 
 const SplashScreen = () => (
@@ -72,7 +74,7 @@ const sp = StyleSheet.create({
 });
 
 // ─── App ───────────────────────────────────────────────────────────────────────
-type MobileState = 'loading' | 'auth' | 'main';
+type MobileState = 'loading' | 'license' | 'auth' | 'main';
 
 export default function App() {
   const [fontsLoaded, setFontsLoaded] = useState(false);
@@ -127,12 +129,24 @@ export default function App() {
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
-    const t = setTimeout(() => { if (mounted.current) setAppState('auth'); }, 1500);
+    const t = setTimeout(() => {
+      if (mounted.current) setAppState(getStoreConfig().licenseActivated ? 'auth' : 'license');
+    }, 1500);
     return () => { mounted.current = false; clearTimeout(t); };
   }, []);
 
   if (appState === 'loading') {
     return <SafeAreaProvider><StatusBar style="dark" /><SplashScreen /></SafeAreaProvider>;
+  }
+  if (appState === 'license') {
+    return (
+      <SafeAreaProvider>
+        <StatusBar style="dark" />
+        <ErrorBoundary>
+          <LicenseActivationScreen onActivated={() => setAppState('auth')} />
+        </ErrorBoundary>
+      </SafeAreaProvider>
+    );
   }
   return (
     <SafeAreaProvider>

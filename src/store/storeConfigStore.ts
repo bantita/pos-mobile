@@ -26,6 +26,10 @@ interface StoreConfigState extends StoreConfig {
   crmEnabled: boolean;
   /** เปิด/ปิดโมดูลทั้งหมด (super admin จัดการ) */
   moduleEnabled: Record<string, boolean>;
+  /** คีย์ใบอนุญาต / รหัสเปิดใช้งานระบบ */
+  licenseKey: string;
+  /** สถานะเปิดใช้งาน License แล้วหรือยัง */
+  licenseActivated: boolean;
 
   setStoreType: (type: StoreType) => void;
   setBusinessType: (type: BusinessType) => void;
@@ -42,6 +46,8 @@ interface StoreConfigState extends StoreConfig {
   setVariantYear: (enabled: boolean) => void;
   setCrmEnabled: (enabled: boolean) => void;
   setModuleEnabled: (moduleId: string, enabled: boolean) => void;
+  /** เปิดใช้งาน License ด้วยคีย์ — คืนค่า true หากคีย์ถูกต้อง (ความยาว >= 6) */
+  activateLicense: (key: string) => boolean;
 }
 
 export const useStoreConfigStore = create<StoreConfigState>()(
@@ -67,6 +73,8 @@ export const useStoreConfigStore = create<StoreConfigState>()(
         kiosk: true, customerDisplay: true, splitPayment: true,
         pointSystem: true, wallet: true, lineIntegration: true,
       },
+      licenseKey: '',
+      licenseActivated: false,
       serviceCharge: {
         enabled: false,
         mode: 'percentage',
@@ -88,6 +96,13 @@ export const useStoreConfigStore = create<StoreConfigState>()(
       setVariantYear: (variantYear) => { set({ variantYear }); logAction('ตั้งค่า', variantYear ? 'เปิด' : 'ปิด', 'ตัวเลือกปี/รุ่น'); },
       setCrmEnabled: (crmEnabled) => { set({ crmEnabled }); logAction('ตั้งค่า', crmEnabled ? 'เปิดเมนู CRM' : 'ปิดเมนู CRM', `CRM ${crmEnabled ? 'เปิด' : 'ปิด'}`); },
       setModuleEnabled: (moduleId, enabled) => { set(s => ({ moduleEnabled: { ...s.moduleEnabled, [moduleId]: enabled } })); logAction('Super Admin', `${enabled ? 'เปิด' : 'ปิด'}โมดูล`, moduleId); },
+      activateLicense: (key) => {
+        const trimmed = key.trim();
+        if (trimmed.length < 6) return false;
+        set({ licenseKey: trimmed, licenseActivated: true });
+        logAction('ตั้งค่า', 'เปิดใช้งาน License', `เปิดใช้งานด้วยคีย์ ${trimmed.slice(0, 4)}...`);
+        return true;
+      },
     }),
     { name: 'pos-store-config', storage: createJSONStorage(() => persistStorage) }
   )

@@ -13,6 +13,8 @@ import { DiscountScreen }         from '../screens/sale/DiscountScreen';
 import { HoldBillScreen }         from '../screens/sale/HoldBillScreen';
 import { PaymentScreen }          from '../screens/sale/PaymentScreen';
 import { ReceiptScreen }          from '../screens/sale/ReceiptScreen';
+import { TaxInvoiceScreen }       from '../screens/sale/TaxInvoiceScreen';
+import { DocumentCancellationScreen } from '../screens/sale/DocumentCancellationScreen';
 import { CustomerDisplayScreen }  from '../screens/sale/CustomerDisplayScreen';
 import { AdManagerScreen }         from '../screens/sale/AdManagerScreen';
 import { CancelBillScreen }       from '../screens/sale/CancelBillScreen';
@@ -30,6 +32,8 @@ export type SaleStackParamList = {
   HoldBill:        undefined;
   Payment:         undefined;
   Receipt:         { saleNo: string; payments: Payment[] };
+  TaxInvoice:      { saleNo: string };
+  DocumentCancellation: { saleNo: string; documentType: string };
   CustomerDisplay: { mode?: string };
   AdManager:       undefined;
   CancelBill:      { saleNo?: string };
@@ -167,6 +171,30 @@ export const SaleNavigator: React.FC = () => {
             saleNo={props.route.params.saleNo}
             payments={props.route.params.payments}
             onNewSale={() => props.navigation.navigate('POSSale')}
+            onTaxInvoice={() => props.navigation.navigate('TaxInvoice', { saleNo: props.route.params.saleNo })}
+          />
+        )}
+      </Stack.Screen>
+
+      {/* ── ใบกำกับภาษีเต็มรูป ── */}
+      <Stack.Screen name="TaxInvoice">
+        {(props) => (
+          <TaxInvoiceScreen
+            saleNo={props.route.params.saleNo}
+            onBack={() => props.navigation.goBack()}
+            onCancelInvoice={() => props.navigation.navigate('DocumentCancellation', { saleNo: props.route.params.saleNo, documentType: 'tax_invoice' })}
+          />
+        )}
+      </Stack.Screen>
+
+      {/* ── ยกเลิกเอกสาร (modal) ── */}
+      <Stack.Screen name="DocumentCancellation" options={{ presentation: 'modal' }}>
+        {(props) => (
+          <DocumentCancellationScreen
+            saleNo={props.route.params.saleNo}
+            documentType={props.route.params.documentType}
+            onBack={() => props.navigation.goBack()}
+            onDone={() => props.navigation.navigate('Receipt', { saleNo: props.route.params.saleNo, payments: [] })}
           />
         )}
       </Stack.Screen>
