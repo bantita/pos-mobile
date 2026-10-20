@@ -1,0 +1,10 @@
+{
+  "verdict": "APPROVED",
+  "summary": "All must-haves satisfied. FEAT-001: branch ids unified to b1/b2/b3; resolveCartPrice (pure, keyed by product CODE, scaled by UOM ratio) is called at the toCartProduct boundary in both POS screens with POSSaleScreen reading from productStore. FEAT-002: per-line VAT honours vatIncluded/vatRate, spreads bill discount proportionally, inclusive VAT not double-added, exclusive VAT added to grand total; PaymentScreen label is now dynamic. FEAT-003: real CSV import/export/template via Blob+FileReader, image picker with preview saved into ProductMaster.image, logAction price-change audit replaces console.log, dead WebPricingScreen deleted. Verification green: tsc = exactly the 13 baseline errors (none in touched files); npm test = cartVat 5 + priceResolver 5 + cartAdapter 14 (24 passing) + engine self-test 39/0; the 3 pre-existing suite-load failures remain. Design-system compliant, Thai UI, no new `any`.",
+  "findings": [
+    "INFORMATIONAL (no change required): getGrandTotal now adds exclusive VAT on top of the discounted subtotal — a deliberate, documented fix from the prior behaviour where exclusive VAT was dropped. PaymentScreen treats VAT as display-only, so the single payable path is correct; no downstream consumer re-adds getVatAmount.",
+    "OUT OF SCOPE (deliberately deferred, author-flagged): on the mobile AddEditProductScreen flow, ProductNavigator.onSaved only calls goBack() and does not persist image/price edits to productStore; the audit logAction still fires. Web product screens and the CSV import path write to productStore directly and are unaffected.",
+    "RUNTIME-ONLY (not coverable by tsc/vitest): branch-price recompute on branch switch depends on useBranchGuard reading branchStore, which is empty at runtime and falls back to b1 — verify in a browser that changing the active branch updates resolved POS prices.",
+    "MINOR (non-blocking): ImportExportScreen exportBtnSub uses Colors.textSecondary on the green Colors.success button, giving weak contrast."
+  ]
+}

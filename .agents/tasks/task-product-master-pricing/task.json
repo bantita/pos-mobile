@@ -1,0 +1,7 @@
+{
+  "task_id": "task-product-master-pricing",
+  "task_description": "Wire per-branch pricing into the POS sale flow (unify branch ids b1/b2/b3, resolvePrice by product CODE scaled by UOM ratio at the add-to-cart boundary, POSSaleScreen reads productStore), fix per-line VAT, make CSV product import/export real, wire the product image button, log price-change audit, and remove the dead WebPricingScreen. Item 9 (supplier/brand master) optional; item 10 (web sync) out of scope; product-variant matrix explicitly not implemented.",
+  "status": "completed",
+  "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003"],
+  "blocked_reason": null
+}
