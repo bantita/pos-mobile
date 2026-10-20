@@ -1,7 +1,7 @@
 {
   "name": "Xcellence POS",
   "short_name": "POS",
-  "description": "ระบบขายหน้าร้าน PWA — ชำระเงิน คูปอง สมาชิก CRM กะการขาย ใบเสร็จ รองรับออฟไลน์",
+  "description": "ระบบขายหน้าร้าน — ชำระเงิน คูปอง สมาชิก กะการขาย ใบเสร็จ ใบกำกับภาษี และออฟไลน์",
   "start_url": "/?target=pos",
   "scope": "/",
   "display": "standalone",
