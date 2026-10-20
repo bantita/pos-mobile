@@ -3,10 +3,10 @@
  * FR-PROD-002: สร้าง Product Master
  * FR-PROD-003: ปรับปรุงข้อมูลสินค้า + Audit Log ราคา
  */
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  TextInput, Switch, Alert, Modal, FlatList, KeyboardAvoidingView, Platform,
+  TextInput, Switch, Alert, Modal, FlatList, KeyboardAvoidingView, Platform, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,10 +14,14 @@ import { ProductMaster } from '../../types/product';
 import { MOCK_CATEGORIES, MOCK_BRANDS, UNITS } from '../../data/mockProducts';
 import { UOMManager } from '../../components/product/UOMManager';
 import type { ProductUOM } from '../../types/product';
+import { logAction } from '../../store/auditLogStore';
 import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
 import { Spacing, BorderRadius } from '../../constants/spacing';
 import { formatCurrency } from '../../utils/format';
+
+const IS_WEB = Platform.OS === 'web';
+const WEB_ONLY_MSG = 'รองรับเฉพาะเว็บในเวอร์ชันนี้';
 
 interface AddEditProductScreenProps {
   product?: ProductMaster;
@@ -112,7 +116,9 @@ export const AddEditProductScreen: React.FC<AddEditProductScreenProps> = ({
   const [uoms, setUoms] = useState<ProductUOM[]>(
     product?.uoms ?? []
   );
+  const [image, setImage] = useState<string | undefined>(product?.image);
   const [saving, setSaving] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
 
   // Picker modals
   const [showCatPicker, setShowCatPicker] = useState(false);
@@ -170,6 +176,27 @@ export const AddEditProductScreen: React.FC<AddEditProductScreenProps> = ({
     return null;
   };
 
+  const handlePickImage = () => {
+    if (!IS_WEB) { Alert.alert('ไม่รองรับ', WEB_ONLY_MSG); return; }
+    let input = imageInputRef.current;
+    if (!input) {
+      input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      imageInputRef.current = input;
+    }
+    input.value = '';
+    input.onchange = () => {
+      const file = input!.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => setImage(String(reader.result ?? ''));
+      reader.onerror = () => Alert.alert('ผิดพลาด', 'อ่านไฟล์รูปภาพไม่สำเร็จ');
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  };
+
   const handleSave = async () => {
     const err = validate();
     if (err) { Alert.alert('ข้อมูลไม่ครบ', err); return; }
@@ -181,6 +208,7 @@ export const AddEditProductScreen: React.FC<AddEditProductScreenProps> = ({
         brandId: brandId || undefined, brandName: brandName || undefined,
         unit, costPrice: cost, salePrice: sale,
         vatIncluded: vatEnabled, vatRate: vatEnabled ? vatRate : 0,
+        image,
         productType,
         status, stockQty: product?.stockQty ?? 0,
         minStock: parseInt(minStock) || 5,
@@ -194,11 +222,14 @@ export const AddEditProductScreen: React.FC<AddEditProductScreenProps> = ({
         updatedAt: new Date(),
       };
       setSaving(false);
-      if (isEdit) {
+      if (isEdit && product && product.salePrice !== sale) {
         // Audit Log: price change
-        if (product && product.salePrice !== sale) {
-          console.log(`[AUDIT] PRICE_CHANGE - Product: ${name}, Old: ${product.salePrice}, New: ${sale}, At: ${new Date().toISOString()}`);
-        }
+        logAction(
+          'สินค้า',
+          'เปลี่ยนราคา',
+          `เปลี่ยนราคา ${name}: ${product.salePrice} -> ${sale}`,
+          { productId: product.id, oldPrice: product.salePrice, newPrice: sale }
+        );
       }
       onSaved(saved);
     }, 800);
@@ -430,11 +461,27 @@ export const AddEditProductScreen: React.FC<AddEditProductScreenProps> = ({
           {/* Section: รูปภาพ */}
           <View style={styles.section}>
             <SectionHeader title="รูปภาพสินค้า" icon="image-outline" />
-            <TouchableOpacity style={styles.imagePlaceholder}>
-              <Ionicons name="camera-outline" size={32} color={Colors.gray400} />
-              <Text style={styles.imagePlaceholderText}>กดเพื่อเพิ่มรูปภาพ</Text>
-              <Text style={styles.imagePlaceholderSub}>รองรับ JPG, PNG ขนาดไม่เกิน 5MB</Text>
-            </TouchableOpacity>
+            {image ? (
+              <View style={styles.imagePreviewBox}>
+                <Image source={{ uri: image }} style={styles.imagePreview} resizeMode="cover" />
+                <View style={styles.imagePreviewActions}>
+                  <TouchableOpacity style={styles.imageActionBtn} onPress={handlePickImage}>
+                    <Ionicons name="swap-horizontal-outline" size={16} color={Colors.primary} />
+                    <Text style={styles.imageActionText}>เปลี่ยนรูป</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.imageActionBtn} onPress={() => setImage(undefined)}>
+                    <Ionicons name="trash-outline" size={16} color={Colors.danger} />
+                    <Text style={[styles.imageActionText, { color: Colors.danger }]}>ลบรูป</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.imagePlaceholder} onPress={handlePickImage} activeOpacity={0.8}>
+                <Ionicons name="camera-outline" size={32} color={Colors.gray400} />
+                <Text style={styles.imagePlaceholderText}>กดเพื่อเพิ่มรูปภาพ</Text>
+                <Text style={styles.imagePlaceholderSub}>รองรับ JPG, PNG ขนาดไม่เกิน 5MB</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Section: สถานะ */}
@@ -595,6 +642,19 @@ const styles = StyleSheet.create({
   },
   imagePlaceholderText: { ...Typography.label, color: Colors.gray400 },
   imagePlaceholderSub: { ...Typography.caption, color: Colors.gray300 },
+  imagePreviewBox: { gap: Spacing.sm },
+  imagePreview: {
+    width: '100%', height: 180, borderRadius: BorderRadius.md,
+    backgroundColor: Colors.backgroundSecondary,
+  },
+  imagePreviewActions: { flexDirection: 'row', gap: Spacing.sm },
+  imageActionBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: Spacing.xs, paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md, borderWidth: 1.5, borderColor: Colors.border,
+    backgroundColor: Colors.backgroundSecondary,
+  },
+  imageActionText: { ...Typography.caption, color: Colors.primary, fontWeight: '600' },
   auditNote: {
     flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm,
     backgroundColor: Colors.primaryLight, borderRadius: BorderRadius.md,
