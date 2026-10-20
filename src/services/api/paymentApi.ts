@@ -181,8 +181,11 @@ export const paymentApi = {
   /**
    * สร้าง PromptPay QR offline (ไม่ต้อง API)
    * ใช้ library QR code generator แสดงผลจาก payload นี้
+   * @param amount - จำนวนเงิน (บาท)
+   * @param promptPayId - หมายเลข PromptPay (ถ้าไม่ระบุ fallback ไปที่ ENV.PROMPTPAY_ID)
    */
-  generateOfflineQR: (amount: number): string => {
-    return generatePromptPayQR(ENV.PROMPTPAY_ID, amount);
+  generateOfflineQR: (amount: number, promptPayId?: string): string => {
+    const id = promptPayId?.trim() || ENV.PROMPTPAY_ID;
+    return generatePromptPayQR(id, amount);
   },
 };

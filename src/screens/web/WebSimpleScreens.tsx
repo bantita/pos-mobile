@@ -2,7 +2,7 @@
  * Simple Web Screens: Inventory, Reports, Users, AuditLog, Settings
  */
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, Switch, ScrollView, Image, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, Switch, ScrollView, Image, Platform, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { WebColors } from '../../constants/webColors';
 import { Colors, Space, Radius, Shadow, Font } from '../../design-system/tokens';
@@ -19,6 +19,7 @@ import { WebUserStaffScreen } from './WebUserStaffScreen';
 import { LookupCheckbox } from '../../components/ui/LookupCheckbox';
 import { usePOSPermissionStore, POSAction, POS_ACTION_LABELS, POSUser } from '../../store/posPermissionStore';
 import { useEmployeeStore } from '../../store/employeeStore';
+import { usePaymentConfigStore } from '../../store/paymentConfigStore';
 
 // ─── Inventory ────────────────────────────────────────────────────────────────
 export const WebInventoryScreen: React.FC = () => {
@@ -2271,40 +2272,67 @@ const SettingScannerSection: React.FC<{ onBack: () => void }> = ({ onBack }) => 
 
 // ─── Setting: Payment Types ───────────────────────────────────────────────────
 const SettingPaymentSection: React.FC<{ onBack: () => void }> = ({ onBack }) => {
-  const [methods, setMethods] = useState([
-    { id: 'cash', label: 'เงินสด', icon: 'cash', color: WebColors.success, enabled: true },
-    { id: 'qr', label: 'QR Code / PromptPay', icon: 'qr-code', color: WebColors.purple, enabled: true },
-    { id: 'transfer', label: 'โอนเงิน (Transfer)', icon: 'swap-horizontal', color: WebColors.info, enabled: true },
-    { id: 'credit', label: 'บัตรเครดิต / เดบิต', icon: 'card', color: WebColors.warning, enabled: true },
-    { id: 'wallet', label: 'E-Wallet (Line Pay, TrueMoney)', icon: 'wallet', color: WebColors.primary, enabled: false },
-    { id: 'coupon', label: 'คูปอง / Voucher', icon: 'pricetag', color: WebColors.danger, enabled: false },
-  ]);
+  const {
+    promptPayId, bankAccount, bankName, accountName, channels,
+    setPromptPayId, setBankAccount, setBankName, setAccountName,
+    toggleChannel, moveChannel, addChannel, removeChannel,
+  } = usePaymentConfigStore();
+
+  const methods = channels;
   const [showAddForm, setShowAddForm] = useState(false);
   const [newLabel, setNewLabel] = useState('');
   const [newIcon, setNewIcon] = useState('cash-outline');
   const [newColor, setNewColor] = useState<string>(WebColors.textSecondary);
 
-  const toggle = (id: string) => {
-    setMethods(prev => prev.map(m => m.id === id ? { ...m, enabled: !m.enabled } : m));
+  // ── ฟอร์ม PromptPay / บัญชีธนาคาร ──
+  const [ppInput, setPpInput] = useState(promptPayId);
+  const [bankInput, setBankInput] = useState(bankAccount);
+  const [bankNameInput, setBankNameInput] = useState(bankName);
+  const [accountNameInput, setAccountNameInput] = useState(accountName);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [ppError, setPpError] = useState('');
+
+  const validatePromptPayId = (id: string): string => {
+    const clean = id.replace(/[-\s]/g, '');
+    if (!clean) return '';
+    if (!/^\d+$/.test(clean)) return 'กรอกตัวเลขเท่านั้น (เบอร์โทร 10 หลัก หรือเลขบัตรประชาชน 13 หลัก)';
+    if (clean.length !== 10 && clean.length !== 13) return 'ต้องเป็นเบอร์โทร 10 หลัก หรือเลขบัตรประชาชน 13 หลัก';
+    return '';
   };
+
+  const handleSavePayee = () => {
+    const err = validatePromptPayId(ppInput);
+    if (err) { setPpError(err); return; }
+    setPpError('');
+    setSaving(true);
+    // persist ลง store (zustand persist จะ sync เข้า storage ทันที)
+    setPromptPayId(ppInput);
+    setBankAccount(bankInput);
+    setBankName(bankNameInput);
+    setAccountName(accountNameInput);
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const toggle = (id: string) => toggleChannel(id);
 
   const handleAdd = () => {
     if (!newLabel.trim()) return;
-    const newMethod = {
+    addChannel({
       id: `custom_${Date.now()}`,
       label: newLabel.trim(),
       icon: newIcon,
       color: newColor,
-      enabled: true,
-    };
-    setMethods(prev => [...prev, newMethod]);
+    });
     setNewLabel(''); setNewIcon('cash-outline'); setNewColor(WebColors.textSecondary);
     setShowAddForm(false);
   };
 
-  const handleDelete = (id: string) => {
-    setMethods(prev => prev.filter(m => m.id !== id));
-  };
+  const handleDelete = (id: string) => removeChannel(id);
+
+  const inputStyle = { borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 12, color: Colors.text } as const;
 
   return (
     <View style={g.root}>
@@ -2313,11 +2341,92 @@ const SettingPaymentSection: React.FC<{ onBack: () => void }> = ({ onBack }) => 
         <Text style={{ fontSize: 12, color: WebColors.primary, fontWeight: '600' }}>ตั้งค่า</Text>
       </TouchableOpacity>
       <Text style={g.pageTitle}>ประเภทชำระเงิน</Text>
-      <Text style={g.pageSub}>เปิด/ปิดช่องทางชำระเงินที่แสดงในหน้า POS</Text>
+      <Text style={g.pageSub}>ตั้งค่าบัญชีรับเงิน และเปิด/ปิด-จัดลำดับช่องทางชำระเงินที่แสดงในหน้า POS</Text>
 
-      <View style={{ backgroundColor: WebColors.white, borderRadius: 12, padding: 20, borderWidth: 1, borderColor: WebColors.border, marginTop: 16, gap: 4 }}>
+      {/* ── บัญชีรับเงิน (PromptPay / ธนาคาร) ── */}
+      <View style={{ backgroundColor: WebColors.white, borderRadius: 12, padding: 20, borderWidth: 1, borderColor: WebColors.border, marginTop: 16, gap: 12 }}>
+        <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.text }}>บัญชีรับเงิน (PromptPay QR)</Text>
+        <Text style={{ fontSize: 12, color: Colors.textSecondary }}>หมายเลข PromptPay นี้จะถูกฝังลงใน QR ที่หน้าชำระเงิน</Text>
+        <View>
+          <Text style={{ fontSize: 11, fontWeight: '600', color: Colors.textSecondary, marginBottom: 4 }}>หมายเลข PromptPay (เบอร์โทร / เลขบัตรประชาชน) *</Text>
+          <TextInput
+            style={[inputStyle, ppError ? { borderColor: WebColors.danger } : null]}
+            value={ppInput}
+            onChangeText={(v) => { setPpInput(v); if (ppError) setPpError(''); }}
+            placeholder="เช่น 0812345678"
+            placeholderTextColor={Colors.textMuted}
+            keyboardType="number-pad"
+          />
+          {ppError ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+              <Ionicons name="alert-circle" size={13} color={WebColors.danger} />
+              <Text style={{ fontSize: 11, color: WebColors.danger }}>{ppError}</Text>
+            </View>
+          ) : null}
+        </View>
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 11, fontWeight: '600', color: Colors.textSecondary, marginBottom: 4 }}>ธนาคาร</Text>
+            <TextInput
+              style={inputStyle}
+              value={bankNameInput}
+              onChangeText={setBankNameInput}
+              placeholder="เช่น ธ.กสิกรไทย"
+              placeholderTextColor={Colors.textMuted}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 11, fontWeight: '600', color: Colors.textSecondary, marginBottom: 4 }}>เลขบัญชี</Text>
+            <TextInput
+              style={inputStyle}
+              value={bankInput}
+              onChangeText={setBankInput}
+              placeholder="เช่น 123-4-56789-0"
+              placeholderTextColor={Colors.textMuted}
+            />
+          </View>
+        </View>
+        <View>
+          <Text style={{ fontSize: 11, fontWeight: '600', color: Colors.textSecondary, marginBottom: 4 }}>ชื่อบัญชี</Text>
+          <TextInput
+            style={inputStyle}
+            value={accountNameInput}
+            onChangeText={setAccountNameInput}
+            placeholder="เช่น ร้านสะดวกซื้อ ABC"
+            placeholderTextColor={Colors.textMuted}
+          />
+        </View>
+        <TouchableOpacity
+          style={[g.primaryBtn, { alignSelf: 'flex-start' }, saving ? { opacity: 0.6 } : null]}
+          onPress={handleSavePayee}
+          disabled={saving}
+        >
+          {saving ? <ActivityIndicator size="small" color={WebColors.white} /> : <Ionicons name="save-outline" size={16} color={WebColors.white} />}
+          <Text style={g.primaryBtnText}>{saved ? '✓ บันทึกแล้ว' : 'บันทึกบัญชีรับเงิน'}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* ── รายการช่องทางชำระเงิน (เปิด/ปิด + จัดลำดับ) ── */}
+      <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.text, marginTop: 20, marginBottom: 8 }}>ช่องทางชำระเงิน</Text>
+      {methods.length === 0 ? (
+        // Empty state
+        <View style={{ backgroundColor: WebColors.white, borderRadius: 12, padding: 32, borderWidth: 1, borderColor: WebColors.border, alignItems: 'center', gap: 8 }}>
+          <Ionicons name="card-outline" size={40} color={Colors.textMuted} />
+          <Text style={{ fontSize: 13, color: Colors.textSecondary }}>ไม่มีช่องทางชำระเงิน</Text>
+        </View>
+      ) : (
+      <View style={{ backgroundColor: WebColors.white, borderRadius: 12, padding: 20, borderWidth: 1, borderColor: WebColors.border, gap: 4 }}>
         {methods.map((m, i) => (
           <View key={m.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: i < methods.length - 1 ? 1 : 0, borderBottomColor: Colors.border, gap: 12 }}>
+            {/* ปุ่มจัดลำดับ */}
+            <View style={{ gap: 2 }}>
+              <TouchableOpacity onPress={() => moveChannel(m.id, 'up')} disabled={i === 0} hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}>
+                <Ionicons name="chevron-up" size={16} color={i === 0 ? Colors.border : Colors.textSecondary} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => moveChannel(m.id, 'down')} disabled={i === methods.length - 1} hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}>
+                <Ionicons name="chevron-down" size={16} color={i === methods.length - 1 ? Colors.border : Colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
             <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: m.color + '18', alignItems: 'center', justifyContent: 'center' }}>
               <Ionicons name={m.icon as any} size={20} color={m.color} />
             </View>
@@ -2333,6 +2442,7 @@ const SettingPaymentSection: React.FC<{ onBack: () => void }> = ({ onBack }) => 
           </View>
         ))}
       </View>
+      )}
 
       {/* เพิ่มประเภทชำระใหม่ */}
       {showAddForm ? (

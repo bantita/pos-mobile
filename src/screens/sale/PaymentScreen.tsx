@@ -3,14 +3,16 @@
  * FR-SALE-006: รับชำระเงิน — Cash, Credit Card, QR Code, Other
  * รองรับ Split Payment (จ่ายหลายช่องทาง)
  */
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   TextInput, ScrollView, Modal, Image,
   KeyboardAvoidingView, Platform, Animated, FlatList,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import QRCode from 'react-native-qrcode-svg';
 import { useCartStore } from '../../store/cartStore';
 import { useMemberStore } from '../../store/memberStore';
 import { usePromoStore } from '../../store/promoStore';
@@ -18,9 +20,13 @@ import { useProductStore } from '../../store/productStore';
 import { useShiftStore } from '../../store/shiftStore';
 import { useStoreConfigStore } from '../../store/storeConfigStore';
 import { useSaleHistoryStore } from '../../store/saleHistoryStore';
+import { usePaymentConfigStore } from '../../store/paymentConfigStore';
 import { Payment, PaymentMethod } from '../../types/sale';
 import { Member } from '../../types/member';
 import { runCartPromotions } from '../../engine/adapter/cartAdapter';
+import { paymentApi } from '../../services/api/paymentApi';
+import { FEATURE_FLAGS } from '../../config/featureFlags';
+import { ENV } from '../../config/env';
 import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
 import { Spacing, BorderRadius } from '../../constants/spacing';
@@ -124,17 +130,33 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
     setShowPointRedeem(false);
   };
 
+  // ── Payment channel config (PromptPay id ที่ใช้ encode ลง QR) ──
+  const promptPayId = usePaymentConfigStore((s) => s.promptPayId);
+
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('cash');
   const [payments, setPayments] = useState<Payment[]>([]);
   const [inputAmount, setInputAmount] = useState('');
   const [reference, setReference] = useState('');
   const [showQRModal, setShowQRModal] = useState(false);
   const [showSplitMode, setShowSplitMode] = useState(false);
+  // สถานะการชำระผ่าน QR: idle = รอสแกน, success = ชำระสำเร็จ (mock auto-confirm)
+  const [qrStatus, setQrStatus] = useState<'idle' | 'success'>('idle');
   const successAnim = useRef(new Animated.Value(0)).current;
+  // timer ของ mock auto-confirm — เก็บไว้เพื่อ clear ตอนปิด modal / unmount
+  const autoConfirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
   const remaining = Math.max(0, grandTotal - totalPaid);
   const changeAmount = Math.max(0, totalPaid - grandTotal);
+
+  // ── PromptPay QR payload (EMVCo) จากยอดที่ต้องชำระ + PromptPay id ที่ตั้งค่าไว้ ──
+  // ใช้ id จาก payment-config store; ถ้ายังไม่ตั้งค่า fallback เป็น ENV.PROMPTPAY_ID
+  const effectivePromptPayId = promptPayId || ENV.PROMPTPAY_ID;
+  const qrAmount = remaining > 0 ? remaining : grandTotal;
+  const qrPayload = useMemo(
+    () => paymentApi.generateOfflineQR(qrAmount, effectivePromptPayId),
+    [qrAmount, effectivePromptPayId]
+  );
   const numInput = parseFloat(inputAmount) || 0;
   const isFullyPaid = totalPaid >= grandTotal;
 
@@ -163,8 +185,10 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
   const removePayment = (index: number) =>
     setPayments((prev) => prev.filter((_, i) => i !== index));
 
-  const handleConfirmPayment = () => {
-    if (!isFullyPaid) return;
+  const handleConfirmPayment = (overridePayments?: Payment[]) => {
+    const finalPayments = overridePayments ?? payments;
+    const finalPaid = finalPayments.reduce((s, p) => s + p.amount, 0);
+    if (finalPaid < grandTotal) return;
     const saleNo = `INV${Date.now().toString().slice(-8)}`;
     const pointsEarned = selectedMember
       ? Math.floor(grandTotal / (pointConfig.earnRate || 1))
@@ -215,15 +239,15 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
       id: saleNo,
       saleNo,
       items,
-      payments,
+      payments: finalPayments,
       discount,
       subtotal: getSubtotal(),
       discountTotal: getDiscountTotal() + promotionDiscount,
       serviceCharge: scAmount,
       vatAmount: getVatAmount(),
       grandTotal,
-      receivedAmount: totalPaid,
-      changeAmount,
+      receivedAmount: finalPaid,
+      changeAmount: Math.max(0, finalPaid - grandTotal),
       memberId: selectedMember?.id,
       memberName: selectedMember?.name,
       pointsEarned,
@@ -237,9 +261,57 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
     Animated.sequence([
       Animated.timing(successAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
     ]).start(() => {
-      onPaid(payments, saleNo);
+      onPaid(finalPayments, saleNo);
     });
   };
+
+  // ── QR payment: ชำระผ่าน PromptPay QR ──
+  // สร้าง payment ช่องทาง qr เต็มยอด แล้วเดินเข้า confirm path เดียวกับปุ่มยืนยัน
+  const confirmQRPayment = () => {
+    const qrPay: Payment = { method: 'qr', amount: grandTotal, reference: 'PromptPay QR' };
+    setPayments([qrPay]);
+    handleConfirmPayment([qrPay]);
+  };
+
+  const clearAutoConfirmTimer = () => {
+    if (autoConfirmTimer.current) {
+      clearTimeout(autoConfirmTimer.current);
+      autoConfirmTimer.current = null;
+    }
+  };
+
+  const openQRModal = () => {
+    setQrStatus('idle');
+    setShowQRModal(true);
+    // 2C auto-confirm (mock): เมื่อเปิด modal ให้จำลองการชำระสำเร็จภายใน ~4 วินาที
+    if (FEATURE_FLAGS.MOCK_PAYMENT_AUTOCONFIRM) {
+      clearAutoConfirmTimer();
+      // MOCK: จำลอง payment gateway แจ้งชำระสำเร็จ (ยังไม่ต่อ gateway จริง)
+      autoConfirmTimer.current = setTimeout(() => {
+        setQrStatus('success');
+        // รอ ~0.8 วิให้ผู้ใช้เห็นสถานะ "ชำระสำเร็จ" ก่อนปิดบิลอัตโนมัติ
+        autoConfirmTimer.current = setTimeout(() => {
+          setShowQRModal(false);
+          confirmQRPayment();
+        }, 800);
+      }, 4000);
+    } else {
+      // เมื่อปิด flag: ใช้ polling สถานะจริงจาก backend แทน (ยังไม่เปิดใช้งาน)
+      // (async () => {
+      //   const res = await paymentApi.checkStatus(paymentId);
+      //   if (res.data.status === 'completed') { setQrStatus('success'); confirmQRPayment(); }
+      // })();
+    }
+  };
+
+  const closeQRModal = () => {
+    clearAutoConfirmTimer();
+    setQrStatus('idle');
+    setShowQRModal(false);
+  };
+
+  // เคลียร์ timer เมื่อ unmount เพื่อไม่ให้ callback ยิงหลังออกจากหน้าจอ
+  useEffect(() => clearAutoConfirmTimer, []);
 
   const selectedMethodInfo = PAYMENT_METHODS.find((m) => m.key === selectedMethod)!;
 
@@ -428,7 +500,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
                     setSelectedMethod(m.key);
                     setInputAmount('');
                     setReference('');
-                    if (m.key === 'qr') setShowQRModal(true);
+                    if (m.key === 'qr') openQRModal();
                   }}
                   activeOpacity={0.8}
                 >
@@ -600,29 +672,55 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
           </TouchableOpacity>
         </View>
 
-        {/* QR Modal */}
-        <Modal visible={showQRModal} animationType="fade" transparent>
+        {/* QR Modal — PromptPay QR จริง (EMVCo payload) */}
+        <Modal visible={showQRModal} animationType="fade" transparent onRequestClose={closeQRModal}>
           <View style={styles.qrOverlay}>
             <View style={styles.qrSheet}>
               <Text style={styles.qrTitle}>สแกน QR Code ชำระเงิน</Text>
-              <Text style={styles.qrAmount}>฿{formatCurrency(remaining)}</Text>
-              {/* QR Placeholder */}
-              <View style={styles.qrBox}>
-                <Ionicons name="qr-code" size={160} color={Colors.primary} />
-                <Text style={styles.qrHint}>QR Code จะถูก generate จาก Payment Gateway</Text>
-              </View>
-              <TouchableOpacity
-                style={styles.qrConfirmBtn}
-                onPress={() => {
-                  setShowQRModal(false);
-                  setInputAmount(String(remaining.toFixed(2)));
-                }}
-              >
-                <Text style={styles.qrConfirmText}>ลูกค้าสแกนแล้ว — ยืนยัน</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setShowQRModal(false)}>
-                <Text style={styles.qrCancel}>ยกเลิก</Text>
-              </TouchableOpacity>
+              <Text style={styles.qrAmount}>฿{formatCurrency(qrAmount)}</Text>
+
+              {qrStatus === 'success' ? (
+                // สถานะชำระสำเร็จ (mock auto-confirm)
+                <View style={styles.qrBox}>
+                  <Ionicons name="checkmark-circle" size={120} color={Colors.success} />
+                  <Text style={styles.qrSuccessText}>ชำระสำเร็จ</Text>
+                </View>
+              ) : (
+                <>
+                  <View style={styles.qrBox}>
+                    <View style={styles.qrCodeFrame}>
+                      <QRCode
+                        value={qrPayload}
+                        size={200}
+                        color={Colors.text}
+                        backgroundColor={Colors.white}
+                      />
+                    </View>
+                    <Text style={styles.qrMerchant}>พร้อมเพย์ {effectivePromptPayId}</Text>
+                    <Text style={styles.qrHint}>สแกนด้วยแอปธนาคารเพื่อชำระ ฿{formatCurrency(qrAmount)}</Text>
+                    {FEATURE_FLAGS.MOCK_PAYMENT_AUTOCONFIRM && (
+                      <View style={styles.qrWaitingRow}>
+                        <ActivityIndicator size="small" color={Colors.primary} />
+                        <Text style={styles.qrWaitingText}>กำลังรอการชำระเงิน...</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* ปุ่มยืนยันด้วยตนเอง — fallback เสมอ (ทั้งเปิด/ปิด flag) */}
+                  <TouchableOpacity
+                    style={styles.qrConfirmBtn}
+                    onPress={() => {
+                      closeQRModal();
+                      confirmQRPayment();
+                    }}
+                  >
+                    <Text style={styles.qrConfirmText}>ลูกค้าสแกนแล้ว — ยืนยัน</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={closeQRModal}>
+                    <Text style={styles.qrCancel}>ยกเลิก</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </View>
         </Modal>
@@ -880,6 +978,14 @@ const styles = StyleSheet.create({
   qrTitle: { ...Typography.h4, color: Colors.text },
   qrAmount: { fontSize: 36, fontWeight: '800', color: Colors.primary },
   qrBox: { alignItems: 'center', gap: Spacing.md, padding: Spacing.md },
+  qrCodeFrame: {
+    padding: Spacing.md, backgroundColor: Colors.white,
+    borderRadius: BorderRadius.md, borderWidth: 1, borderColor: Colors.border,
+  },
+  qrMerchant: { ...Typography.label, color: Colors.text, fontWeight: '700' },
+  qrSuccessText: { ...Typography.h4, color: Colors.success, fontWeight: '800' },
+  qrWaitingRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
+  qrWaitingText: { ...Typography.caption, color: Colors.textSecondary },
   qrHint: { ...Typography.caption, color: Colors.textSecondary, textAlign: 'center' },
   qrConfirmBtn: {
     backgroundColor: Colors.primary, borderRadius: BorderRadius.md,
