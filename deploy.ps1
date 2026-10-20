@@ -41,9 +41,16 @@ if ($html -notmatch 'font-fix.css') {
 Write-Host "Font fix applied!" -ForegroundColor Green
 
 Write-Host "=== Deploying to Vercel ===" -ForegroundColor Cyan
+
+# บังคับ target project ให้ตรง (dist-admin) — กัน vercel สร้าง project ใหม่จากชื่อโฟลเดอร์ dist
+$env:VERCEL_ORG_ID     = "team_SIdcl6FDfMTlEv092ImNgfK0"
+$env:VERCEL_PROJECT_ID = "prj_dXjNcbjxBJjxXPaEHQmHBINIjscL"
+
 Set-Location dist
-vercel --prod
+vercel deploy --prod --yes --scope $env:VERCEL_ORG_ID
+
+if ($LASTEXITCODE -ne 0) { Write-Host "Deploy failed!" -ForegroundColor Red; exit 1 }
 
 Write-Host ""
 Write-Host "=== Done! ===" -ForegroundColor Green
-Write-Host "URL: https://xcellence-pos.vercel.app" -ForegroundColor Yellow
+Write-Host "URL: https://dist-admin-rose-delta.vercel.app" -ForegroundColor Yellow

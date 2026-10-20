@@ -2795,8 +2795,33 @@ const SettingBranchPaymentScreen: React.FC<{ branchId: string; branchName: strin
 };
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
+// keys ของข้อมูลธุรกรรม/เทส ที่จะถูกล้างเมื่อกด "รีเซ็ตข้อมูลเทส"
+// หมายเหตุ: ไม่ล้าง pos-auth / pos-products / pos-members / pos-store-config ฯลฯ
+// เพื่อให้ยังล็อกอินอยู่และไม่ต้อง setup ร้าน/สินค้าใหม่
+const TEST_DATA_KEYS = [
+  'pos-shift',         // กะ (เปิด/ปิดกะ + ประวัติ)
+  'pos-cart',          // ตะกร้า + บิลพัก
+  'pos-sale-history',  // ประวัติการขาย
+  'pos-stockdocs',     // เอกสารรับ/จ่ายสต็อก
+  'pos-audit-log',     // ประวัติการใช้งาน
+  'pos-sync',          // คิว sync
+  'pos-wallet',        // กระเป๋าเงิน/แต้ม
+  'pos-test-tracker',  // บันทึกผลทดสอบ
+];
+
 export const WebSettingsScreen: React.FC = () => {
   const [subView, setSubView] = useState<string | null>(null);
+  const [showResetModal, setShowResetModal] = useState(false);
+
+  const handleResetTestData = () => {
+    if (typeof localStorage !== 'undefined') {
+      TEST_DATA_KEYS.forEach((k) => localStorage.removeItem(k));
+    }
+    // reload เพื่อให้ทุก store อ่านค่าเริ่มต้นใหม่ (กลับสู่สถานะยังไม่เปิดกะ)
+    if (typeof window !== 'undefined') {
+      window.location.reload();
+    }
+  };
 
   // Route ไปหน้าย่อย
   if (subView === 'shop')       return <SettingShopScreen       onBack={() => setSubView(null)} />;
@@ -2852,9 +2877,63 @@ export const WebSettingsScreen: React.FC = () => {
           </TouchableOpacity>
         ))}
       </View>
+
+      {/* ── โซนอันตราย: รีเซ็ตข้อมูลเทส ── */}
+      <Text style={[g.pageSub, { marginTop: 8, marginBottom: -4, color: WebColors.danger, fontWeight: '700' }]}>โซนอันตราย</Text>
+      <TouchableOpacity
+        style={[g.settingCard, { borderColor: WebColors.danger }]}
+        onPress={() => setShowResetModal(true)}
+      >
+        <View style={[g.settingIcon, { backgroundColor: WebColors.dangerLight }]}>
+          <Ionicons name="trash-outline" size={24} color={WebColors.danger} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[g.settingLabel, { color: WebColors.danger }]}>รีเซ็ตข้อมูลเทส</Text>
+          <Text style={g.settingSub}>ล้างกะ, ตะกร้า, ประวัติขาย, เอกสารสต็อก, log — เริ่มเทสใหม่ตั้งแต่เปิดกะ</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={16} color={WebColors.danger} />
+      </TouchableOpacity>
+
+      {/* ── Modal ยืนยันรีเซ็ต ── */}
+      {showResetModal && (
+        <View style={rs.overlay}>
+          <View style={rs.box}>
+            <View style={[g.settingIcon, { backgroundColor: WebColors.dangerLight, alignSelf: 'center' }]}>
+              <Ionicons name="warning-outline" size={26} color={WebColors.danger} />
+            </View>
+            <Text style={rs.title}>ยืนยันรีเซ็ตข้อมูลเทส?</Text>
+            <Text style={rs.msg}>
+              ระบบจะล้างข้อมูลกะ ตะกร้า ประวัติการขาย เอกสารสต็อก และ log ทั้งหมด{'\n'}
+              (ข้อมูลร้าน สินค้า สมาชิก และผู้ใช้จะยังอยู่ครบ ไม่ต้องล็อกอินใหม่){'\n\n'}
+              การกระทำนี้ย้อนกลับไม่ได้
+            </Text>
+            <View style={rs.actions}>
+              <TouchableOpacity style={rs.cancelBtn} onPress={() => setShowResetModal(false)}>
+                <Text style={rs.cancelText}>ยกเลิก</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={rs.confirmBtn} onPress={handleResetTestData}>
+                <Ionicons name="trash-outline" size={16} color={WebColors.white} />
+                <Text style={rs.confirmText}>ล้างข้อมูลเทส</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 };
+
+const rs = StyleSheet.create({
+  overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
+  box: { backgroundColor: WebColors.white, borderRadius: 16, padding: 24, width: 420, maxWidth: '90%', gap: 12 },
+  title: { fontSize: 16, fontWeight: '800', color: WebColors.text, textAlign: 'center' },
+  msg: { fontSize: 13, color: WebColors.textSecondary, textAlign: 'center', lineHeight: 20 },
+  actions: { flexDirection: 'row', gap: 10, justifyContent: 'center', marginTop: 4 },
+  cancelBtn: { paddingHorizontal: 20, paddingVertical: 11, borderRadius: 8, backgroundColor: WebColors.gray50, borderWidth: 1, borderColor: WebColors.border },
+  cancelText: { fontSize: 13, fontWeight: '600', color: WebColors.textSecondary },
+  confirmBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 20, paddingVertical: 11, borderRadius: 8, backgroundColor: WebColors.danger },
+  confirmText: { fontSize: 13, fontWeight: '700', color: WebColors.white },
+});
 
 // ─── Shared styles ─────────────────────────────────────────────────────────────
 const g = StyleSheet.create({
