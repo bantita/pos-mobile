@@ -68,7 +68,7 @@ const SplashScreen = () => (
   </View>
 );
 const sp = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFF8F8', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  container: { flex: 1, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', gap: 8 },
   logo: { fontSize: 64 },
   title: { fontSize: 28, fontWeight: '800', color: '#1F2937' },
 });
@@ -87,8 +87,8 @@ export default function App() {
 
   if (!fontsLoaded) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF8F8' }}>
-        <ActivityIndicator size="large" color="#E23744" />
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' }}>
+        <ActivityIndicator size="large" color="#B91C2C" />
       </View>
     );
   }

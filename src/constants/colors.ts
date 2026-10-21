@@ -5,16 +5,16 @@
  */
 
 // ─── Brand ───────────────────────────────────────────────────────────────────
-const PRIMARY = '#E23744';
-const PRIMARY_DARK = '#B91C2C';
-const PRIMARY_LIGHT = '#FDE8EA';
-const PRIMARY_HOVER = '#EF4E5A';
+const PRIMARY = '#B91C2C';
+const PRIMARY_DARK = '#991B1B';
+const PRIMARY_LIGHT = '#FBE3E5';
+const PRIMARY_HOVER = '#D32030';
 
 // ─── Background & Surface ────────────────────────────────────────────────────
-const BG_PRIMARY = '#FFF8F8';
-const BG_SECONDARY = '#FDE8EA';
+const BG_PRIMARY = '#FFFFFF';
+const BG_SECONDARY = '#FBE3E5';
 const SURFACE = '#FFFFFF';
-const SURFACE_HOVER = '#FFFBFB';
+const SURFACE_HOVER = '#FEF6F7';
 
 // ─── Text ────────────────────────────────────────────────────────────────────
 const TEXT_PRIMARY = '#1F2328';
@@ -47,7 +47,7 @@ const DANGER_TEXT = '#B91C2C';
 
 // ─── Sidebar ─────────────────────────────────────────────────────────────────
 const SIDEBAR = '#FFFFFF';
-const SIDEBAR_HOVER = '#FDE8EA';
+const SIDEBAR_HOVER = '#FBE3E5';
 const SIDEBAR_ACTIVE = PRIMARY;
 const SIDEBAR_TEXT = '#4A5058';
 const SIDEBAR_TEXT_ACTIVE = '#FFFFFF';
@@ -175,7 +175,7 @@ export const Colors = {
   gray8: TEXT_PRIMARY,
 
   // Category colors
-  category1: '#E23744',
+  category1: '#B91C2C',
   category2: '#2563EB',
   category3: '#15934B',
   category4: '#B4690E',
@@ -194,12 +194,12 @@ export const MemberLevelColors = {
 
 // ─── Category Array ──────────────────────────────────────────────────────────
 export const CategoryColors = [
-  '#E23744', '#2563EB', '#15934B', '#B4690E', '#0EA5E9', '#EC4899',
+  '#B91C2C', '#2563EB', '#15934B', '#B4690E', '#0EA5E9', '#EC4899',
 ];
 
 // ─── Gradient Presets ────────────────────────────────────────────────────────
 export const Gradients = {
-  primary: ['#E23744', '#EF4E5A'] as [string, string],
-  primaryReverse: ['#EF4E5A', '#E23744'] as [string, string],
-  warm: ['#FFF8F8', '#FDE8EA'] as [string, string],
+  primary: ['#B91C2C', '#D32030'] as [string, string],
+  primaryReverse: ['#D32030', '#B91C2C'] as [string, string],
+  warm: ['#FFFFFF', '#FBE3E5'] as [string, string],
 };

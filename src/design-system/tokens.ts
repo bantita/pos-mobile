@@ -4,14 +4,14 @@
  */
 
 export const Colors = {
-  primary:        '#E23744',
-  primaryDark:    '#B91C2C',
-  primaryLight:   '#FDE8EA',
-  primaryHover:   '#EF4E5A',
+  primary:        '#B91C2C',
+  primaryDark:    '#991B1B',
+  primaryLight:   '#FBE3E5',
+  primaryHover:   '#D32030',
 
-  background:     '#FFF8F8',
+  background:     '#FFFFFF',
   surface:        '#FFFFFF',
-  surfaceHover:   '#FFFBFB',
+  surfaceHover:   '#FEF6F7',
 
   text:           '#1F2328',
   textSecondary:  '#4A5058',
@@ -19,7 +19,7 @@ export const Colors = {
   textOnPrimary:  '#FFFFFF',
 
   border:         '#ECEEF1',
-  borderFocus:    '#E23744',
+  borderFocus:    '#B91C2C',
 
   success:        '#15934B',
   successLight:   '#DCF5E6',
@@ -31,8 +31,8 @@ export const Colors = {
   infoLight:      '#DCE8FD',
 
   sidebar:        '#FFFFFF',
-  sidebarHover:   '#FDE8EA',
-  sidebarActive:  '#E23744',
+  sidebarHover:   '#FBE3E5',
+  sidebarActive:  '#B91C2C',
   sidebarText:    '#4A5058',
   sidebarTextActive: '#FFFFFF',
 
