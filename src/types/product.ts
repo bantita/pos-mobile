@@ -15,6 +15,22 @@ export interface ProductUOM {
   isDefault: boolean;    // หน่วยที่ใช้แสดงใน POS by default
 }
 
+/** ตัวเลือกสินค้า (variant option) เช่น { name: 'สี', values: ['แดง','น้ำเงิน'] } */
+export interface ProductOption {
+  name: string;
+  values: string[];
+}
+
+/** หนึ่ง variant ของสินค้า (ผสมค่าตัวเลือกต่าง ๆ เข้าด้วยกัน) */
+export interface ProductVariant {
+  id: string;
+  sku?: string;
+  barcode?: string;
+  price?: number;
+  stockQty: number;
+  optionValues: Record<string, string>;
+}
+
 export interface Category {
   id: string;
   name: string;
@@ -53,6 +69,14 @@ export interface ProductMaster {
   minStock: number;
   /** รายการหน่วยนับทั้งหมด (รวมหน่วยฐาน ratio=1 เป็น index 0) */
   uoms: ProductUOM[];
+  /** ตัวเลือกสินค้า (variant options) — optional/additive */
+  options?: ProductOption[];
+  /** รายการ variant ทั้งหมดของสินค้า — optional/additive */
+  variants?: ProductVariant[];
+  /** รหัสผู้จัดจำหน่าย (supplier) — optional/additive */
+  supplierId?: string;
+  /** ชื่อผู้จัดจำหน่าย (supplier) — optional/additive */
+  supplierName?: string;
   /** ประเภทสินค้า: 'general' = สินค้าทั่วไป, 'service' = สินค้าบริการ (ต้องเลือกช่าง) */
   productType: 'general' | 'service';
   /** สี (variant) */

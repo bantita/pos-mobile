@@ -16,7 +16,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 import { resolveCartPrice } from '../priceResolver';
 import { usePricingStore } from '../../store/pricingStore';
 import { PricingDocument, PricingItem } from '../../types/pricing';
-import { ProductMaster, ProductUOM } from '../../types/product';
+import { ProductMaster, ProductUOM, ProductVariant } from '../../types/product';
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 const baseUom = (over: Partial<ProductUOM>): ProductUOM => ({
@@ -101,5 +101,42 @@ describe('priceResolver — resolveCartPrice', () => {
     const res = resolveCartPrice(MASTER, PACK_UOM, 'b1'); // 12 × 6
     expect(res.source).toBe('central');
     expect(res.price).toBeCloseTo(72, 2);
+  });
+});
+
+// ─── Variant pricing ────────────────────────────────────────────────────────
+const VARIANT_WITH_PRICE: ProductVariant = {
+  id: 'v30_red', barcode: '8850999030101', price: 320, stockQty: 22,
+  optionValues: { 'สี': 'แดง' },
+};
+const VARIANT_NO_PRICE: ProductVariant = {
+  id: 'v30_blue', barcode: '8850999030102', stockQty: 18,
+  optionValues: { 'สี': 'น้ำเงิน' },
+};
+
+describe('priceResolver — variant pricing', () => {
+  test('variant.price ชนะราคาสาขา/กลาง (source=base)', () => {
+    usePricingStore.setState({ documents: [CENTRAL_DOC, BRANCH_B1_DOC] });
+    const res = resolveCartPrice(MASTER, baseUom({}), 'b1', VARIANT_WITH_PRICE);
+    expect(res.source).toBe('base');
+    expect(res.price).toBeCloseTo(320, 2);
+  });
+
+  test('variant.price สเกลด้วย uom.ratio', () => {
+    usePricingStore.setState({ documents: [CENTRAL_DOC, BRANCH_B1_DOC] });
+    const res = resolveCartPrice(MASTER, PACK_UOM, 'b1', VARIANT_WITH_PRICE); // 320 × 6
+    expect(res.source).toBe('base');
+    expect(res.price).toBeCloseTo(1920, 2);
+  });
+
+  test('variant.price == null → ตกไปใช้ลอจิกราคาสาขา แล้วราคากลาง', () => {
+    usePricingStore.setState({ documents: [CENTRAL_DOC, BRANCH_B1_DOC] });
+    const branch = resolveCartPrice(MASTER, baseUom({}), 'b1', VARIANT_NO_PRICE);
+    expect(branch.source).toBe('branch');
+    expect(branch.price).toBeCloseTo(9, 2);
+
+    const central = resolveCartPrice(MASTER, baseUom({}), 'b3', VARIANT_NO_PRICE);
+    expect(central.source).toBe('central');
+    expect(central.price).toBeCloseTo(12, 2);
   });
 });

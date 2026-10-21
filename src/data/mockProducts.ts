@@ -3,7 +3,7 @@
  * ไม่มี duplicate export เด็ดขาด
  * มี Validation Guard ตรวจ id/code/barcode ซ้ำใน __DEV__
  */
-import { ProductMaster, Category, Brand, ProductUOM } from '../types/product';
+import { ProductMaster, Category, Brand, ProductUOM, ProductVariant } from '../types/product';
 
 // ─── Categories ───────────────────────────────────────────────────────────────
 export const MOCK_CATEGORIES: Category[] = [
@@ -247,16 +247,51 @@ export const MOCK_PRODUCTS: ProductMaster[] = [
     uoms: [baseUOM('u23_1', 'คู่', 1200, 2490, '8850999023001')],
     createdAt: new Date('2024-05-01'), updatedAt: new Date('2024-06-01'),
   },
+  // ─── Product ที่มี Variant (variant matrix demo) ───────────────────────────
+  {
+    id: 'p30', code: 'P030', barcode: '8850999030001',
+    name: 'เสื้อโปโล Signature',
+    categoryId: 'c4', categoryName: 'ของใช้', unit: 'ตัว',
+    costPrice: 150, salePrice: 290, vatIncluded: true, vatRate: 7,
+    productType: 'general',
+    status: 'active', stockQty: 40, minStock: 5,
+    uoms: [baseUOM('u30_1', 'ตัว', 150, 290, '8850999030001')],
+    options: [{ name: 'สี', values: ['แดง', 'น้ำเงิน'] }],
+    variants: [
+      { id: 'v30_red',  barcode: '8850999030101', stockQty: 22, optionValues: { 'สี': 'แดง' } },
+      { id: 'v30_blue', barcode: '8850999030102', stockQty: 18, optionValues: { 'สี': 'น้ำเงิน' } },
+    ],
+    createdAt: new Date('2024-06-01'), updatedAt: new Date('2024-06-01'),
+  },
 ];
 
 // ─── findProductByBarcode ─────────────────────────────────────────────────────
 export const findProductByBarcode = (
   barcode: string,
   products: ProductMaster[],
-): { product: ProductMaster; uom: ProductUOM } | null => {
+): { product: ProductMaster; uom: ProductUOM; variant?: ProductVariant } | null => {
+  // 1) ค้นหาจาก barcode ของ variant ก่อน → คืนหน่วยฐาน/default ของสินค้า + variant นั้น
+  for (const product of products) {
+    for (const variant of product.variants ?? []) {
+      if (variant.barcode === barcode) {
+        const uom =
+          (product.uoms ?? []).find((u) => u.isDefault) ?? (product.uoms ?? [])[0];
+        if (uom) return { product, uom, variant };
+      }
+    }
+  }
+  // 2) ค้นหาจาก barcode ของ UOM (สินค้าปกติ / สินค้าที่มี variant แต่สแกน barcode หน่วย)
   for (const product of products) {
     for (const uom of product.uoms ?? []) {
       if (uom.barcodes.includes(barcode)) return { product, uom };
+    }
+  }
+  // 3) fallback: barcode หลักของ master (หน่วยฐาน)
+  for (const product of products) {
+    if (product.barcode === barcode) {
+      const uom =
+        (product.uoms ?? []).find((u) => u.isDefault) ?? (product.uoms ?? [])[0];
+      if (uom) return { product, uom };
     }
   }
   return null;
@@ -287,6 +322,13 @@ export const findProductByBarcode = (
           errors.push(`Duplicate barcode: "${bc}" → ${p.name} / ${uom.unit}`);
         seenBarcodes.add(bc);
       });
+    });
+
+    (p.variants ?? []).forEach((v) => {
+      if (!v.barcode) return;
+      if (seenBarcodes.has(v.barcode))
+        errors.push(`Duplicate barcode: "${v.barcode}" → ${p.name} / variant ${v.id}`);
+      seenBarcodes.add(v.barcode);
     });
   });
 

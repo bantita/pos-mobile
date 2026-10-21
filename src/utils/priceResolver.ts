@@ -12,7 +12,7 @@
  *
  * เป็นฟังก์ชัน pure ไม่มี React import — เรียกใช้ได้ทั้งใน screen และใน unit test
  */
-import { ProductMaster, ProductUOM } from '../types/product';
+import { ProductMaster, ProductUOM, ProductVariant } from '../types/product';
 import { usePricingStore } from '../store/pricingStore';
 import { PricingScope } from '../types/pricing';
 
@@ -38,7 +38,12 @@ export function resolveCartPrice(
   master: ProductMaster,
   uom: ProductUOM,
   branchId?: string,
+  variant?: ProductVariant,
 ): ResolvedCartPrice {
+  // variant มีราคาระบุเอง → ใช้ราคา variant สเกลด้วย ratio (ก่อนลอจิกราคาสาขา/กลาง)
+  if (variant?.price != null) {
+    return { price: round2(variant.price * uom.ratio), source: 'base' };
+  }
   const resolved = usePricingStore.getState().resolvePrice(master.code, branchId);
   if (resolved) {
     // ราคาฐาน (ต่อ 1 หน่วยฐาน) สเกลด้วย ratio ของหน่วยที่เลือก

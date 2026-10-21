@@ -34,16 +34,28 @@ export const useProductStore = create<ProductState>()(
         set((s) => ({ products: s.products.filter((p) => p.id !== id) })),
 
       deductStock: (productId, qty) =>
-        set((s) => ({
-          products: s.products.map((p) => {
-            // productId อาจเป็น "p1_u1_1" → ต้อง match master id
-            const masterId = productId.split('_')[0];
-            if (p.id === masterId || p.id === productId) {
+        set((s) => {
+          // productId อาจเป็น "p1_u1_1" หรือ "p1_u1_1__v30_red"
+          // แยก variant ด้วย '__' ก่อน แล้วค่อยหา master id จากส่วนซ้าย (split('_')[0])
+          const [left, variantId] = productId.split('__');
+          const masterId = left.split('_')[0];
+          return {
+            products: s.products.map((p) => {
+              if (p.id !== masterId && p.id !== productId) return p;
+              if (variantId && p.variants?.length) {
+                return {
+                  ...p,
+                  variants: p.variants.map((v) =>
+                    v.id === variantId
+                      ? { ...v, stockQty: Math.max(0, v.stockQty - qty) }
+                      : v
+                  ),
+                };
+              }
               return { ...p, stockQty: Math.max(0, p.stockQty - qty) };
-            }
-            return p;
-          }),
-        })),
+            }),
+          };
+        }),
     }),
     {
       name: 'pos-products',
