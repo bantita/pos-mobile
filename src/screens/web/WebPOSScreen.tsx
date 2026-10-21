@@ -31,7 +31,8 @@ import { Product, CartItem, Payment } from '../../types/sale';
 import { Member } from '../../types/member';
 import { ProductMaster, ProductVariant } from '../../types/product';
 import { WebCustomerDisplayScreen } from './WebCustomerDisplayScreen';
-import { useReceiptStore } from '../../store/receiptStore';
+import { useReceiptStore, DEFAULT_TEMPLATE } from '../../store/receiptStore';
+import { buildTemplateHtml, ReceiptRenderData } from '../../utils/receiptTemplate';
 import { StaffPopup } from '../../components/sale/StaffPopup';
 import { getStoreType, useStoreConfigStore } from '../../store/storeConfigStore';
 import { getFeaturesByStoreType } from '../../utils/storeFeatures';
@@ -396,121 +397,40 @@ function printReceipt80mm(invoice: {
   const footerText = cfg.footerText || `ขอบคุณที่ใช้บริการ 🙏`;
   const headerLogo = cfg.headerLogo || '';
   const showLogo   = cfg.showLogo ?? true;
-  const paper      = cfg.paperSize  || paperSize;
 
-  const W = paper === '80mm' ? '72mm' : paper === '58mm' ? '50mm' : '190mm';
-  const fmtN = (n: number) => n.toLocaleString('th-TH', { minimumFractionDigits: 2 });
-  const taxIdFmt = (id: string) => id.replace(/(\d{1})(\d{4})(\d{5})(\d{2})(\d{1})/, '$1-$2-$3-$4-$5');
-  const grandEx = invoice.grand / 1.07;
-  const vatAmt  = invoice.grand - grandEx;
-
-  // ── Logo HTML ──────────────────────────────────────────────────────────────
-  const logoHtml = showLogo && headerLogo
-    ? `<div style="text-align:center;margin-bottom:4px"><img src="${headerLogo}" style="max-width:180px;max-height:72px;" /></div>`
-    : '';
-
-  const itemRows = invoice.items.map(i => `
-    <tr>
-      <td style="padding:2px 0">${i.name}</td>
-      <td style="text-align:center">${i.qty}</td>
-      <td style="text-align:right">${fmtN(i.unitPrice)}</td>
-      <td style="text-align:right;color:${i.disc>0?'#c00':'#999'}">${i.disc>0?`-${fmtN(i.disc)}`:'-'}</td>
-      <td style="text-align:right;font-weight:bold">${fmtN(i.total)}</td>
-    </tr>`).join('');
+  // ── คำนวณยอดเงินในชั้น caller (renderer ไม่คำนวณเอง) ─────────────────────────
+  const preVatAmount = invoice.grand / 1.07;
+  const vat          = invoice.grand - preVatAmount;
 
   const docTitle = billType === 'receipt' ? 'ใบเสร็จรับเงิน'
     : billType === 'tax_short' ? 'ใบกำกับภาษีอย่างย่อ' : 'ใบกำกับภาษี';
 
-  const buyerSection = billType === 'tax_full' && invoice.buyerInfo ? `
-    <div class="section">
-      <b>ข้อมูลผู้ซื้อ</b><br/>
-      ${invoice.buyerInfo.name}<br/>
-      ${invoice.buyerInfo.addr}<br/>
-      เลขประจำตัวผู้เสียภาษี: ${taxIdFmt(invoice.buyerInfo.taxId)} (${invoice.buyerInfo.branch})
-    </div>` : '';
+  // ── สร้าง ReceiptRenderData จากบิลจริง แล้ว render ผ่าน renderer กลาง ─────────
+  const data: ReceiptRenderData = {
+    shopName, shopAddr, shopTel, shopTaxId, shopBranch, posRegNo,
+    footerText, headerText,
+    logoUri: headerLogo, showLogo,
+    docTitle,
+    billNo: invoice.billNo,
+    dateTime: `${invoice.date} ${invoice.time} น.`,
+    cashier: invoice.cashier,
+    payMethod: invoice.payMethod,
+    cancelReason: invoice.cancelReason || '',
+    buyerName:   invoice.buyerInfo?.name   || '',
+    buyerAddr:   invoice.buyerInfo?.addr   || '',
+    buyerTaxId:  invoice.buyerInfo?.taxId  || '',
+    buyerBranch: invoice.buyerInfo?.branch || '',
+    items: invoice.items.map(i => ({
+      name: i.name, qty: i.qty, unitPrice: i.unitPrice, disc: i.disc, lineTotal: i.total,
+    })),
+    subtotal: invoice.subtotal,
+    discount: invoice.discount,
+    preVatAmount,
+    vat,
+    total: invoice.grand,
+  };
 
-  const vatSection = billType !== 'receipt' ? `
-    <tr><td>มูลค่าก่อน VAT</td><td style="text-align:right">${fmtN(grandEx)}</td></tr>
-    <tr style="color:#7C3AED;font-weight:bold"><td>VAT 7%</td><td style="text-align:right">${fmtN(vatAmt)}</td></tr>` : '';
-
-  const html = `<!DOCTYPE html><html lang="th"><head>
-  <meta charset="UTF-8"/>
-  <title>${docTitle}</title>
-  <style>
-    @page { size: ${paper} auto; margin: 3mm; }
-    * { box-sizing: border-box; }
-    body {
-      font-family: 'TH SarabunPSK','Sarabun','Courier New',monospace;
-      font-size: 12px; width: ${W}; margin: 0 auto; color: #000;
-    }
-    .center { text-align: center; }
-    .bold { font-weight: bold; }
-    .dash { border-top: 1px dashed #000; margin: 4px 0; }
-    .solid { border-top: 2px solid #000; margin: 4px 0; }
-    .section { margin: 3px 0; font-size: 11px; }
-    .header-text { font-style: italic; font-size: 11px; }
-    .doc-title {
-      font-size: 14px; font-weight: bold; text-align: center;
-      border: 2px solid #000; padding: 4px; margin: 5px 0;
-    }
-    table { width: 100%; border-collapse: collapse; font-size: 11px; }
-    th { border-bottom: 1px solid #000; padding: 3px 0; text-align: left; font-size: 11px; }
-    td { padding: 2px 0; vertical-align: top; }
-    .sum-row td { padding: 2px 0; }
-    .grand-row { font-size: 15px; font-weight: bold; }
-    .footer { text-align: center; margin-top: 8px; font-size: 12px; }
-    @media print { body { width: ${W}; } }
-  </style>
-  </head><body>
-  ${logoHtml}
-  <div class="center bold" style="font-size:15px">${shopName}</div>
-  <div class="center section">${shopAddr}</div>
-  <div class="center section">โทร ${shopTel}</div>
-  ${billType !== 'receipt' ? `<div class="center section">เลขประจำตัวผู้เสียภาษี: ${taxIdFmt(shopTaxId)} (${shopBranch})</div>
-  <div class="center section">หมายเลขรหัสเครื่อง: ${posRegNo}</div>` : ''}
-  ${headerText ? `<div class="center header-text">${headerText}</div>` : ''}
-  <div class="doc-title">${docTitle}</div>
-  ${invoice.cancelReason ? '<div class="center bold" style="color:red;font-size:16px">** ยกเลิก **</div>' : ''}
-  ${buyerSection}
-  <div class="dash"></div>
-  <table>
-    <tr><td>เลขที่</td><td style="text-align:right">${invoice.billNo}</td></tr>
-    <tr><td>วันที่</td><td style="text-align:right">${invoice.date} ${invoice.time} น.</td></tr>
-    <tr><td>แคชเชียร์</td><td style="text-align:right">${invoice.cashier}</td></tr>
-    <tr><td>ชำระด้วย</td><td style="text-align:right">${invoice.payMethod}</td></tr>
-  </table>
-  <div class="dash"></div>
-  <table>
-    <thead>
-      <tr>
-        <th>รายการ</th>
-        <th style="text-align:center;width:24px">จน.</th>
-        <th style="text-align:right;width:52px">ราคา</th>
-        <th style="text-align:right;width:44px">ส่วนลด</th>
-        <th style="text-align:right;width:56px">รวม</th>
-      </tr>
-    </thead>
-    <tbody>${itemRows}</tbody>
-  </table>
-  <div class="dash"></div>
-  <table class="sum-row">
-    <tr><td>ยอดรวม</td><td style="text-align:right">${fmtN(invoice.subtotal)}</td></tr>
-    ${invoice.discount > 0 ? `<tr style="color:red"><td>ส่วนลด</td><td style="text-align:right">-${fmtN(invoice.discount)}</td></tr>` : ''}
-    ${vatSection}
-  </table>
-  <div class="solid"></div>
-  <table class="grand-row">
-    <tr><td>ยอดสุทธิ</td><td style="text-align:right">${fmtN(invoice.grand)}</td></tr>
-  </table>
-  <div class="dash"></div>
-  ${invoice.memberInfo ? `<div style="font-size:11px;margin-bottom:6px">
-  <div class="row"><span>สมาชิก:</span><span>${invoice.memberInfo.name} (${invoice.memberInfo.memberNo})</span></div>
-  ${invoice.memberInfo.pointsEarned ? `<div class="row"><span>คะแนนที่ได้รับ:</span><span>+${invoice.memberInfo.pointsEarned} pts</span></div>` : ''}
-  <div class="row"><span>คะแนนคงเหลือ:</span><span>${invoice.memberInfo.pointBalance.toLocaleString()} pts</span></div>
-  <div class="row"><span>Wallet คงเหลือ:</span><span>฿${invoice.memberInfo.walletBalance.toLocaleString()}</span></div>
-  </div><div class="dash"></div>` : ''}
-  <div class="footer">${footerText}<br/><span style="font-size:10px">${shopName}${shopBranch ? ' · ' + shopBranch : ''}</span></div>
-  </body></html>`;
+  const html = buildTemplateHtml(useReceiptStore.getState().config.template ?? DEFAULT_TEMPLATE, data);
 
   const w = (window as any).open('', '_blank', 'width=460,height=680');
   if (!w) return;
