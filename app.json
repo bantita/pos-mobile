@@ -32,8 +32,8 @@
       "output": "single",
       "name": "Xcellence POS",
       "shortName": "POS",
-      "themeColor": "#EA580C",
-      "backgroundColor": "#FFF9F4"
+      "themeColor": "#E23744",
+      "backgroundColor": "#FFF8F8"
     },
     "scheme": "pos-mobile",
     "extra": {

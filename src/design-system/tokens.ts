@@ -1,39 +1,39 @@
 /**
  * Xcellence ERP — Design System Tokens (Web)
- * Theme: Warm Pastel Coral/Orange
+ * Theme: Modern Minimal Red
  */
 
 export const Colors = {
-  primary:        '#FF8A75',
-  primaryDark:    '#D85A30',
-  primaryLight:   '#FFE9DD',
-  primaryHover:   '#FF9E8C',
+  primary:        '#E23744',
+  primaryDark:    '#B91C2C',
+  primaryLight:   '#FDE8EA',
+  primaryHover:   '#EF4E5A',
 
-  background:     '#FFF9F4',
+  background:     '#FFF8F8',
   surface:        '#FFFFFF',
-  surfaceHover:   '#FFFCFA',
+  surfaceHover:   '#FFFBFB',
 
-  text:           '#3D2E2B',
-  textSecondary:  '#5B4A46',
-  textMuted:      '#6B5B57',
+  text:           '#1F2328',
+  textSecondary:  '#4A5058',
+  textMuted:      '#8A9099',
   textOnPrimary:  '#FFFFFF',
 
-  border:         '#F0E2DA',
-  borderFocus:    '#FF8A75',
+  border:         '#ECEEF1',
+  borderFocus:    '#E23744',
 
-  success:        '#1F7A5C',
-  successLight:   '#C9F1E1',
-  warning:        '#92660B',
-  warningLight:   '#FFE8A3',
-  danger:         '#D85A30',
-  dangerLight:    '#FAECE7',
-  info:           '#5B3FA0',
-  infoLight:      '#E6DBFB',
+  success:        '#15934B',
+  successLight:   '#DCF5E6',
+  warning:        '#B4690E',
+  warningLight:   '#FCEFD3',
+  danger:         '#D32030',
+  dangerLight:    '#FBE3E5',
+  info:           '#2563EB',
+  infoLight:      '#DCE8FD',
 
-  sidebar:        '#FFE9DD',
-  sidebarHover:   '#FFD6C4',
-  sidebarActive:  '#FF8A75',
-  sidebarText:    '#5B4A46',
+  sidebar:        '#FFFFFF',
+  sidebarHover:   '#FDE8EA',
+  sidebarActive:  '#E23744',
+  sidebarText:    '#4A5058',
   sidebarTextActive: '#FFFFFF',
 
   white:          '#FFFFFF',

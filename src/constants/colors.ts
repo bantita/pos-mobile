@@ -1,55 +1,55 @@
 /**
  * Design Tokens — Color System
  * Brand: Xcellence ERP · POS Mobile
- * Theme: Warm Pastel Coral/Orange
+ * Theme: Modern Minimal Red
  */
 
 // ─── Brand ───────────────────────────────────────────────────────────────────
-const PRIMARY = '#FF8A75';
-const PRIMARY_DARK = '#D85A30';
-const PRIMARY_LIGHT = '#FFE9DD';
-const PRIMARY_HOVER = '#FF9E8C';
+const PRIMARY = '#E23744';
+const PRIMARY_DARK = '#B91C2C';
+const PRIMARY_LIGHT = '#FDE8EA';
+const PRIMARY_HOVER = '#EF4E5A';
 
 // ─── Background & Surface ────────────────────────────────────────────────────
-const BG_PRIMARY = '#FFF9F4';
-const BG_SECONDARY = '#FFE9DD';
+const BG_PRIMARY = '#FFF8F8';
+const BG_SECONDARY = '#FDE8EA';
 const SURFACE = '#FFFFFF';
-const SURFACE_HOVER = '#FFFCFA';
+const SURFACE_HOVER = '#FFFBFB';
 
 // ─── Text ────────────────────────────────────────────────────────────────────
-const TEXT_PRIMARY = '#3D2E2B';
-const TEXT_SECONDARY = '#5B4A46';
-const TEXT_MUTED = '#6B5B57';
+const TEXT_PRIMARY = '#1F2328';
+const TEXT_SECONDARY = '#4A5058';
+const TEXT_MUTED = '#8A9099';
 const TEXT_ON_PRIMARY = '#FFFFFF';
 
 // ─── Borders ─────────────────────────────────────────────────────────────────
-const BORDER = '#F0E2DA';
+const BORDER = '#ECEEF1';
 const BORDER_FOCUS = PRIMARY;
-const BORDER_LIGHT = '#F5EDE8';
+const BORDER_LIGHT = '#F3F4F6';
 
 // ─── Semantic / Status ───────────────────────────────────────────────────────
-const SUCCESS = '#1F7A5C';
-const SUCCESS_LIGHT = '#C9F1E1';
-const WARNING = '#92660B';
-const WARNING_LIGHT = '#FFE8A3';
-const DANGER = '#D85A30';
-const DANGER_LIGHT = '#FAECE7';
-const INFO = '#5B3FA0';
-const INFO_LIGHT = '#E6DBFB';
+const SUCCESS = '#15934B';
+const SUCCESS_LIGHT = '#DCF5E6';
+const WARNING = '#B4690E';
+const WARNING_LIGHT = '#FCEFD3';
+const DANGER = '#D32030';
+const DANGER_LIGHT = '#FBE3E5';
+const INFO = '#2563EB';
+const INFO_LIGHT = '#DCE8FD';
 
 // ─── Named Status ────────────────────────────────────────────────────────────
-const SUCCESS_BG = '#EAF3DE';
-const SUCCESS_TEXT = '#3B6D11';
-const WARNING_BG = '#FAEEDA';
-const WARNING_TEXT = '#854F0B';
-const DANGER_BG = '#FAECE7';
-const DANGER_TEXT = '#D85A30';
+const SUCCESS_BG = '#DCF5E6';
+const SUCCESS_TEXT = '#0F7038';
+const WARNING_BG = '#FCEFD3';
+const WARNING_TEXT = '#8A5208';
+const DANGER_BG = '#FBE3E5';
+const DANGER_TEXT = '#B91C2C';
 
 // ─── Sidebar ─────────────────────────────────────────────────────────────────
-const SIDEBAR = '#FFE9DD';
-const SIDEBAR_HOVER = '#FFD6C4';
+const SIDEBAR = '#FFFFFF';
+const SIDEBAR_HOVER = '#FDE8EA';
 const SIDEBAR_ACTIVE = PRIMARY;
-const SIDEBAR_TEXT = '#5B4A46';
+const SIDEBAR_TEXT = '#4A5058';
 const SIDEBAR_TEXT_ACTIVE = '#FFFFFF';
 
 // ─── Misc ────────────────────────────────────────────────────────────────────
@@ -175,31 +175,31 @@ export const Colors = {
   gray8: TEXT_PRIMARY,
 
   // Category colors
-  category1: '#FF8A75',
-  category2: '#5B3FA0',
-  category3: '#1F7A5C',
-  category4: '#92660B',
+  category1: '#E23744',
+  category2: '#2563EB',
+  category3: '#15934B',
+  category4: '#B4690E',
   category5: '#0EA5E9',
   category6: '#EC4899',
 };
 
 // ─── Member Level Colors ─────────────────────────────────────────────────────
 export const MemberLevelColors = {
-  member:   { color: '#8A7672', bgColor: '#F5EDE8' },
+  member:   { color: '#8A9099', bgColor: '#F3F4F6' },
   silver:   { color: '#6B7280', bgColor: '#F3F4F6' },
-  gold:     { color: '#92660B', bgColor: '#FFE8A3' },
-  platinum: { color: '#5B3FA0', bgColor: '#E6DBFB' },
-  vip:      { color: '#D85A30', bgColor: '#FAECE7' },
+  gold:     { color: '#B4690E', bgColor: '#FCEFD3' },
+  platinum: { color: '#2563EB', bgColor: '#DCE8FD' },
+  vip:      { color: '#D32030', bgColor: '#FBE3E5' },
 } as const;
 
 // ─── Category Array ──────────────────────────────────────────────────────────
 export const CategoryColors = [
-  '#FF8A75', '#5B3FA0', '#1F7A5C', '#92660B', '#0EA5E9', '#EC4899',
+  '#E23744', '#2563EB', '#15934B', '#B4690E', '#0EA5E9', '#EC4899',
 ];
 
 // ─── Gradient Presets ────────────────────────────────────────────────────────
 export const Gradients = {
-  primary: ['#FF8A75', '#FFB89A'] as [string, string],
-  primaryReverse: ['#FFB89A', '#FF8A75'] as [string, string],
-  warm: ['#FFF9F4', '#FFE9DD'] as [string, string],
+  primary: ['#E23744', '#EF4E5A'] as [string, string],
+  primaryReverse: ['#EF4E5A', '#E23744'] as [string, string],
+  warm: ['#FFF8F8', '#FDE8EA'] as [string, string],
 };
