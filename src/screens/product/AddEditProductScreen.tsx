@@ -11,10 +11,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ProductMaster } from '../../types/product';
-import { MOCK_CATEGORIES, UNITS } from '../../data/mockProducts';
+import { UNITS } from '../../data/mockProducts';
 import * as brandStore from '../../store/brandStore';
+import { getCategories } from '../../store/categoryStore';
+import { getSuppliers } from '../../store/supplierStore';
 import { UOMManager } from '../../components/product/UOMManager';
-import type { ProductUOM } from '../../types/product';
+import type { ProductUOM, ProductOption, ProductVariant } from '../../types/product';
 import { logAction } from '../../store/auditLogStore';
 import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
@@ -52,13 +54,21 @@ interface PickerModalProps {
   selectedId: string;
   onSelect: (id: string, name: string) => void;
   onClose: () => void;
+  /** แสดงข้อความ "ไม่มีข้อมูล" เมื่อ true (เช่น store ว่าง) */
+  showEmpty?: boolean;
 }
-const PickerModal: React.FC<PickerModalProps> = ({ visible, title, items, selectedId, onSelect, onClose }) => (
+const PickerModal: React.FC<PickerModalProps> = ({ visible, title, items, selectedId, onSelect, onClose, showEmpty }) => (
   <Modal visible={visible} animationType="slide" transparent>
     <View style={pickerStyles.overlay}>
       <View style={pickerStyles.sheet}>
         <View style={pickerStyles.handle} />
         <Text style={pickerStyles.title}>{title}</Text>
+        {showEmpty && (
+          <View style={pickerStyles.emptyBox}>
+            <Ionicons name="file-tray-outline" size={40} color={Colors.gray300} />
+            <Text style={pickerStyles.emptyText}>ไม่มีข้อมูล</Text>
+          </View>
+        )}
         <FlatList
           data={items}
           keyExtractor={(item) => item.id}
@@ -91,6 +101,8 @@ const pickerStyles = StyleSheet.create({
   optionText: { ...Typography.body1, color: Colors.text },
   cancelBtn: { alignItems: 'center', paddingVertical: Spacing.md, marginTop: Spacing.xs },
   cancelText: { ...Typography.button, color: Colors.danger },
+  emptyBox: { alignItems: 'center', paddingVertical: Spacing.lg, gap: Spacing.xs },
+  emptyText: { ...Typography.body1, color: Colors.gray400 },
 });
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -106,6 +118,15 @@ export const AddEditProductScreen: React.FC<AddEditProductScreenProps> = ({
   const [categoryName, setCategoryName] = useState(product?.categoryName ?? '');
   const [brandId, setBrandId] = useState(product?.brandId ?? '');
   const [brandName, setBrandName] = useState(product?.brandName ?? '');
+  const [supplierId, setSupplierId] = useState(product?.supplierId ?? '');
+  const [supplierName, setSupplierName] = useState(product?.supplierName ?? '');
+  const [options, setOptions] = useState<ProductOption[]>(
+    product?.options ? product.options.map((o) => ({ name: o.name, values: [...o.values] })) : []
+  );
+  const [variants, setVariants] = useState<ProductVariant[]>(
+    product?.variants ? product.variants.map((v) => ({ ...v, optionValues: { ...v.optionValues } })) : []
+  );
+  const [variantError, setVariantError] = useState('');
   const [unit, setUnit] = useState(product?.unit ?? 'ชิ้น');
   const [costPrice, setCostPrice] = useState(product ? String(product.costPrice) : '');
   const [salePrice, setSalePrice] = useState(product ? String(product.salePrice) : '');
@@ -124,6 +145,7 @@ export const AddEditProductScreen: React.FC<AddEditProductScreenProps> = ({
   // Picker modals
   const [showCatPicker, setShowCatPicker] = useState(false);
   const [showBrandPicker, setShowBrandPicker] = useState(false);
+  const [showSupplierPicker, setShowSupplierPicker] = useState(false);
   const [showUnitPicker, setShowUnitPicker] = useState(false);
 
   // Sync base UOM เมื่อ unit / costPrice / salePrice เปลี่ยน
@@ -169,6 +191,77 @@ export const AddEditProductScreen: React.FC<AddEditProductScreenProps> = ({
     setCode(`P${ts}`);
   };
 
+  // ─── Options / Variants ───
+  const regenerateVariants = (nextOptions: ProductOption[]) => {
+    const valid = nextOptions.filter((o) => o.name.trim() && o.values.some((v) => v.trim()));
+    if (valid.length === 0) { setVariants([]); return; }
+    let combos: Record<string, string>[] = [{}];
+    valid.forEach((opt) => {
+      const vals = opt.values.filter((v) => v.trim());
+      const next: Record<string, string>[] = [];
+      combos.forEach((combo) => {
+        vals.forEach((val) => { next.push({ ...combo, [opt.name]: val }); });
+      });
+      combos = next;
+    });
+    setVariants((prev) => combos.map((optionValues, i) => {
+      const existing = prev.find((v) => JSON.stringify(v.optionValues) === JSON.stringify(optionValues));
+      return existing ?? {
+        id: `v_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 5)}`,
+        stockQty: 0,
+        optionValues,
+      };
+    }));
+  };
+
+  const updateOption = (index: number, patch: Partial<ProductOption>) => {
+    setOptions((prev) => {
+      const next = prev.map((o, i) => i === index ? { ...o, ...patch } : o);
+      regenerateVariants(next);
+      return next;
+    });
+  };
+  const addOption = () => setOptions((prev) => [...prev, { name: '', values: [] }]);
+  const removeOption = (index: number) => {
+    setOptions((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      regenerateVariants(next);
+      return next;
+    });
+  };
+  const setOptionValues = (index: number, raw: string) => {
+    const values = raw.split(',').map((v) => v.trim()).filter(Boolean);
+    updateOption(index, { values });
+  };
+  const updateVariant = (id: string, patch: Partial<ProductVariant>) => {
+    setVariants((prev) => prev.map((v) => v.id === id ? { ...v, ...patch } : v));
+  };
+
+  const optionNameError = (() => {
+    const names = options.map((o) => o.name.trim());
+    for (let i = 0; i < options.length; i++) {
+      if (!names[i]) return 'ชื่อตัวเลือกห้ามว่าง';
+      if (names.indexOf(names[i]) !== i) return `ชื่อตัวเลือก "${names[i]}" ซ้ำกัน`;
+      if (options[i].values.filter((v) => v.trim()).length === 0) return `ตัวเลือก "${names[i]}" ต้องมีค่าอย่างน้อย 1 ค่า`;
+    }
+    return '';
+  })();
+
+  const validateVariants = (): string | null => {
+    if (optionNameError) return optionNameError;
+    const seenBarcodes = new Set<string>();
+    for (const v of variants) {
+      if (!Number.isInteger(v.stockQty) || v.stockQty < 0) return 'จำนวนสต๊อกของตัวเลือกต้องเป็นจำนวนเต็มไม่ติดลบ';
+      if (v.price != null && v.price < 0) return 'ราคาของตัวเลือกต้องไม่ติดลบ';
+      const bc = v.barcode?.trim();
+      if (bc) {
+        if (seenBarcodes.has(bc)) return `บาร์โค้ด "${bc}" ของตัวเลือกซ้ำกันภายในสินค้า`;
+        seenBarcodes.add(bc);
+      }
+    }
+    return null;
+  };
+
   const validate = (): string | null => {
     if (!code.trim()) return 'กรุณากรอกรหัสสินค้า';
     if (!name.trim()) return 'กรุณากรอกชื่อสินค้า';
@@ -201,6 +294,9 @@ export const AddEditProductScreen: React.FC<AddEditProductScreenProps> = ({
   const handleSave = async () => {
     const err = validate();
     if (err) { Alert.alert('ข้อมูลไม่ครบ', err); return; }
+    const vErr = validateVariants();
+    if (vErr) { setVariantError(vErr); return; }
+    setVariantError('');
     setSaving(true);
     setTimeout(() => {
       const saved: ProductMaster = {
@@ -219,6 +315,11 @@ export const AddEditProductScreen: React.FC<AddEditProductScreenProps> = ({
           barcodes: barcode ? [barcode] : [],
           isDefault: true,
         }],
+        // always write (clearable on edit)
+        options: options.length > 0 ? options : [],
+        variants: variants.length > 0 ? variants : [],
+        supplierId: supplierId || undefined,
+        supplierName: supplierId ? (supplierName || undefined) : undefined,
         createdAt: product?.createdAt ?? new Date(),
         updatedAt: new Date(),
       };
@@ -321,7 +422,123 @@ export const AddEditProductScreen: React.FC<AddEditProductScreenProps> = ({
             <SectionHeader title="หมวดหมู่และหน่วย" icon="list-outline" />
             <PickerField label="หมวดหมู่" value={categoryName} placeholder="เลือกหมวดหมู่" required onPress={() => setShowCatPicker(true)} />
             <PickerField label="Brand" value={brandName} placeholder="เลือก Brand (ถ้ามี)" onPress={() => setShowBrandPicker(true)} />
+            <PickerField label="ผู้จำหน่าย" value={supplierName} placeholder="เลือกผู้จำหน่าย (ถ้ามี)" onPress={() => setShowSupplierPicker(true)} />
             <PickerField label="หน่วยนับ" value={unit} placeholder="เลือกหน่วย" required onPress={() => setShowUnitPicker(true)} />          </View>
+
+          {/* Section: ตัวเลือกและ Variant */}
+          <View style={styles.section}>
+            <View style={styles.optionsHeaderRow}>
+              <SectionHeader title="ตัวเลือกสินค้า (Variant)" icon="color-palette-outline" />
+              <TouchableOpacity style={styles.addOptionBtn} onPress={addOption}>
+                <Ionicons name="add" size={16} color={Colors.primary} />
+                <Text style={styles.addOptionText}>เพิ่มตัวเลือก</Text>
+              </TouchableOpacity>
+            </View>
+
+            {options.length === 0 && (
+              <Text style={styles.optionsHint}>ไม่มีข้อมูล — เพิ่มตัวเลือก เช่น สี/ไซส์ เพื่อสร้าง variant</Text>
+            )}
+
+            {options.map((opt, idx) => (
+              <View key={idx} style={styles.optionRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabel}>ชื่อตัวเลือก *</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={opt.name}
+                    onChangeText={(v) => updateOption(idx, { name: v })}
+                    placeholder="เช่น สี"
+                    placeholderTextColor={Colors.gray400}
+                  />
+                </View>
+                <View style={{ flex: 1.4 }}>
+                  <Text style={styles.fieldLabel}>ค่า (คั่นด้วย ,) *</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={opt.values.join(', ')}
+                    onChangeText={(v) => setOptionValues(idx, v)}
+                    placeholder="เช่น แดง, น้ำเงิน"
+                    placeholderTextColor={Colors.gray400}
+                  />
+                </View>
+                <TouchableOpacity style={styles.optionDeleteBtn} onPress={() => removeOption(idx)}>
+                  <Ionicons name="trash-outline" size={16} color={Colors.danger} />
+                </TouchableOpacity>
+              </View>
+            ))}
+
+            {!!optionNameError && (
+              <View style={styles.errorBox}>
+                <Ionicons name="alert-circle-outline" size={16} color={Colors.danger} />
+                <Text style={styles.errorText}>{optionNameError}</Text>
+              </View>
+            )}
+
+            {variants.length > 0 && !optionNameError && (
+              <View style={styles.variantList}>
+                <Text style={styles.variantListTitle}>Variant ({variants.length})</Text>
+                {variants.map((v) => (
+                  <View key={v.id} style={styles.variantCard}>
+                    <Text style={styles.variantName}>{Object.values(v.optionValues).join(' / ')}</Text>
+                    <View style={styles.variantFields}>
+                      <View style={styles.variantField}>
+                        <Text style={styles.variantFieldLabel}>SKU</Text>
+                        <TextInput
+                          style={styles.variantInput}
+                          value={v.sku ?? ''}
+                          onChangeText={(t) => updateVariant(v.id, { sku: t || undefined })}
+                          placeholder="SKU"
+                          placeholderTextColor={Colors.gray400}
+                        />
+                      </View>
+                      <View style={styles.variantField}>
+                        <Text style={styles.variantFieldLabel}>บาร์โค้ด</Text>
+                        <TextInput
+                          style={styles.variantInput}
+                          value={v.barcode ?? ''}
+                          onChangeText={(t) => updateVariant(v.id, { barcode: t || undefined })}
+                          placeholder="บาร์โค้ด"
+                          placeholderTextColor={Colors.gray400}
+                          keyboardType="number-pad"
+                        />
+                      </View>
+                    </View>
+                    <View style={styles.variantFields}>
+                      <View style={styles.variantField}>
+                        <Text style={styles.variantFieldLabel}>ราคา (ถ้ามี)</Text>
+                        <TextInput
+                          style={styles.variantInput}
+                          value={v.price != null ? String(v.price) : ''}
+                          onChangeText={(t) => updateVariant(v.id, { price: t.trim() === '' ? undefined : (parseFloat(t) || 0) })}
+                          placeholder="ราคา"
+                          placeholderTextColor={Colors.gray400}
+                          keyboardType="decimal-pad"
+                        />
+                      </View>
+                      <View style={styles.variantField}>
+                        <Text style={styles.variantFieldLabel}>สต๊อก</Text>
+                        <TextInput
+                          style={styles.variantInput}
+                          value={String(v.stockQty)}
+                          onChangeText={(t) => updateVariant(v.id, { stockQty: Math.max(0, Math.floor(parseFloat(t) || 0)) })}
+                          placeholder="0"
+                          placeholderTextColor={Colors.gray400}
+                          keyboardType="number-pad"
+                        />
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {!!variantError && (
+              <View style={styles.errorBox}>
+                <Ionicons name="alert-circle-outline" size={16} color={Colors.danger} />
+                <Text style={styles.errorText}>{variantError}</Text>
+              </View>
+            )}
+          </View>
 
           {/* Section: ราคา */}
           <View style={styles.section}>
@@ -532,7 +749,7 @@ export const AddEditProductScreen: React.FC<AddEditProductScreenProps> = ({
       {/* Pickers */}
       <PickerModal
         visible={showCatPicker} title="เลือกหมวดหมู่"
-        items={MOCK_CATEGORIES.filter((c) => c.status === 'active')}
+        items={getCategories().filter((c) => c.status === 'active')}
         selectedId={categoryId}
         onSelect={(id, nm) => { setCategoryId(id); setCategoryName(nm); }}
         onClose={() => setShowCatPicker(false)}
@@ -543,6 +760,14 @@ export const AddEditProductScreen: React.FC<AddEditProductScreenProps> = ({
         selectedId={brandId}
         onSelect={(id, nm) => { setBrandId(id); setBrandName(id ? nm : ''); }}
         onClose={() => setShowBrandPicker(false)}
+      />
+      <PickerModal
+        visible={showSupplierPicker} title="เลือกผู้จำหน่าย"
+        items={[{ id: '', name: '— ไม่ระบุ —' }, ...getSuppliers()]}
+        selectedId={supplierId}
+        showEmpty={getSuppliers().length === 0}
+        onSelect={(id, nm) => { setSupplierId(id); setSupplierName(id ? nm : ''); }}
+        onClose={() => setShowSupplierPicker(false)}
       />
       <PickerModal
         visible={showUnitPicker} title="เลือกหน่วยนับ"
@@ -662,6 +887,43 @@ const styles = StyleSheet.create({
     padding: Spacing.md, borderLeftWidth: 3, borderLeftColor: Colors.primary,
   },
   auditNoteText: { ...Typography.body2, color: Colors.primary, flex: 1 },
+  optionsHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  addOptionBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: Colors.primaryLight, borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs,
+    borderWidth: 1, borderColor: Colors.primary, marginBottom: Spacing.sm,
+  },
+  addOptionText: { ...Typography.caption, color: Colors.primary, fontWeight: '600' },
+  optionsHint: { ...Typography.caption, color: Colors.textSecondary, marginBottom: Spacing.sm },
+  optionRow: { flexDirection: 'row', gap: Spacing.sm, alignItems: 'flex-end', marginBottom: Spacing.sm },
+  optionDeleteBtn: {
+    width: 44, height: 44, borderRadius: BorderRadius.md,
+    backgroundColor: Colors.dangerLight, alignItems: 'center', justifyContent: 'center',
+  },
+  errorBox: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+    backgroundColor: Colors.dangerLight, borderRadius: BorderRadius.md,
+    padding: Spacing.md, marginTop: Spacing.sm,
+    borderLeftWidth: 3, borderLeftColor: Colors.danger,
+  },
+  errorText: { ...Typography.body2, color: Colors.danger, flex: 1 },
+  variantList: { marginTop: Spacing.sm, gap: Spacing.sm },
+  variantListTitle: { ...Typography.label, color: Colors.gray700 },
+  variantCard: {
+    backgroundColor: Colors.backgroundSecondary, borderRadius: BorderRadius.md,
+    borderWidth: 1, borderColor: Colors.border, padding: Spacing.sm, gap: Spacing.sm,
+  },
+  variantName: { ...Typography.label, color: Colors.primary, fontWeight: '700' },
+  variantFields: { flexDirection: 'row', gap: Spacing.sm },
+  variantField: { flex: 1 },
+  variantFieldLabel: { ...Typography.caption, color: Colors.textSecondary, marginBottom: 2 },
+  variantInput: {
+    backgroundColor: Colors.surface, borderRadius: BorderRadius.sm,
+    borderWidth: 1.5, borderColor: Colors.border,
+    paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs,
+    ...Typography.body2, color: Colors.text,
+  },
   footer: {
     padding: Spacing.md, backgroundColor: Colors.surface,
     borderTopWidth: 1, borderTopColor: Colors.border,

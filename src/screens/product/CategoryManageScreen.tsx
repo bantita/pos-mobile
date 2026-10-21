@@ -10,10 +10,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Category, Brand } from '../../types/product';
-import { MOCK_CATEGORIES } from '../../data/mockProducts';
 import {
   useBrandStore, addBrand, updateBrand, deleteBrand, getBrandProductCount,
 } from '../../store/brandStore';
+import {
+  useCategoryStore, addCategory, updateCategory, deleteCategory, getCategoryProductCount,
+} from '../../store/categoryStore';
 import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
 import { Spacing, BorderRadius } from '../../constants/spacing';
@@ -26,7 +28,7 @@ type Tab = 'category' | 'brand';
 
 export const CategoryManageScreen: React.FC<CategoryManageScreenProps> = ({ onBack }) => {
   const [tab, setTab] = useState<Tab>('category');
-  const [categories, setCategories] = useState<Category[]>(MOCK_CATEGORIES);
+  const categories = useCategoryStore((st) => st.categories);
   const brands = useBrandStore((st) => st.brands);
 
   // Bottom sheet modal state
@@ -54,10 +56,9 @@ export const CategoryManageScreen: React.FC<CategoryManageScreenProps> = ({ onBa
     const status: 'active' | 'inactive' = formActive ? 'active' : 'inactive';
     if (tab === 'category') {
       if (editItem) {
-        setCategories((prev) => prev.map((c) => c.id === editItem.id ? { ...c, name: formName, status } : c));
+        updateCategory(editItem.id, { name: formName, status });
       } else {
-        const newCat: Category = { id: `c${Date.now()}`, name: formName, productCount: 0, status };
-        setCategories((prev) => [...prev, newCat]);
+        addCategory({ name: formName, status });
       }
     } else {
       if (editItem) {
@@ -71,7 +72,8 @@ export const CategoryManageScreen: React.FC<CategoryManageScreenProps> = ({ onBa
 
   const handleToggleStatus = (id: string) => {
     if (tab === 'category') {
-      setCategories((prev) => prev.map((c) => c.id === id ? { ...c, status: c.status === 'active' ? 'inactive' : 'active' } : c));
+      const c = categories.find((x) => x.id === id);
+      updateCategory(id, { status: c?.status === 'active' ? 'inactive' : 'active' });
     } else {
       const b = brands.find((x) => x.id === id);
       updateBrand(id, { status: b?.status === 'active' ? 'inactive' : 'active' });
@@ -88,7 +90,7 @@ export const CategoryManageScreen: React.FC<CategoryManageScreenProps> = ({ onBa
       {
         text: 'ลบ', style: 'destructive',
         onPress: () => {
-          if (tab === 'category') setCategories((prev) => prev.filter((c) => c.id !== id));
+          if (tab === 'category') deleteCategory(id);
           else deleteBrand(id);
         },
       },
@@ -108,7 +110,7 @@ export const CategoryManageScreen: React.FC<CategoryManageScreenProps> = ({ onBa
       </View>
       <View style={styles.itemInfo}>
         <Text style={styles.itemName}>{item.name}</Text>
-        <Text style={styles.itemCount}>{(tab === 'brand' ? getBrandProductCount(item.id) : item.productCount)} สินค้า</Text>
+        <Text style={styles.itemCount}>{(tab === 'brand' ? getBrandProductCount(item.id) : getCategoryProductCount(item.id))} สินค้า</Text>
       </View>
       <View style={[styles.statusBadge, item.status === 'active' ? styles.statusActive : styles.statusInactive]}>
         <Text style={[styles.statusText, { color: item.status === 'active' ? Colors.success : Colors.gray500 }]}>
@@ -130,7 +132,7 @@ export const CategoryManageScreen: React.FC<CategoryManageScreenProps> = ({ onBa
           />
         </TouchableOpacity>
         <TouchableOpacity style={[styles.actionBtn, { backgroundColor: Colors.dangerLight }]}
-          onPress={() => handleDelete(item.id, item.name, tab === 'brand' ? getBrandProductCount(item.id) : item.productCount)}>
+          onPress={() => handleDelete(item.id, item.name, tab === 'brand' ? getBrandProductCount(item.id) : getCategoryProductCount(item.id))}>
           <Ionicons name="trash-outline" size={16} color={Colors.danger} />
         </TouchableOpacity>
       </View>

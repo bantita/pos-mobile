@@ -10,8 +10,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ProductMaster } from '../../types/product';
-import { MOCK_CATEGORIES } from '../../data/mockProducts';
 import { useProductStore } from '../../store/productStore';
+import { useCategoryStore } from '../../store/categoryStore';
 import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
 import { Spacing, BorderRadius, Shadow } from '../../constants/spacing';
@@ -31,6 +31,7 @@ export const ProductListScreen: React.FC<ProductListScreenProps> = ({
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const products = useProductStore((st) => st.products);
+  const categories = useCategoryStore((st) => st.categories);
   const { width } = useWindowDimensions();
   const isWide = width >= 900;
   const { variantColor, variantLot, variantSize, variantYear } = useStoreConfigStore();
@@ -145,7 +146,7 @@ export const ProductListScreen: React.FC<ProductListScreenProps> = ({
 
       {/* Category Chips */}
       <FlatList
-        data={[{ id: 'all', name: 'ทั้งหมด', productCount: products.length, status: 'active' as const }, ...MOCK_CATEGORIES]}
+        data={[{ id: 'all', name: 'ทั้งหมด', productCount: products.length, status: 'active' as const }, ...categories]}
         horizontal
         showsHorizontalScrollIndicator={false}
         keyExtractor={(item) => item.id}

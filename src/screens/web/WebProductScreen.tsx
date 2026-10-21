@@ -13,10 +13,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { WebColors } from '../../constants/webColors';
 import { Colors, Space, Radius, Shadow, Font } from '../../design-system/tokens';
-import { MOCK_PRODUCTS, MOCK_CATEGORIES, UNITS } from '../../data/mockProducts';
-import { ProductMaster, ProductUOM } from '../../types/product';
+import { MOCK_PRODUCTS, UNITS } from '../../data/mockProducts';
+import { ProductMaster, ProductUOM, ProductOption, ProductVariant } from '../../types/product';
 import { useProductStore } from '../../store/productStore';
 import * as brandStore from '../../store/brandStore';
+import * as categoryStore from '../../store/categoryStore';
+import { getSuppliers } from '../../store/supplierStore';
 
 const fmt = (n: number) => n.toLocaleString('th-TH', { minimumFractionDigits: 2 });
 
@@ -433,12 +435,22 @@ const ProductFormModal: React.FC<{
   const [imageUrl, setImageUrl] = useState(product?.image ?? '');
 
   // ─── Base fields ───
+  const categoriesList = categoryStore.getCategories();
+  const suppliersList = getSuppliers();
+
   const [name,     setName]     = useState(product?.name     ?? '');
   const [code,     setCode]     = useState(product?.code     ?? '');
   const [catId,    setCatId]    = useState(product?.categoryId ?? 'c1');
   const [brandId,  setBrandId]  = useState(product?.brandId  ?? '');
+  const [supplierId, setSupplierId] = useState(product?.supplierId ?? '');
   const [showCatDropdown, setShowCatDropdown] = useState(false);
   const [showBrandDropdown, setShowBrandDropdown] = useState(false);
+  const [showSupplierDropdown, setShowSupplierDropdown] = useState(false);
+
+  // ─── Options / Variants ───
+  const [options, setOptions] = useState<ProductOption[]>(product?.options ? product.options.map(o => ({ name: o.name, values: [...o.values] })) : []);
+  const [variants, setVariants] = useState<ProductVariant[]>(product?.variants ? product.variants.map(v => ({ ...v, optionValues: { ...v.optionValues } })) : []);
+  const [variantError, setVariantError] = useState('');
   const [minStock, setMinStock] = useState(String(product?.minStock ?? '5'));
   const [active,   setActive]   = useState(product?.status !== 'inactive');
   const [vat,      setVat]      = useState(product?.vatIncluded ?? true);
@@ -498,15 +510,33 @@ const ProductFormModal: React.FC<{
     return list;
   };
 
+  const validateVariants = (): string | null => {
+    const seenBarcodes = new Set<string>();
+    for (const v of variants) {
+      if (!Number.isInteger(v.stockQty) || v.stockQty < 0) return 'จำนวนสต๊อกของตัวเลือกต้องเป็นจำนวนเต็มไม่ติดลบ';
+      if (v.price != null && v.price < 0) return 'ราคาของตัวเลือกต้องไม่ติดลบ';
+      const bc = v.barcode?.trim();
+      if (bc) {
+        if (seenBarcodes.has(bc)) return `บาร์โค้ด "${bc}" ของตัวเลือกซ้ำกันภายในสินค้า`;
+        seenBarcodes.add(bc);
+      }
+    }
+    return null;
+  };
+
   const handleSave = () => {
+    const vErr = validateVariants();
+    if (vErr) { setVariantError(vErr); return; }
+    setVariantError('');
     const finalUOMs = ensureDefault(uoms);
     const defaultUOM = finalUOMs.find(u => u.isDefault) ?? finalUOMs[0];
+    const supplier = suppliersList.find(sp => sp.id === supplierId);
     onSave({
       name,
       code,
       barcode: defaultUOM?.barcodes[0] ?? '',
       categoryId: catId,
-      categoryName: MOCK_CATEGORIES.find(c => c.id === catId)?.name ?? '',
+      categoryName: categoriesList.find(c => c.id === catId)?.name ?? '',
       brandId: brandId || undefined,
       brandName: brandStore.getBrand(brandId)?.name,
       unit: baseUnit,
@@ -518,11 +548,81 @@ const ProductFormModal: React.FC<{
       status: active ? 'active' : 'inactive',
       image: imageUrl || undefined,
       uoms: finalUOMs,
+      // always write (clearable on edit)
+      options: options.length > 0 ? options : [],
+      variants: variants.length > 0 ? variants : [],
+      supplierId: supplierId || undefined,
+      supplierName: supplier?.name,
     });
     onClose();
   };
 
-  const canSave = name.trim().length > 0 && code.trim().length > 0 && uoms.length > 0;
+  const baseCanSave = name.trim().length > 0 && code.trim().length > 0 && uoms.length > 0;
+
+  // ─── Options / Variants editing ───
+  const regenerateVariants = (nextOptions: ProductOption[]) => {
+    const valid = nextOptions.filter(o => o.name.trim() && o.values.some(v => v.trim()));
+    if (valid.length === 0) { setVariants([]); return; }
+    // cartesian product ของ option values
+    let combos: Record<string, string>[] = [{}];
+    valid.forEach(opt => {
+      const vals = opt.values.filter(v => v.trim());
+      const next: Record<string, string>[] = [];
+      combos.forEach(combo => {
+        vals.forEach(val => { next.push({ ...combo, [opt.name]: val }); });
+      });
+      combos = next;
+    });
+    setVariants(prev => combos.map((optionValues, i) => {
+      const existing = prev.find(v => JSON.stringify(v.optionValues) === JSON.stringify(optionValues));
+      return existing ?? {
+        id: `v_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 5)}`,
+        stockQty: 0,
+        optionValues,
+      };
+    }));
+  };
+
+  const updateOption = (index: number, patch: Partial<ProductOption>) => {
+    setOptions(prev => {
+      const next = prev.map((o, i) => i === index ? { ...o, ...patch } : o);
+      regenerateVariants(next);
+      return next;
+    });
+  };
+
+  const addOption = () => {
+    setOptions(prev => [...prev, { name: '', values: [] }]);
+  };
+
+  const removeOption = (index: number) => {
+    setOptions(prev => {
+      const next = prev.filter((_, i) => i !== index);
+      regenerateVariants(next);
+      return next;
+    });
+  };
+
+  const setOptionValues = (index: number, raw: string) => {
+    const values = raw.split(',').map(v => v.trim()).filter(Boolean);
+    updateOption(index, { values });
+  };
+
+  const updateVariant = (id: string, patch: Partial<ProductVariant>) => {
+    setVariants(prev => prev.map(v => v.id === id ? { ...v, ...patch } : v));
+  };
+
+  const optionNameError = (() => {
+    const names = options.map(o => o.name.trim());
+    for (let i = 0; i < options.length; i++) {
+      if (!names[i]) return 'ชื่อตัวเลือกห้ามว่าง';
+      if (names.indexOf(names[i]) !== i) return `ชื่อตัวเลือก "${names[i]}" ซ้ำกัน`;
+      if (options[i].values.filter(v => v.trim()).length === 0) return `ตัวเลือก "${names[i]}" ต้องมีค่าอย่างน้อย 1 ค่า`;
+    }
+    return '';
+  })();
+
+  const canSave = baseCanSave && !optionNameError;
 
   return (
     <Modal visible={visible} transparent animationType="fade">
@@ -645,14 +745,14 @@ const ProductFormModal: React.FC<{
                       onPress={() => setShowCatDropdown(!showCatDropdown)}
                     >
                       <Text style={{ fontSize: 12, color: catId ? Colors.text : '#9CA3AF' }}>
-                        {MOCK_CATEGORIES.find(c => c.id === catId)?.name || 'เลือกหมวดหมู่...'}
+                        {categoriesList.find(c => c.id === catId)?.name || 'เลือกหมวดหมู่...'}
                       </Text>
                       <Ionicons name="chevron-down" size={14} color="#9CA3AF" />
                     </TouchableOpacity>
                     {showCatDropdown && (
                       <View style={{ position: 'absolute', top: 40, left: 0, right: 0, backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB', zIndex: 9999, maxHeight: 180, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, elevation: 5 }}>
                         <ScrollView style={{ maxHeight: 180 }}>
-                          {MOCK_CATEGORIES.filter(c => c.status === 'active').map(c => (
+                          {categoriesList.filter(c => c.status === 'active').map(c => (
                             <TouchableOpacity key={c.id} style={{ paddingVertical: 9, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: '#F5F5F5', backgroundColor: catId === c.id ? WebColors.primaryLight : '#fff' }} onPress={() => { setCatId(c.id); setShowCatDropdown(false); }}>
                               <Text style={{ fontSize: 12, color: catId === c.id ? WebColors.primary : Colors.text }}>{c.name}</Text>
                             </TouchableOpacity>
@@ -759,6 +859,150 @@ const ProductFormModal: React.FC<{
                 />
               ))}
             </View>
+
+            {/* ── ผู้จำหน่าย ── */}
+            <View style={[fm.section, { zIndex: 50 }]}>
+              <Text style={fm.sectionTitle}>🏭  ผู้จำหน่าย</Text>
+              <View style={{ position: 'relative', zIndex: 50 }}>
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1.5, borderColor: WebColors.border, borderRadius: 8, paddingHorizontal: 12, minHeight: 44 }}
+                  onPress={() => setShowSupplierDropdown(!showSupplierDropdown)}
+                >
+                  <Text style={{ fontSize: 12, color: supplierId ? Colors.text : WebColors.textDisabled }}>
+                    {supplierId ? (suppliersList.find(sp => sp.id === supplierId)?.name ?? '— ไม่ระบุ —') : '— ไม่ระบุ —'}
+                  </Text>
+                  <Ionicons name="chevron-down" size={14} color={WebColors.textSecondary} />
+                </TouchableOpacity>
+                {showSupplierDropdown && (
+                  <View style={{ position: 'absolute', top: 48, left: 0, right: 0, backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: WebColors.border, zIndex: 50, maxHeight: 200, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, elevation: 5 }}>
+                    <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled>
+                      <TouchableOpacity style={{ paddingVertical: 11, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: '#F5F5F5', backgroundColor: !supplierId ? WebColors.primaryLight : '#fff' }} onPress={() => { setSupplierId(''); setShowSupplierDropdown(false); }}>
+                        <Text style={{ fontSize: 12, color: !supplierId ? WebColors.primary : Colors.text }}>— ไม่ระบุ —</Text>
+                      </TouchableOpacity>
+                      {suppliersList.map(sp => (
+                        <TouchableOpacity key={sp.id} style={{ paddingVertical: 11, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: '#F5F5F5', backgroundColor: supplierId === sp.id ? WebColors.primaryLight : '#fff' }} onPress={() => { setSupplierId(sp.id); setShowSupplierDropdown(false); }}>
+                          <Text style={{ fontSize: 12, color: supplierId === sp.id ? WebColors.primary : Colors.text }}>{sp.name}</Text>
+                        </TouchableOpacity>
+                      ))}
+                      {suppliersList.length === 0 && (
+                        <Text style={{ padding: 12, fontSize: 12, color: WebColors.textDisabled }}>ไม่มีข้อมูล</Text>
+                      )}
+                    </ScrollView>
+                  </View>
+                )}
+              </View>
+            </View>
+
+            {/* ── ตัวเลือกและ Variant ── */}
+            <View style={fm.section}>
+              <View style={fm.sectionHeader}>
+                <Text style={fm.sectionTitle}>🎨  ตัวเลือกสินค้า ({options.length})</Text>
+                <TouchableOpacity style={fm.addUOMBtn} onPress={addOption}>
+                  <Ionicons name="add" size={14} color={WebColors.primary} />
+                  <Text style={fm.addUOMText}>เพิ่มตัวเลือก</Text>
+                </TouchableOpacity>
+              </View>
+
+              {options.length === 0 && (
+                <Text style={{ fontSize: 12, color: WebColors.textDisabled }}>ไม่มีข้อมูล — เพิ่มตัวเลือก เช่น สี/ไซส์ เพื่อสร้าง variant</Text>
+              )}
+
+              {options.map((opt, idx) => (
+                <View key={idx} style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-end', marginBottom: 8 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={fm.label}>ชื่อตัวเลือก *</Text>
+                    <TextInput
+                      style={fm.inputFull}
+                      value={opt.name}
+                      onChangeText={v => updateOption(idx, { name: v })}
+                      placeholder="เช่น สี"
+                      placeholderTextColor={WebColors.textDisabled}
+                    />
+                  </View>
+                  <View style={{ flex: 2 }}>
+                    <Text style={fm.label}>ค่า (คั่นด้วย ,) *</Text>
+                    <TextInput
+                      style={fm.inputFull}
+                      value={opt.values.join(', ')}
+                      onChangeText={v => setOptionValues(idx, v)}
+                      placeholder="เช่น แดง, น้ำเงิน"
+                      placeholderTextColor={WebColors.textDisabled}
+                    />
+                  </View>
+                  <TouchableOpacity style={{ width: 44, height: 44, borderRadius: 8, backgroundColor: WebColors.dangerLight, alignItems: 'center', justifyContent: 'center' }} onPress={() => removeOption(idx)}>
+                    <Ionicons name="trash-outline" size={16} color={WebColors.danger} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+
+              {!!optionNameError && (
+                <View style={fm.errorBox}>
+                  <Ionicons name="alert-circle-outline" size={14} color={WebColors.danger} />
+                  <Text style={fm.errorText}>{optionNameError}</Text>
+                </View>
+              )}
+
+              {/* Variant grid */}
+              {variants.length > 0 && !optionNameError && (
+                <View style={{ marginTop: 10 }}>
+                  <Text style={[fm.label, { marginBottom: 6 }]}>Variant ({variants.length})</Text>
+                  {variants.map(v => (
+                    <View key={v.id} style={fm.variantRow}>
+                      <View style={{ flex: 1.3, justifyContent: 'center' }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.text }}>
+                          {Object.values(v.optionValues).join(' / ')}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <TextInput
+                          style={fm.input}
+                          value={v.sku ?? ''}
+                          onChangeText={t => updateVariant(v.id, { sku: t || undefined })}
+                          placeholder="SKU"
+                          placeholderTextColor={WebColors.textDisabled}
+                        />
+                      </View>
+                      <View style={{ flex: 1.2 }}>
+                        <TextInput
+                          style={fm.input}
+                          value={v.barcode ?? ''}
+                          onChangeText={t => updateVariant(v.id, { barcode: t || undefined })}
+                          placeholder="บาร์โค้ด"
+                          placeholderTextColor={WebColors.textDisabled}
+                        />
+                      </View>
+                      <View style={{ flex: 0.8 }}>
+                        <TextInput
+                          style={fm.input}
+                          value={v.price != null ? String(v.price) : ''}
+                          onChangeText={t => updateVariant(v.id, { price: t.trim() === '' ? undefined : (parseFloat(t) || 0) })}
+                          keyboardType="decimal-pad"
+                          placeholder="ราคา"
+                          placeholderTextColor={WebColors.textDisabled}
+                        />
+                      </View>
+                      <View style={{ flex: 0.7 }}>
+                        <TextInput
+                          style={fm.input}
+                          value={String(v.stockQty)}
+                          onChangeText={t => updateVariant(v.id, { stockQty: Math.max(0, Math.floor(parseFloat(t) || 0)) })}
+                          keyboardType="number-pad"
+                          placeholder="สต๊อก"
+                          placeholderTextColor={WebColors.textDisabled}
+                        />
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {!!variantError && (
+                <View style={fm.errorBox}>
+                  <Ionicons name="alert-circle-outline" size={14} color={WebColors.danger} />
+                  <Text style={fm.errorText}>{variantError}</Text>
+                </View>
+              )}
+            </View>
           </ScrollView>
 
           {/* Actions */}
@@ -862,6 +1106,16 @@ const fm = StyleSheet.create({
   saveBtn: { flex: 2, height: 44, borderRadius: 12, backgroundColor: WebColors.primary, alignItems: 'center', justifyContent: 'center' },
   saveBtnDisabled: { backgroundColor: '#A5B4FC' },
   saveText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+  errorBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8,
+    backgroundColor: WebColors.dangerLight, borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 8,
+    borderWidth: 1, borderColor: WebColors.danger,
+  },
+  errorText: { flex: 1, fontSize: 12, color: WebColors.danger, fontWeight: '600' },
+  variantRow: {
+    flexDirection: 'row', gap: 6, alignItems: 'center', marginBottom: 6,
+  },
 });
 
 // ─── Master Screen ────────────────────────────────────────────────────────────
@@ -966,44 +1220,51 @@ const MasterScreen: React.FC<{ allProducts: typeof MOCK_PRODUCTS }> = ({ allProd
     setBrandRefreshKey(k => k + 1);
   };
 
-  // ── Category state ──
-  const [categories, setCategories] = useState<CategoryItem[]>([...MOCK_CATEGORIES]);
+  // ── Category state (categoryStore เป็น single source of truth) ──
+  const [categoryRefreshKey, setCategoryRefreshKey] = useState(0);
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryStatus, setNewCategoryStatus] = useState<'active' | 'inactive'>('active');
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
   const [editingCategoryName, setEditingCategoryName] = useState('');
 
+  // อ่านจาก store ตรง ๆ — categoryRefreshKey บังคับ re-render หลัง mutation
+  void categoryRefreshKey;
+  const categories: CategoryItem[] = categoryStore.getCategories().map(c => ({
+    id: c.id,
+    name: c.name,
+    productCount: categoryStore.getCategoryProductCount(c.id),
+    status: c.status,
+  }));
+
   const handleAddCategory = () => {
     const name = newCategoryName.trim();
     if (!name) return;
-    const newC: CategoryItem = {
-      id: `c_${Date.now()}`,
-      name,
-      productCount: 0,
-      status: newCategoryStatus,
-    };
-    setCategories(prev => [...prev, newC]);
+    categoryStore.addCategory({ name, status: newCategoryStatus });
     setNewCategoryName('');
     setNewCategoryStatus('active');
     setShowAddCategory(false);
+    setCategoryRefreshKey(k => k + 1);
   };
 
   const handleSaveEditCategory = (id: string) => {
     const name = editingCategoryName.trim();
     if (!name) { setEditingCategory(null); return; }
-    setCategories(prev => prev.map(c => c.id === id ? { ...c, name } : c));
+    categoryStore.updateCategory(id, { name });
     setEditingCategory(null);
+    setCategoryRefreshKey(k => k + 1);
   };
 
   const handleDeleteCategory = (id: string) => {
-    setCategories(prev => prev.filter(c => c.id !== id));
+    categoryStore.deleteCategory(id);
+    setCategoryRefreshKey(k => k + 1);
   };
 
   const handleToggleCategoryStatus = (id: string) => {
-    setCategories(prev => prev.map(c =>
-      c.id === id ? { ...c, status: c.status === 'active' ? 'inactive' : 'active' } : c
-    ));
+    const current = categoryStore.getCategory(id);
+    if (!current) return;
+    categoryStore.updateCategory(id, { status: current.status === 'active' ? 'inactive' : 'active' });
+    setCategoryRefreshKey(k => k + 1);
   };
 
   return (
@@ -1552,6 +1813,7 @@ const ms: any = StyleSheet.create({
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export const WebProductScreen: React.FC = () => {
   const { products, addProduct, updateProduct, deleteProduct } = useProductStore();
+  const filterCategories = categoryStore.useCategoryStore(st => st.categories);
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const [search, setSearch]       = useState('');
@@ -1629,7 +1891,7 @@ export const WebProductScreen: React.FC = () => {
               >
                 <Text style={[s.chipText, catFilter === 'all' && s.chipTextActive]}>ทั้งหมด</Text>
               </TouchableOpacity>
-              {MOCK_CATEGORIES.filter(c => c.status === 'active').map(c => (
+              {filterCategories.filter(c => c.status === 'active').map(c => (
                 <TouchableOpacity
                   key={c.id}
                   style={[s.chip, catFilter === c.id && s.chipActive]}

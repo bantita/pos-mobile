@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ImportRow, ProductMaster, ProductUOM } from '../../types/product';
 import { useProductStore } from '../../store/productStore';
-import { MOCK_CATEGORIES } from '../../data/mockProducts';
+import { getCategories } from '../../store/categoryStore';
 import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
 import { Spacing, BorderRadius } from '../../constants/spacing';
@@ -97,10 +97,6 @@ function resolveHeaderIndex(headers: string[]): Record<string, number> {
   return idx;
 }
 
-const ACTIVE_CATEGORY_NAMES = MOCK_CATEGORIES
-  .filter((c) => c.status === 'active')
-  .map((c) => c.name);
-
 export const ImportExportScreen: React.FC<ImportExportScreenProps> = ({ onBack, totalProducts }) => {
   const products = useProductStore((s) => s.products);
   const addProduct = useProductStore((s) => s.addProduct);
@@ -124,10 +120,11 @@ export const ImportExportScreen: React.FC<ImportExportScreenProps> = ({ onBack, 
   // ─── Import ────────────────────────────────────────────────────────────────
   const validateRow = (row: Omit<ImportRow, 'errors'>): string[] => {
     const errors: string[] = [];
+    const activeCategoryNames = getCategories().filter((c) => c.status === 'active').map((c) => c.name);
     if (!row.code.trim()) errors.push('รหัสสินค้าว่าง');
     if (!row.name.trim()) errors.push('ชื่อสินค้าว่าง');
     if (!(row.salePrice > 0)) errors.push('ราคาขายต้องมากกว่า 0');
-    if (row.category && !ACTIVE_CATEGORY_NAMES.includes(row.category)) {
+    if (row.category && !activeCategoryNames.includes(row.category)) {
       errors.push('หมวดหมู่ไม่พบในระบบ');
     }
     return errors;
@@ -195,10 +192,11 @@ export const ImportExportScreen: React.FC<ImportExportScreenProps> = ({ onBack, 
   const applyImport = () => {
     setImportStep('importing');
     const existingByCode = new Map(products.map((p) => [p.code, p]));
+    const categoriesList = getCategories();
     let count = 0;
     validRows.forEach((row) => {
       const existing = existingByCode.get(row.code);
-      const category = MOCK_CATEGORIES.find((c) => c.name === row.category);
+      const category = categoriesList.find((c) => c.name === row.category);
       if (existing) {
         updateProduct(existing.id, {
           name: row.name || existing.name,
