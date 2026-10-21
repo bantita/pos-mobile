@@ -44,6 +44,7 @@ const NAV_ITEMS = [
   { route: 'team',        icon: 'people-outline',          label: 'จัดการทีม' },
   { route: 'auditlog',    icon: 'document-text-outline',   label: 'Audit Log' },
   { route: 'settings',    icon: 'settings-outline',        label: 'ตั้งค่า'   },
+  { route: 'receipt-designer', icon: 'create-outline',     label: 'แก้ไขรูปแบบบิล' },
   { route: 'superadmin',  icon: 'shield-checkmark-outline', label: 'Super Admin', adminOnly: true },
 ];
 
@@ -85,7 +86,9 @@ export const WebSidebar: React.FC<Props> = ({
     // CRM toggle (super admin controls)
     if (item.route === 'crm' && !getStoreConfig().crmEnabled) return false;
     // Role-based access ('suppliers' ใช้สิทธิ์ร่วมกับ 'products')
-    const accessKey = item.route === 'reports' ? 'reports' : (['suppliers', 'brands'].includes(item.route) ? 'products' : item.route);
+    const accessKey = item.route === 'reports' ? 'reports'
+      : (['suppliers', 'brands'].includes(item.route) ? 'products'
+        : (item.route === 'receipt-designer' ? 'settings' : item.route));
     if (user && !canAccess(user.role, accessKey)) return false;
     return true;
   });

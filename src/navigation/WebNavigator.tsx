@@ -18,6 +18,7 @@ import { WebDocumentSettingsScreen } from '../screens/web/WebDocumentSettingsScr
 import { WebBranchManageScreen } from '../screens/web/WebBranchManageScreen';
 import { WebSupplierScreen }   from '../screens/web/WebSupplierScreen';
 import { WebBrandScreen }       from '../screens/web/WebBrandScreen';
+import { WebReceiptDesignerScreen } from '../screens/web/WebReceiptDesignerScreen';
 import { useAuthStore }       from '../store/authStore';
 import { canAccess }          from '../constants/rolePermissions';
 
@@ -36,6 +37,7 @@ const PAGE_NAMES: Record<string, string> = {
   team:                       'จัดการทีม',
   auditlog:                   'Audit Log',
   settings:                   'ตั้งค่า',
+  'receipt-designer':         'แก้ไขรูปแบบบิล',
   licenses:                   'ใบอนุญาต',
   documents:                  'ตั้งค่า › เอกสาร',
   branches:                   'สาขา',
@@ -114,7 +116,7 @@ export const WebNavigator: React.FC = () => {
     // licenses/documents/branches ไม่มี key ใน rolePermissions → ใช้สิทธิ์ 'settings'
     const accessKey = r.startsWith('report_')
       ? 'reports'
-      : (['documents', 'licenses', 'branches'].includes(r) ? 'settings'
+      : (['documents', 'licenses', 'branches', 'receipt-designer'].includes(r) ? 'settings'
         : (['suppliers', 'brands'].includes(r) ? 'products' : r));
     if (canAccess(user.role, accessKey)) {
       setRoute(r);
@@ -124,7 +126,7 @@ export const WebNavigator: React.FC = () => {
   };
 
   const isReportRoute = route === 'reports' || route.startsWith('report_');
-  const routeAccessKey = ['documents', 'licenses', 'branches'].includes(route) ? 'settings'
+  const routeAccessKey = ['documents', 'licenses', 'branches', 'receipt-designer'].includes(route) ? 'settings'
     : (['suppliers', 'brands'].includes(route) ? 'products' : route);
   if (!isReportRoute && !canAccess(user.role, routeAccessKey)) {
     setTimeout(() => setRoute('dashboard'), 0);
@@ -151,6 +153,7 @@ export const WebNavigator: React.FC = () => {
       case 'branches':  return <WebBranchManageScreen />;
       case 'suppliers': return <WebSupplierScreen />;
       case 'brands':    return <WebBrandScreen />;
+      case 'receipt-designer': return <WebReceiptDesignerScreen />;
       case 'superadmin': return <WebSuperAdminScreen />;
       default:          return <WebDashboardScreen />;
     }
