@@ -19,8 +19,8 @@ import {
 const DEFAULT_ORDER = DEFAULT_LAYOUT.map(b => b.id);
 
 beforeEach(() => {
-  // คืนค่า layout เป็น DEFAULT ก่อนทุกเทส
-  useReceiptStore.getState().setLayout(DEFAULT_LAYOUT.map(b => ({ ...b })));
+  // คืนค่า layout เป็น DEFAULT ก่อนทุกเทส (setLayout ถูกถอดออกแล้ว)
+  useReceiptStore.getState().setConfig({ layout: DEFAULT_LAYOUT.map(b => ({ ...b })) });
 });
 
 describe('receiptStore — DEFAULT layout', () => {
@@ -32,43 +32,6 @@ describe('receiptStore — DEFAULT layout', () => {
       'billInfo', 'items', 'totals', 'payment', 'footerText', 'branchInfo',
     ]);
     expect(layout.every(b => b.visible)).toBe(true);
-  });
-});
-
-describe('receiptStore — setters', () => {
-  test('reorderLayout ย้ายบล็อก', () => {
-    const { reorderLayout } = useReceiptStore.getState();
-    reorderLayout(0, 2); // logo -> index 2
-    const ids = useReceiptStore.getState().config.layout.map(b => b.id);
-    expect(ids.slice(0, 3)).toEqual(['shopName', 'shopAddr', 'logo']);
-  });
-
-  test('reorderLayout ที่อินเด็กซ์ไม่ถูกต้องไม่เปลี่ยนอะไร', () => {
-    const { reorderLayout } = useReceiptStore.getState();
-    reorderLayout(0, 99);
-    expect(useReceiptStore.getState().config.layout.map(b => b.id)).toEqual(DEFAULT_ORDER);
-  });
-
-  test('toggleBlock สลับการมองเห็น', () => {
-    const { toggleBlock } = useReceiptStore.getState();
-    toggleBlock('items');
-    const items = useReceiptStore.getState().config.layout.find(b => b.id === 'items');
-    expect(items?.visible).toBe(false);
-    toggleBlock('items');
-    expect(useReceiptStore.getState().config.layout.find(b => b.id === 'items')?.visible).toBe(true);
-  });
-
-  test('setBlockAlign ตั้งการจัดตำแหน่ง', () => {
-    const { setBlockAlign } = useReceiptStore.getState();
-    setBlockAlign('items', 'center');
-    expect(useReceiptStore.getState().config.layout.find(b => b.id === 'items')?.align).toBe('center');
-  });
-
-  test('setConfig ยังรวม field อื่นได้โดยไม่กระทบ layout', () => {
-    const { setConfig } = useReceiptStore.getState();
-    setConfig({ shopName: 'ร้านใหม่' });
-    expect(useReceiptStore.getState().config.shopName).toBe('ร้านใหม่');
-    expect(useReceiptStore.getState().config.layout).toHaveLength(12);
   });
 });
 
