@@ -15,7 +15,7 @@ interface BrandState {
   brands: Brand[];
 }
 
-const useBrandStore = create<BrandState>()(
+export const useBrandStore = create<BrandState>()(
   persist(
     () => ({
       brands: [...MOCK_BRANDS] as Brand[],
