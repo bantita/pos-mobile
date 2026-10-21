@@ -15,7 +15,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useCartStore } from '../../store/cartStore';
 import { useSaleModeStore } from '../../store/saleModeStore';
 import { Product, OrderType, OrderDetails, ORDER_TYPE_LABELS, ORDER_TYPE_ICONS } from '../../types/sale';
-import { ProductUOM } from '../../types/product';
 import { useNavigation } from '@react-navigation/native';
 import { useKioskStore } from '../../store/kioskStore';
 import { SaleModePicker } from '../../components/sale/SaleModePicker';
@@ -30,29 +29,13 @@ import { MOCK_TECHNICIANS } from '../../data/mockStaff';
 import { useStoreConfigStore } from '../../store/storeConfigStore';
 import { useProductStore } from '../../store/productStore';
 import { useBranchGuard } from '../../hooks/useBranchGuard';
-import { resolveCartPrice } from '../../utils/priceResolver';
+import { toCartProduct, masterDisplayStock } from '../../utils/cartProduct';
+import { VariantSelector } from '../../components/sale/VariantSelector';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ─── Mock Products (Product type สำหรับ cart) ─────────────────────────────────
 const CATEGORIES = ['ทั้งหมด', 'เครื่องดื่ม', 'อาหาร', 'ขนม', 'ของใช้'];
-
-// แปลง ProductMaster → Product ตาม UOM ที่เลือก
-// ราคาในตะกร้า resolve ตามสาขาที่ active (ราคาสาขา/ราคากลาง × ratio) ผ่าน resolveCartPrice
-// ถ้าไม่มีเอกสารราคา จะ fallback เป็น uom.salePrice ตามเดิม
-const toCartProduct = (master: ProductMaster, uom: ProductUOM, branchId?: string): Product => ({
-  id: `${master.id}_${uom.id}`,
-  code: master.code,
-  barcode: uom.barcodes[0] ?? master.barcode,
-  name: uom.ratio > 1 ? `${master.name} (${uom.unit})` : master.name,
-  category: master.categoryName,
-  price: resolveCartPrice(master, uom, branchId).price,
-  cost: uom.costPrice,
-  vatIncluded: master.vatIncluded,
-  vatRate: master.vatRate,
-  unit: uom.unit,
-  stockQty: Math.floor(master.stockQty / uom.ratio),
-});
 
 // ─── Props ─────────────────────────────────────────────────────────────────────
 interface POSSaleScreenProps {
@@ -409,6 +392,10 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
   const [showUOMSelector, setShowUOMSelector] = useState(false);
   const [selectedMaster, setSelectedMaster] = useState<ProductMaster | null>(null);
 
+  // Variant selector
+  const [showVariantSelector, setShowVariantSelector] = useState(false);
+  const [variantMaster, setVariantMaster] = useState<ProductMaster | null>(null);
+
   // Service Staff popup
   const [showStaffPopup, setShowStaffPopup] = useState(false);
   const [serviceProduct, setServiceProduct] = useState<Product | null>(null);
@@ -442,27 +429,37 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
 
   // ── Add product (จาก grid) ──
   const handleProductPress = useCallback((product: Product) => {
-    // Check if this is a SERVICE product → show staff popup
+    // ลำดับความสำคัญ: service → variant → multi-UOM → default
     const master = products.find((m) => product.id.startsWith(m.id + '_'));
+    // 1) SERVICE product → show staff popup
     if (master && master.productType === 'service') {
       setServiceProduct(product);
       setShowStaffPopup(true);
       return;
     }
-    // ถ้า master มีหลาย UOM → แสดง UOM selector
+    // 2) สินค้ามี variant → แสดง VariantSelector
+    if (master && master.variants?.length) {
+      setVariantMaster(master);
+      setShowVariantSelector(true);
+      return;
+    }
+    // 3) ถ้า master มีหลาย UOM → แสดง UOM selector
     if (master && master.uoms.length > 1 && !product.id.includes('uom_base') && product.unit === master.unit) {
       setSelectedMaster(master);
       setShowUOMSelector(true);
       return;
     }
-    // default UOM → เพิ่มเลย
+    // 4) default UOM → เพิ่มเลย
     addItem(product);
   }, [addItem, products]);
 
   const handleProductLongPress = useCallback((product: Product) => {
-    // Long press → เลือก UOM เสมอ
+    // ลำดับความสำคัญ: variant → เลือก UOM → เพิ่มเลย
     const master = products.find((m) => product.id.startsWith(m.id + '_'));
-    if (master && master.uoms.length > 1) {
+    if (master && master.variants?.length) {
+      setVariantMaster(master);
+      setShowVariantSelector(true);
+    } else if (master && master.uoms.length > 1) {
       setSelectedMaster(master);
       setShowUOMSelector(true);
     } else {
@@ -476,7 +473,21 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
     if (scanFeedbackTimer.current) clearTimeout(scanFeedbackTimer.current);
 
     const result = findProductByBarcode(barcode.trim(), products);
-    if (result) {
+    if (result?.variant) {
+      // barcode ตรงกับ variant → เพิ่มลงบิลได้เลย
+      const cartProduct = toCartProduct(result.product, result.uom, activeBranchId, result.variant);
+      addItem(cartProduct);
+      setScanResult({ name: cartProduct.name, price: cartProduct.price });
+      setScanStatus('found');
+      if (beepOnScan) Vibration.vibrate(60);
+    } else if (result && result.product.variants?.length) {
+      // สแกน barcode หน่วย/หลักของสินค้าที่มี variant → ต้องเลือก variant ก่อน
+      setVariantMaster(result.product);
+      setShowVariantSelector(true);
+      setScanStatus('idle');
+      setManualBarcode('');
+      return;
+    } else if (result) {
       const cartProduct = toCartProduct(result.product, result.uom, activeBranchId);
       addItem(cartProduct);
       setScanResult({ name: cartProduct.name, price: cartProduct.price });
@@ -499,12 +510,14 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
     const isLargeUnit = !item.unit.match(/^(ชิ้น|ขวด|กระป๋อง|ซอง|ถุง|ก้อน)$/);
     const master = products.find((m) => item.id.startsWith(m.id + '_'));
     const isService = master?.productType === 'service';
+    // สินค้ามี variant → แสดง stock รวมของทุก variant แทน stock หน่วย
+    const displayStock = master?.variants?.length ? masterDisplayStock(master) : item.stockQty;
     return (
       <TouchableOpacity
-        style={[styles.productCard, { width: cardWidth }, item.stockQty === 0 && styles.outOfStock]}
-        onPress={() => item.stockQty > 0 && handleProductPress(item)}
-        onLongPress={() => item.stockQty > 0 && handleProductLongPress(item)}
-        disabled={item.stockQty === 0}
+        style={[styles.productCard, { width: cardWidth }, displayStock === 0 && styles.outOfStock]}
+        onPress={() => displayStock > 0 && handleProductPress(item)}
+        onLongPress={() => displayStock > 0 && handleProductLongPress(item)}
+        disabled={displayStock === 0}
         activeOpacity={0.75}
       >
         <View style={[styles.productIconBox, isLargeUnit && { backgroundColor: Colors.warningLight }, isService && styles.serviceIconBox]}>
@@ -524,13 +537,13 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
             </View>
           )}
         </View>
-        {item.stockQty === 0 ? (
+        {displayStock === 0 ? (
           <View style={styles.outOfStockOverlay}>
             <Text style={styles.outOfStockText}>หมด</Text>
           </View>
-        ) : item.stockQty <= 5 && !isService ? (
+        ) : displayStock <= 5 && !isService ? (
           <View style={styles.lowStockBadge}>
-            <Text style={styles.lowStockText}>{item.stockQty}</Text>
+            <Text style={styles.lowStockText}>{displayStock}</Text>
           </View>
         ) : null}
         <Text style={[styles.productName, gridColumns === 4 && styles.productNameSm]} numberOfLines={2}>
@@ -779,6 +792,15 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
         branchId={activeBranchId}
         onSelect={(p) => addItem(p)}
         onClose={() => setShowUOMSelector(false)}
+      />
+
+      {/* ── Variant Selector ── */}
+      <VariantSelector
+        visible={showVariantSelector}
+        master={variantMaster}
+        branchId={activeBranchId}
+        onSelect={(p) => addItem(p)}
+        onClose={() => { setShowVariantSelector(false); setVariantMaster(null); }}
       />
 
       {/* ── Service Staff Popup ── */}

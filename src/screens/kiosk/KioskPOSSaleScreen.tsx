@@ -32,6 +32,8 @@ const isWide    = W >= 1024;
 const isTablet  = W >= 768 && !isWide;
 
 // convert master+uom → cart product
+// NOTE: kiosk ตั้งใจไม่รองรับ variant (อยู่นอกขอบเขต variant matrix) จึงเก็บ toCartProduct
+// แบบ local 2-arg ไว้ตามเดิม ไม่ย้ายไป shared helper
 const toCartProduct = (master: typeof MOCK_PRODUCTS[0], uom: ProductUOM): Product => ({
   id: `${master.id}_${uom.id}`,
   code: master.code,
@@ -46,7 +48,10 @@ const toCartProduct = (master: typeof MOCK_PRODUCTS[0], uom: ProductUOM): Produc
   stockQty: Math.floor(master.stockQty / uom.ratio),
 });
 
-const ALL_PRODUCTS: Product[] = MOCK_PRODUCTS.flatMap(m =>
+// kiosk ไม่แสดง/ไม่สแกนสินค้าที่มี variant — กรองออกจาก grid และ barcode match
+const KIOSK_PRODUCTS = MOCK_PRODUCTS.filter(m => !(m.variants && m.variants.length));
+
+const ALL_PRODUCTS: Product[] = KIOSK_PRODUCTS.flatMap(m =>
   m.uoms.map(uom => toCartProduct(m, uom))
 );
 const CATEGORIES = ['ทั้งหมด', 'เครื่องดื่ม', 'อาหาร', 'ขนม', 'ของใช้'];
@@ -171,7 +176,7 @@ export const KioskPOSSaleScreen: React.FC<Props> = ({
     const matchSrch = !search ||
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       p.barcode.includes(search);
-    return matchCat && matchSrch && p.unit === (MOCK_PRODUCTS.find(m => m.id === p.id.split('_')[0])?.unit ?? p.unit);
+    return matchCat && matchSrch && p.unit === (KIOSK_PRODUCTS.find(m => m.id === p.id.split('_')[0])?.unit ?? p.unit);
   });
 
   const cols = effectiveLayout === 'fullgrid' ? 5 : effectiveLayout === 'split' ? 3 : 3;
@@ -180,7 +185,7 @@ export const KioskPOSSaleScreen: React.FC<Props> = ({
   // ── Scan handler ────────────────────────────────────────────────────────────
   const handleScan = useCallback((barcode: string) => {
     if (!barcode.trim()) return;
-    const result = findProductByBarcode(barcode.trim(), MOCK_PRODUCTS);
+    const result = findProductByBarcode(barcode.trim(), KIOSK_PRODUCTS);
     if (result) {
       const p = toCartProduct(result.product, result.uom);
       addItem(p);

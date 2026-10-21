@@ -13,12 +13,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { WebColors } from '../../constants/webColors';
 import { Colors, Space, Radius, Shadow, Font } from '../../design-system/tokens';
-import { MOCK_PRODUCTS } from '../../data/mockProducts';
+import { findProductByBarcode } from '../../data/mockProducts';
 import { useCartStore } from '../../store/cartStore';
 import { useCustomerDisplayStore } from '../../store/customerDisplayStore';
 import { useProductStore } from '../../store/productStore';
 import { useBranchGuard } from '../../hooks/useBranchGuard';
 import { resolveCartPrice } from '../../utils/priceResolver';
+import { toCartProduct, masterDisplayStock } from '../../utils/cartProduct';
 import { useMemberStore } from '../../store/memberStore';
 import { usePromoStore } from '../../store/promoStore';
 import { useWalletStore } from '../../store/walletStore';
@@ -28,7 +29,7 @@ import { usePOSPermissionStore, POSAction, POS_ACTION_LABELS } from '../../store
 import { logAction } from '../../store/auditLogStore';
 import { Product, CartItem, Payment } from '../../types/sale';
 import { Member } from '../../types/member';
-import { ProductUOM } from '../../types/product';
+import { ProductMaster, ProductVariant } from '../../types/product';
 import { WebCustomerDisplayScreen } from './WebCustomerDisplayScreen';
 import { useReceiptStore } from '../../store/receiptStore';
 import { StaffPopup } from '../../components/sale/StaffPopup';
@@ -121,16 +122,7 @@ const DEFAULT_PAY_TYPES: PaymentType[] = [
 const CATS = ['ทั้งหมด', 'เครื่องดื่ม', 'อาหาร', 'ขนม', 'ของใช้'];
 const fmt = (n: number) => n.toLocaleString('th-TH', { minimumFractionDigits: 2 });
 
-// ราคาในตะกร้า resolve ตามสาขาที่ active (ราคาสาขา/ราคากลาง × ratio) ผ่าน resolveCartPrice
-// ถ้าไม่มีเอกสารราคา จะ fallback เป็น uom.salePrice ตามเดิม
-const toCartProduct = (m: typeof MOCK_PRODUCTS[0], uom: ProductUOM, branchId?: string): Product => ({
-  id: `${m.id}_${uom.id}`, code: m.code, barcode: uom.barcodes[0] ?? m.barcode,
-  name: uom.ratio > 1 ? `${m.name} (${uom.unit})` : m.name,
-  category: m.categoryName, price: resolveCartPrice(m, uom, branchId).price, cost: uom.costPrice,
-  vatIncluded: m.vatIncluded, vatRate: m.vatRate, unit: uom.unit,
-  stockQty: Math.floor(m.stockQty / uom.ratio),
-});
-
+// toCartProduct + masterDisplayStock ย้ายไปใช้ helper กลางที่ src/utils/cartProduct.ts
 // Base products computed inside component (reactive to productStore)
 
 // ─── Cart Item Row ─────────────────────────────────────────────────────────────
@@ -1460,19 +1452,26 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
     const trimmed = text.trim();
     if (!trimmed) return;
 
-    // ค้น ALL_BASE ทุก product ทุก UOM (multi-barcode support)
-    const found = (() => {
-      for (const master of masterProducts) {
-        for (const uom of master.uoms) {
-          if (uom.barcodes.includes(trimmed)) {
-            return toCartProduct(master, uom, activeBranchId);
-          }
-        }
-      }
-      return ALL_BASE.find(p => p.barcode === trimmed);
-    })();
+    const result = findProductByBarcode(trimmed, masterProducts);
 
-    if (found) {
+    if (result?.variant) {
+      // barcode ตรงกับ variant → เพิ่มลงบิลได้เลย
+      const prod = toCartProduct(result.product, result.uom, activeBranchId, result.variant);
+      if (result.variant.stockQty > 0) {
+        handleProductTap(prod);
+        setScanFlash(`✅ ${prod.name}`);
+      } else {
+        setScanFlash(`❌ ${prod.name} — สินค้าหมด`);
+      }
+      setSearch('');
+      setTimeout(() => setScanFlash(null), 1600);
+    } else if (result && result.product.variants?.length) {
+      // สแกน barcode หน่วย/หลักของสินค้าที่มี variant → ต้องเลือก variant ก่อน
+      setVariantSelected({});
+      setVariantPickerMaster(result.product);
+      setSearch('');
+    } else if (result) {
+      const found = toCartProduct(result.product, result.uom, activeBranchId);
       if (found.stockQty > 0) {
         handleProductTap(found);
         setScanFlash(`✅ ${found.name}`);
@@ -1486,7 +1485,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
       setSearch(trimmed);
     }
     setTimeout(() => searchRef.current?.focus(), 80);
-  }, [handleProductTap, masterProducts, ALL_BASE, activeBranchId]);
+  }, [handleProductTap, masterProducts, activeBranchId]);
 
   // Per-item overrides
   const [itemDiscounts, setItemDiscounts] = useState<Record<string, number>>({});   // disc per unit
@@ -1567,6 +1566,10 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
   // Modals
   // UOM Picker
   const [uomPickerProduct, setUomPickerProduct] = useState<Product | null>(null);
+
+  // Variant Picker (สินค้าที่มี variant)
+  const [variantPickerMaster, setVariantPickerMaster] = useState<ProductMaster | null>(null);
+  const [variantSelected, setVariantSelected] = useState<Record<string, string>>({});
 
   const [discModal, setDiscModal]       = useState<string | null>(null); // productId
   const [discModalType, setDiscModalType] = useState<'amount'|'percent'>('amount');
@@ -2238,30 +2241,36 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
               </View>
             ) : (
               <View style={s.grid5Wrap}>
-                {filtered.map(p => (
+                {filtered.map(p => {
+                  const baseId = p.id.split('_')[0];
+                  const master = masterProducts.find(m => m.id === baseId);
+                  // สินค้ามี variant → แสดง stock รวมของทุก variant
+                  const dStock = master?.variants?.length ? masterDisplayStock(master) : p.stockQty;
+                  return (
                   <TouchableOpacity
                     key={p.id}
-                    style={[s.productCard, { width: cardWidth }, p.stockQty === 0 && { opacity: 0.4 }]}
+                    style={[s.productCard, { width: cardWidth }, dStock === 0 && { opacity: 0.4 }]}
                     onPress={() => {
-                      if (p.stockQty === 0) return;
-                      const baseId = p.id.split('_')[0];
-                      const master = masterProducts.find(m => m.id === baseId);
-                      if (master && master.uoms.length > 1) {
+                      if (dStock === 0) return;
+                      if (master?.variants?.length) {
+                        setVariantSelected({});
+                        setVariantPickerMaster(master);
+                      } else if (master && master.uoms.length > 1) {
                         setUomPickerProduct(p);
                       } else {
                         handleProductTap(p);
                       }
                     }}
-                    disabled={p.stockQty === 0}
+                    disabled={dStock === 0}
                     activeOpacity={0.75}
                   >
                     <View style={s.productImg}>
                       <Ionicons name="cube-outline" size={28} color={WebColors.primary} />
-                      {p.stockQty === 0 && (
+                      {dStock === 0 && (
                         <View style={s.outBadge}><Text style={s.outBadgeText}>หมด</Text></View>
                       )}
-                      {p.stockQty > 0 && p.stockQty <= 5 && (
-                        <View style={s.lowBadge}><Text style={s.lowBadgeText}>{p.stockQty}</Text></View>
+                      {dStock > 0 && dStock <= 5 && (
+                        <View style={s.lowBadge}><Text style={s.lowBadgeText}>{dStock}</Text></View>
                       )}
                     </View>
                     <View style={s.productInfo}>
@@ -2269,13 +2278,14 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                       <Text style={s.productCat} numberOfLines={1}>{p.category}</Text>
                       <View style={s.productBottom}>
                         <Text style={s.productPrice}>฿{p.price}</Text>
-                        <Text style={[s.productStock, p.stockQty <= 5 && { color: WebColors.danger }]}>
-                          {p.stockQty > 0 ? p.stockQty : ''}
+                        <Text style={[s.productStock, dStock <= 5 && { color: WebColors.danger }]}>
+                          {dStock > 0 ? dStock : ''}
                         </Text>
                       </View>
                     </View>
                   </TouchableOpacity>
-                ))}
+                  );
+                })}
               </View>
             )}
           </ScrollView>
@@ -2286,20 +2296,26 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
             contentContainerStyle={{ gap: 8, paddingBottom: 8 }}
             showsVerticalScrollIndicator={false}
             style={{ flex: 1 }}
-            renderItem={({ item: p }) => (
+            renderItem={({ item: p }) => {
+              const baseId = p.id.split('_')[0];
+              const master = masterProducts.find(m => m.id === baseId);
+              // สินค้ามี variant → แสดง stock รวมของทุก variant
+              const dStock = master?.variants?.length ? masterDisplayStock(master) : p.stockQty;
+              return (
               <TouchableOpacity
-                style={[s.listRow, p.stockQty === 0 && { opacity: 0.4 }]}
+                style={[s.listRow, dStock === 0 && { opacity: 0.4 }]}
                 onPress={() => {
-                  if (p.stockQty === 0) return;
-                  const baseId = p.id.split('_')[0];
-                  const master = masterProducts.find(m => m.id === baseId);
-                  if (master && master.uoms.length > 1) {
+                  if (dStock === 0) return;
+                  if (master?.variants?.length) {
+                    setVariantSelected({});
+                    setVariantPickerMaster(master);
+                  } else if (master && master.uoms.length > 1) {
                     setUomPickerProduct(p);
                   } else {
                     handleProductTap(p);
                   }
                 }}
-                disabled={p.stockQty === 0}
+                disabled={dStock === 0}
               >
                 <View style={s.listIcon}>
                   <Ionicons name="cube-outline" size={20} color={WebColors.primary} />
@@ -2309,11 +2325,12 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                   <Text style={s.listCat}>{p.category} · {p.unit}</Text>
                 </View>
                 <Text style={s.listPrice}>฿{p.price}</Text>
-                <Text style={[s.listStock, p.stockQty <= 5 && { color: WebColors.danger }]}>
-                  {p.stockQty} ชิ้น
+                <Text style={[s.listStock, dStock <= 5 && { color: WebColors.danger }]}>
+                  {dStock} ชิ้น
                 </Text>
               </TouchableOpacity>
-            )}
+              );
+            }}
             ListEmptyComponent={
               <View style={s.empty}>
                 <Ionicons name="search-outline" size={40} color={WebColors.border} />
@@ -3244,6 +3261,98 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
             <TouchableOpacity style={m.cancelBtn} onPress={() => setUomPickerProduct(null)}>
               <Text style={m.cancelText}>ยกเลิก</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Variant Picker Modal ── */}
+      <Modal visible={!!variantPickerMaster} transparent animationType="fade">
+        <View style={m.overlay}>
+          <View style={[m.box, { width: 380 }]}>
+            <Text style={m.title}>เลือกตัวเลือกสินค้า</Text>
+            <Text style={m.sub}>{variantPickerMaster?.name}</Text>
+            {(() => {
+              const master = variantPickerMaster;
+              if (!master) return null;
+              const options = master.options ?? [];
+              const uom = master.uoms[0];
+              if (options.length === 0) {
+                return (
+                  <View style={{ alignItems: 'center', paddingVertical: 16, gap: 8 }}>
+                    <Ionicons name="cube-outline" size={40} color={WebColors.border} />
+                    <Text style={{ fontSize: 12, color: WebColors.textSecondary }}>ไม่มีข้อมูลตัวเลือก</Text>
+                  </View>
+                );
+              }
+              const allChosen = options.every(opt => !!variantSelected[opt.name]);
+              const matched: ProductVariant | undefined = allChosen
+                ? (master.variants ?? []).find(v =>
+                    options.every(opt => v.optionValues[opt.name] === variantSelected[opt.name]))
+                : undefined;
+              const previewPrice = uom
+                ? resolveCartPrice(master, uom, activeBranchId, matched).price
+                : 0;
+              return (
+                <>
+                  {options.map(opt => (
+                    <View key={opt.name} style={{ gap: 8 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: WebColors.textSecondary }}>{opt.name}</Text>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                        {opt.values.map(value => {
+                          const active = variantSelected[opt.name] === value;
+                          const hasVariant = (master.variants ?? []).some(v => v.optionValues[opt.name] === value);
+                          return (
+                            <TouchableOpacity
+                              key={value}
+                              style={{
+                                minHeight: 44, paddingHorizontal: 18, justifyContent: 'center',
+                                borderRadius: 12, borderWidth: 1.5,
+                                borderColor: active ? WebColors.primary : WebColors.border,
+                                backgroundColor: active ? WebColors.primary : WebColors.gray50,
+                                opacity: hasVariant ? 1 : 0.4,
+                              }}
+                              disabled={!hasVariant}
+                              onPress={() => setVariantSelected(sel => ({ ...sel, [opt.name]: value }))}
+                            >
+                              <Text style={{ fontSize: 13, fontWeight: '700', color: active ? '#fff' : WebColors.text }}>{value}</Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  ))}
+                  {allChosen && !matched && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FEF2F2', borderRadius: 12, padding: 12 }}>
+                      <Ionicons name="alert-circle-outline" size={18} color={WebColors.danger} />
+                      <Text style={{ fontSize: 12, color: WebColors.danger, flex: 1 }}>ไม่มีสินค้าตามตัวเลือกที่เลือก</Text>
+                    </View>
+                  )}
+                  {matched && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 }}>
+                      <Text style={{ fontSize: 12, color: WebColors.textSecondary }}>ราคา</Text>
+                      <Text style={{ fontSize: 18, fontWeight: '900', color: WebColors.primary }}>฿{fmt(previewPrice)}</Text>
+                    </View>
+                  )}
+                  <View style={m.actions}>
+                    <TouchableOpacity style={m.cancelBtn} onPress={() => { setVariantPickerMaster(null); setVariantSelected({}); }}>
+                      <Text style={m.cancelText}>ยกเลิก</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[m.okBtn, !matched && m.okBtnDisabled]}
+                      disabled={!matched}
+                      onPress={() => {
+                        if (!uom || !matched) return;
+                        handleProductTap(toCartProduct(master, uom, activeBranchId, matched));
+                        setVariantPickerMaster(null);
+                        setVariantSelected({});
+                      }}
+                    >
+                      <Text style={m.okText}>เพิ่มลงบิล</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              );
+            })()}
           </View>
         </View>
       </Modal>
