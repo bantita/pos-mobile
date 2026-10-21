@@ -17,7 +17,8 @@ import { WebRichMenuScreen } from './WebRichMenuScreen';
 import { WebErpSettingsScreen } from './WebErpSettingsScreen';
 import { WebCrmConfigScreen } from './WebCrmConfigScreen';
 import { WebSyncSettingsScreen } from './WebSyncSettingsScreen';
-import { useReceiptStore } from '../../store/receiptStore';
+import { useReceiptStore, ReceiptBlockId, ReceiptBlockAlign } from '../../store/receiptStore';
+import { getOrderedBlocks, buildReceiptHtml, ReceiptSampleData } from '../../utils/receiptLayout';
 import { WebStoreSettingsSection } from '../../components/settings/WebStoreSettingsSection';
 import { WebUserStaffScreen } from './WebUserStaffScreen';
 import { LookupCheckbox } from '../../components/ui/LookupCheckbox';
@@ -1865,9 +1866,229 @@ const sv = StyleSheet.create({
   chipText: { fontSize: 12, color: WebColors.textSecondary, fontWeight: '600' },
 });
 
+// ─── Receipt layout helpers (shared with preview) ─────────────────────────────
+const BLOCK_LABELS: Record<ReceiptBlockId, string> = {
+  logo:       'โลโก้',
+  shopName:   'ชื่อร้าน',
+  shopAddr:   'ที่อยู่',
+  shopTel:    'เบอร์โทร',
+  taxId:      'เลขผู้เสียภาษี',
+  headerText: 'ข้อความหัวบิล',
+  billInfo:   'ข้อมูลบิล',
+  items:      'รายการสินค้า',
+  totals:     'ยอดรวม',
+  payment:    'การชำระเงิน',
+  footerText: 'ข้อความท้ายบิล',
+  branchInfo: 'สาขา·เครื่อง',
+};
+
+const ALIGN_OPTIONS: { val: ReceiptBlockAlign; label: string }[] = [
+  { val: 'left',   label: 'ซ้าย' },
+  { val: 'center', label: 'กลาง' },
+  { val: 'right',  label: 'ขวา' },
+];
+
+// แทรกเส้นประก่อนกลุ่มเหล่านี้ (ให้ตรงกับ buildReceiptHtml)
+const PREVIEW_DASH_BEFORE = new Set<ReceiptBlockId>(['billInfo', 'items', 'totals', 'footerText']);
+
+interface PreviewFields {
+  shopName: string; shopAddr: string; shopTel: string; shopTaxId: string;
+  shopBranch: string; posRegNo: string; headerText: string; footerText: string;
+  showLogo: boolean; logoPreview: string;
+  mockItems: { name: string; qty: number; price: number }[]; total: number;
+}
+
+/** render เนื้อหาบล็อกเดียวสำหรับ Preview — คืน null ถ้าไม่มีเนื้อหา */
+function renderPreviewBlock(
+  id: ReceiptBlockId,
+  align: ReceiptBlockAlign,
+  f: PreviewFields,
+): React.ReactNode | null {
+  const ta = align as 'left' | 'center' | 'right';
+  switch (id) {
+    case 'logo':
+      return f.showLogo && f.logoPreview ? (
+        <View style={{ alignItems: align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center', marginBottom: 4 }}>
+          <Image source={{ uri: f.logoPreview }} style={{ width: 200, height: 80 }} resizeMode="contain" />
+        </View>
+      ) : null;
+    case 'shopName':
+      return <Text style={{ textAlign: ta, fontWeight: '800', fontSize: 12 }}>{f.shopName || 'ชื่อร้าน'}</Text>;
+    case 'shopAddr':
+      return f.shopAddr ? <Text style={{ textAlign: ta, fontSize: 13, color: WebColors.textSecondary }}>{f.shopAddr}</Text> : null;
+    case 'shopTel':
+      return f.shopTel ? <Text style={{ textAlign: ta, fontSize: 13, color: WebColors.textSecondary }}>โทร: {f.shopTel}</Text> : null;
+    case 'taxId':
+      return f.shopTaxId ? <Text style={{ textAlign: ta, fontSize: 13, color: WebColors.textSecondary }}>เลขผู้เสียภาษี: {f.shopTaxId}</Text> : null;
+    case 'headerText':
+      return f.headerText ? <Text style={{ textAlign: ta, fontSize: 13, fontStyle: 'italic', color: WebColors.textSecondary }}>{f.headerText}</Text> : null;
+    case 'billInfo':
+      return (
+        <View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <Text style={{ fontSize: 13 }}>ใบเสร็จ #20001</Text>
+            <Text style={{ fontSize: 13 }}>{new Date().toLocaleDateString('th-TH')}</Text>
+          </View>
+        </View>
+      );
+    case 'items':
+      return (
+        <View>
+          {f.mockItems.map((item, idx) => (
+            <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <Text style={{ fontSize: 13, flex: 1 }}>{item.name} x{item.qty}</Text>
+              <Text style={{ fontSize: 13 }}>฿{item.price.toFixed(2)}</Text>
+            </View>
+          ))}
+        </View>
+      );
+    case 'totals':
+      return (
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          <Text style={{ fontSize: 12, fontWeight: '700' }}>รวมทั้งสิ้น</Text>
+          <Text style={{ fontSize: 12, fontWeight: '700' }}>฿{f.total.toFixed(2)}</Text>
+        </View>
+      );
+    case 'payment':
+      return (
+        <View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <Text style={{ fontSize: 13, color: WebColors.textSecondary }}>รับเงิน</Text>
+            <Text style={{ fontSize: 13 }}>฿100.00</Text>
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <Text style={{ fontSize: 13, color: WebColors.textSecondary }}>เงินทอน</Text>
+            <Text style={{ fontSize: 13 }}>฿{(100 - f.total).toFixed(2)}</Text>
+          </View>
+        </View>
+      );
+    case 'footerText':
+      return f.footerText ? <Text style={{ textAlign: ta, fontSize: 13, color: WebColors.grayDark }}>{f.footerText}</Text> : null;
+    case 'branchInfo':
+      return (f.shopBranch || f.posRegNo) ? (
+        <Text style={{ textAlign: ta, fontSize: 12, color: WebColors.textSecondary }}>
+          {f.shopBranch}{f.shopBranch && f.posRegNo ? ' | ' : ''}{f.posRegNo}
+        </Text>
+      ) : null;
+    default:
+      return null;
+  }
+}
+
+// ─── ReceiptLayoutBuilder (web-only interactive, mobile read-only note) ────────
+const ReceiptLayoutBuilder: React.FC<{
+  layout: { id: ReceiptBlockId; visible: boolean; align?: ReceiptBlockAlign }[];
+  onReorder: (from: number, to: number) => void;
+  onToggle: (id: ReceiptBlockId) => void;
+  onAlign: (id: ReceiptBlockId, align: ReceiptBlockAlign) => void;
+}> = ({ layout, onReorder, onToggle, onAlign }) => {
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+
+  if (Platform.OS !== 'web') {
+    return (
+      <View style={sv.card}>
+        <Text style={sv.cardTitle}>🧩 จัดวางบิล (ลากเพื่อจัดลำดับ)</Text>
+        <Text style={{ fontSize: 13, color: WebColors.textSecondary, lineHeight: 18 }}>
+          ปรับลำดับ/การแสดงผลของบิลได้บนเวอร์ชันเว็บ
+        </Text>
+      </View>
+    );
+  }
+
+  const dragProps = (index: number) => ({
+    draggable: true,
+    onDragStart: () => setDragIndex(index),
+    onDragOver: (e: any) => { e.preventDefault?.(); },
+    onDrop: (e: any) => {
+      e.preventDefault?.();
+      if (dragIndex !== null && dragIndex !== index) onReorder(dragIndex, index);
+      setDragIndex(null);
+    },
+    onDragEnd: () => setDragIndex(null),
+  });
+
+  return (
+    <View style={sv.card}>
+      <Text style={sv.cardTitle}>🧩 จัดวางบิล (ลากเพื่อจัดลำดับ)</Text>
+      <Text style={{ fontSize: 13, color: WebColors.textSecondary, lineHeight: 18, marginBottom: 4 }}>
+        ลากที่จับเพื่อจัดลำดับ หรือใช้ปุ่มขึ้น/ลง · สลับการแสดงผลและการจัดตำแหน่งของแต่ละบล็อก
+      </Text>
+      {layout.map((block, i) => (
+        <View
+          key={block.id}
+          {...(dragProps(i) as any)}
+          style={{
+            flexDirection: 'row', alignItems: 'center', gap: 8,
+            paddingVertical: 8, paddingHorizontal: 8, borderRadius: 8,
+            borderWidth: 1, borderColor: dragIndex === i ? WebColors.primary : WebColors.border,
+            backgroundColor: block.visible ? WebColors.white : WebColors.gray50,
+            marginBottom: 6,
+          }}
+        >
+          {/* Drag handle */}
+          <Ionicons name="reorder-three-outline" size={18} color={WebColors.textSecondary} />
+
+          {/* Up/Down arrows (guaranteed reorder) */}
+          <View style={{ flexDirection: 'row', gap: 2 }}>
+            <TouchableOpacity
+              onPress={() => onReorder(i, i - 1)}
+              disabled={i === 0}
+              style={{ width: 28, height: 44, alignItems: 'center', justifyContent: 'center', opacity: i === 0 ? 0.3 : 1 }}
+            >
+              <Ionicons name="chevron-up" size={16} color={WebColors.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => onReorder(i, i + 1)}
+              disabled={i === layout.length - 1}
+              style={{ width: 28, height: 44, alignItems: 'center', justifyContent: 'center', opacity: i === layout.length - 1 ? 0.3 : 1 }}
+            >
+              <Ionicons name="chevron-down" size={16} color={WebColors.primary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Name */}
+          <Text style={{ flex: 1, fontSize: 13, fontWeight: '700', color: WebColors.text }}>
+            {BLOCK_LABELS[block.id]}
+          </Text>
+
+          {/* Align chips */}
+          <View style={{ flexDirection: 'row', gap: 4 }}>
+            {ALIGN_OPTIONS.map(opt => {
+              const active = (block.align ?? 'left') === opt.val;
+              return (
+                <TouchableOpacity
+                  key={opt.val}
+                  onPress={() => onAlign(block.id, opt.val)}
+                  style={[
+                    { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1.5, borderColor: WebColors.border, backgroundColor: WebColors.white },
+                    active && { backgroundColor: WebColors.primary, borderColor: WebColors.primary },
+                  ]}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: active ? WebColors.white : WebColors.textSecondary }}>{opt.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Visible switch */}
+          <Switch
+            value={block.visible}
+            onValueChange={() => onToggle(block.id)}
+            trackColor={{ true: WebColors.success, false: WebColors.border }}
+          />
+        </View>
+      ))}
+    </View>
+  );
+};
+
 // ─── SettingReceiptScreen ─────────────────────────────────────────────────────
 const SettingReceiptScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
-  const { config, setConfig } = useReceiptStore();
+  const config        = useReceiptStore(s => s.config);
+  const setConfig     = useReceiptStore(s => s.setConfig);
+  const reorderLayout = useReceiptStore(s => s.reorderLayout);
+  const toggleBlock   = useReceiptStore(s => s.toggleBlock);
+  const setBlockAlign = useReceiptStore(s => s.setBlockAlign);
   const setShopNameStore = useAuthStore(s => s.setShopName);
   const currentLogo      = useAuthStore(s => s.user?.shopLogo);
 
@@ -1892,48 +2113,6 @@ const SettingReceiptScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     setTimeout(() => setSaved(false), 2000);
   };
 
-  const openPrintPopup = () => {
-    if (Platform.OS !== 'web') return;
-    const W = '72mm';
-    const logoHtml = showLogo && logoPreview
-      ? `<img src="${logoPreview}" style="max-width:180px;max-height:72px;display:block;margin:0 auto 4px;" />`
-      : '';
-    const html = `<!DOCTYPE html><html><head>
-      <meta charset="utf-8"/>
-      <style>
-        @page { size: 80mm auto; margin: 4mm; }
-        body { font-family:'TH SarabunPSK','Sarabun',monospace; font-size:13px; width:${W}; margin:0 auto; }
-        .c { text-align:center; } .bold { font-weight:700; } .italic { font-style:italic; }
-        .dash { border-top:1px dashed #000; margin:5px 0; }
-        .row { display:flex; justify-content:space-between; }
-        @media print { body { width:${W}; } }
-      </style></head><body>
-      ${logoHtml}
-      <p class="c bold">${shopName}</p>
-      <p class="c" style="font-size:11px">${shopAddr}</p>
-      <p class="c" style="font-size:11px">โทร: ${shopTel}</p>
-      ${headerText ? `<p class="c italic" style="font-size:11px">${headerText}</p>` : ''}
-      <div class="dash"></div>
-      <div class="row"><span>ใบเสร็จรับเงิน</span><span>#20001</span></div>
-      <div class="row"><span style="font-size:11px">วันที่: ${new Date().toLocaleDateString('th-TH')}</span><span style="font-size:11px">ภาษี: ${shopTaxId}</span></div>
-      <div class="dash"></div>
-      <div class="row"><span>น้ำดื่ม 600ml x2</span><span>฿20.00</span></div>
-      <div class="row"><span>ขนมปัง x1</span><span>฿25.00</span></div>
-      <div class="row"><span>กาแฟ x1</span><span>฿45.00</span></div>
-      <div class="dash"></div>
-      <div class="row bold"><span>รวมทั้งสิ้น</span><span>฿90.00</span></div>
-      <div class="row" style="font-size:11px"><span>รับเงิน</span><span>฿100.00</span></div>
-      <div class="row" style="font-size:11px"><span>เงินทอน</span><span>฿10.00</span></div>
-      <div class="dash"></div>
-      <p class="c" style="font-size:12px">${footerText}</p>
-      <p class="c" style="font-size:10px">สาขา: ${shopBranch} | เครื่อง: ${posRegNo}</p>
-    </body></html>`;
-    const w = (window as any).open('', '_blank', 'width=420,height=600');
-    if (!w) { alert('⚠️ กรุณาอนุญาต popup แล้วลองใหม่'); return; }
-    w.document.write(html);
-    w.document.close();
-  };
-
   // ── Mock items for preview ────────────────────────────────────────────────
   const mockItems = [
     { name: 'น้ำดื่ม 600ml', qty: 2, price: 20 },
@@ -1941,6 +2120,31 @@ const SettingReceiptScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     { name: 'กาแฟ',          qty: 1, price: 45 },
   ];
   const total = mockItems.reduce((s, i) => s + i.price, 0);
+
+  // ── Config ที่ใช้ render จริง: ฟิลด์ร้านจาก editor state (เห็นผลทันที) + layout จาก store ──
+  const liveConfig = {
+    ...config,
+    shopName, shopAddr, shopTel, shopTaxId, shopBranch, posRegNo,
+    headerText, footerText, showLogo, headerLogo: logoPreview,
+  };
+  const sampleData: ReceiptSampleData = {
+    billNo: '20001',
+    date: new Date().toLocaleDateString('th-TH'),
+    items: mockItems,
+    total,
+    received: 100,
+    change: 100 - total,
+  };
+  const orderedBlocks = getOrderedBlocks(liveConfig);
+
+  const openPrintPopup = () => {
+    if (Platform.OS !== 'web') return;
+    const html = buildReceiptHtml(liveConfig, sampleData);
+    const w = (window as any).open('', '_blank', 'width=420,height=600');
+    if (!w) { alert('⚠️ กรุณาอนุญาต popup แล้วลองใหม่'); return; }
+    w.document.write(html);
+    w.document.close();
+  };
 
   return (
     <View style={sv.root}>
@@ -2059,65 +2263,44 @@ const SettingReceiptScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           </View>
         </View>
 
+        {/* Section: จัดวางบิล (ลากเพื่อจัดลำดับ) */}
+        <ReceiptLayoutBuilder
+          layout={config.layout}
+          onReorder={reorderLayout}
+          onToggle={toggleBlock}
+          onAlign={setBlockAlign}
+        />
+
         {/* Section 4: ตัวอย่างบิล (Preview) */}
         <View style={sv.card}>
           <Text style={sv.cardTitle}>🧾 ตัวอย่างบิล (Preview — 80mm)</Text>
           <View style={{ alignItems: 'center' }}>
             <View style={{ width: 280, backgroundColor: WebColors.white, borderWidth: 1, borderColor: WebColors.gray300, borderRadius: 8, padding: 12, gap: 2 }}>
-              {/* Logo */}
-              {showLogo && logoPreview ? (
-                <View style={{ alignItems: 'center', marginBottom: 4 }}>
-                  <Image source={{ uri: logoPreview }} style={{ width: 200, height: 80 }} resizeMode="contain" />
-                </View>
-              ) : null}
-              {/* Shop name */}
-              <Text style={{ textAlign: 'center', fontWeight: '800', fontSize: 12 }}>{shopName || 'ชื่อร้าน'}</Text>
-              {/* Address */}
-              {shopAddr ? <Text style={{ textAlign: 'center', fontSize: 13, color: WebColors.textSecondary }}>{shopAddr}</Text> : null}
-              {/* Tel */}
-              {shopTel ? <Text style={{ textAlign: 'center', fontSize: 13, color: WebColors.textSecondary }}>โทร: {shopTel}</Text> : null}
-              {/* Header text */}
-              {headerText ? <Text style={{ textAlign: 'center', fontSize: 13, fontStyle: 'italic', color: WebColors.textSecondary }}>{headerText}</Text> : null}
-              {/* Dashed line */}
-              <View style={{ borderTopWidth: 1, borderStyle: 'dashed', borderColor: WebColors.textSecondary, marginVertical: 4 }} />
-              {/* Bill info */}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ fontSize: 13 }}>ใบเสร็จ #20001</Text>
-                <Text style={{ fontSize: 13 }}>{new Date().toLocaleDateString('th-TH')}</Text>
-              </View>
-              {/* Dashed line */}
-              <View style={{ borderTopWidth: 1, borderStyle: 'dashed', borderColor: WebColors.textSecondary, marginVertical: 4 }} />
-              {/* Items */}
-              {mockItems.map((item, idx) => (
-                <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text style={{ fontSize: 13, flex: 1 }}>{item.name} x{item.qty}</Text>
-                  <Text style={{ fontSize: 13 }}>฿{item.price.toFixed(2)}</Text>
-                </View>
-              ))}
-              {/* Dashed line */}
-              <View style={{ borderTopWidth: 1, borderStyle: 'dashed', borderColor: WebColors.textSecondary, marginVertical: 4 }} />
-              {/* Totals */}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ fontSize: 12, fontWeight: '700' }}>รวมทั้งสิ้น</Text>
-                <Text style={{ fontSize: 12, fontWeight: '700' }}>฿{total.toFixed(2)}</Text>
-              </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ fontSize: 13, color: WebColors.textSecondary }}>รับเงิน</Text>
-                <Text style={{ fontSize: 13 }}>฿100.00</Text>
-              </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ fontSize: 13, color: WebColors.textSecondary }}>เงินทอน</Text>
-                <Text style={{ fontSize: 13 }}>฿{(100 - total).toFixed(2)}</Text>
-              </View>
-              {/* Dashed line */}
-              <View style={{ borderTopWidth: 1, borderStyle: 'dashed', borderColor: WebColors.textSecondary, marginVertical: 4 }} />
-              {/* Footer */}
-              <Text style={{ textAlign: 'center', fontSize: 13, color: WebColors.grayDark }}>{footerText}</Text>
-              {(shopBranch || posRegNo) ? (
-                <Text style={{ textAlign: 'center', fontSize: 12, color: WebColors.textSecondary }}>
-                  {shopBranch}{shopBranch && posRegNo ? ' | ' : ''}{posRegNo}
+              {orderedBlocks.length === 0 ? (
+                <Text style={{ textAlign: 'center', fontSize: 13, color: WebColors.textSecondary }}>
+                  ไม่มีข้อมูล — เปิดการแสดงผลของบล็อกอย่างน้อย 1 รายการ
                 </Text>
-              ) : null}
+              ) : (
+                (() => {
+                  const nodes: React.ReactNode[] = [];
+                  let rendered = false;
+                  orderedBlocks.forEach((block, idx) => {
+                    const content = renderPreviewBlock(block.id, block.align ?? 'left', {
+                      shopName, shopAddr, shopTel, shopTaxId, shopBranch, posRegNo,
+                      headerText, footerText, showLogo, logoPreview, mockItems, total,
+                    });
+                    if (content === null) return;
+                    if (rendered && PREVIEW_DASH_BEFORE.has(block.id)) {
+                      nodes.push(
+                        <View key={`dash-${idx}`} style={{ borderTopWidth: 1, borderStyle: 'dashed', borderColor: WebColors.textSecondary, marginVertical: 4 }} />
+                      );
+                    }
+                    nodes.push(<View key={block.id}>{content}</View>);
+                    rendered = true;
+                  });
+                  return nodes;
+                })()
+              )}
             </View>
           </View>
         </View>
