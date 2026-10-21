@@ -1,0 +1,7 @@
+{
+  "task_id": "task-vmat",
+  "task_description": "Add a backward-compatible product variant matrix (TASK 1), optional ProductMaster.supplierId/supplierName with a supplier picker (TASK 2), and a categoryStore mirroring brandStore wired across all category pickers (TASK 3), to the Expo RN-Web POS CRM at d:\\pos-mobile\\.worktrees\\vmat. Honor the design-system (modern-red #E23744 from constants, real tokens/components, Thai UI, loading/error/empty, no any).",
+  "status": "completed",
+  "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003"],
+  "blocked_reason": null
+}

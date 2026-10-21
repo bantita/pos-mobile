@@ -1,0 +1,30 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    {
+      "id": "N-1",
+      "severity": "NIT",
+      "title": "Inaccurate claim that handleBarcodeSubmit computes master in scope",
+      "location": "design.md — M-1 resolution; WebPOSScreen.tsx handleBarcodeSubmit (~line 1459)",
+      "detail": "Only handleProductTap and the two grid onPress blocks (~2247, ~2294) compute baseId/master. handleBarcodeSubmit runs its own master/uom loop. Non-load-bearing because the barcode path is refactored to shared findProductByBarcode (returns variant?).",
+      "fix": "Reword: grid branches compute master in scope; handleBarcodeSubmit is refactored to findProductByBarcode which returns { product, uom, variant? }."
+    },
+    {
+      "id": "N-2",
+      "severity": "NIT",
+      "title": "Kiosk barcode-exclusion arg not stated explicitly",
+      "location": "design.md — Kiosk section; KioskPOSSaleScreen.tsx (~line 183)",
+      "detail": "Kiosk calls findProductByBarcode(barcode, MOCK_PRODUCTS) with the full list. To exclude variant products from barcode match, the filtered array must be passed in.",
+      "fix": "Pass the same !(m.variants && m.variants.length) filtered array into findProductByBarcode and build ALL_PRODUCTS from it."
+    },
+    {
+      "id": "N-3",
+      "severity": "NIT",
+      "title": "Kiosk retains its own local 2-arg toCartProduct",
+      "location": "design.md — OUT of scope; KioskPOSSaleScreen.tsx (~line 35)",
+      "detail": "Kiosk has a local toCartProduct(master, uom) not migrated to the shared helper. Correct given kiosk is out of scope for variants, but not stated.",
+      "fix": "Add a line: kiosk keeps its existing local toCartProduct and is not migrated."
+    }
+  ],
+  "reviewDoc": "d:\\pos-mobile\\.agents\\tasks\\task-vmat\\design-review.md"
+}
