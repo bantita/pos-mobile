@@ -172,7 +172,12 @@ function borderCss(el: ReceiptElement): string {
   if (!needsBorder) return '';
   const w = s.borderWidthMm > 0 ? s.borderWidthMm : 0.3;
   const color = s.color || '#000';
-  return `border:${w}mm solid ${color};`;
+  const style = s.lineStyle || 'solid';
+  // 'line' = เส้นคั่นแนวนอน → ใช้ border-top อย่างเดียว; อื่น ๆ = กรอบรอบ
+  if (el.type === 'line') {
+    return `border-top:${w}mm ${style} ${color};`;
+  }
+  return `border:${w}mm ${style} ${color};`;
 }
 
 /** HTML ของรายการสินค้า (5 คอลัมน์ ตรงกับ thermal เดิม) */

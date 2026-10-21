@@ -304,6 +304,11 @@ export const ReceiptCanvas: React.FC<ReceiptCanvasProps> = ({
         const selected = isEdit && selectedId === el.id;
         const needsBorder = el.style.border || el.type === 'box' || el.type === 'line';
         const borderPx = Math.max(1, el.style.borderWidthMm * k);
+        const lineStyle = el.style.lineStyle || 'solid';
+        // RN borderStyle รองรับ solid/dashed/dotted; 'double' map เป็น solid หนาขึ้นบน preview
+        const rnBorderStyle = lineStyle === 'double' ? 'solid' : lineStyle;
+        const bColor = needsBorder ? el.style.color || WebColors.text : 'transparent';
+        const isLine = el.type === 'line';
         return (
           <View
             key={el.id}
@@ -315,8 +320,13 @@ export const ReceiptCanvas: React.FC<ReceiptCanvasProps> = ({
                 top: topPx,
                 width: wPx,
                 height: hPx,
-                borderWidth: needsBorder ? borderPx : 0,
-                borderColor: needsBorder ? el.style.color || WebColors.text : 'transparent',
+                borderStyle: rnBorderStyle as any,
+                // 'line' = เส้นคั่น → ขอบบนอย่างเดียว; อื่น ๆ = กรอบรอบ
+                borderTopWidth: needsBorder ? (isLine ? borderPx : borderPx) : 0,
+                borderRightWidth: needsBorder && !isLine ? borderPx : 0,
+                borderBottomWidth: needsBorder && !isLine ? borderPx : 0,
+                borderLeftWidth: needsBorder && !isLine ? borderPx : 0,
+                borderColor: bColor,
               },
               selected ? cs.elementSelected : null,
             ]}

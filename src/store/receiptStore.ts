@@ -66,6 +66,9 @@ export type ReceiptFieldKey =
 
 export type ElementAlign = 'left' | 'center' | 'right';
 
+/** สไตล์เส้น/ขอบ — ใช้กับ type 'line'/'box' และกรอบของ element อื่น */
+export type LineStyle = 'solid' | 'dashed' | 'dotted' | 'double';
+
 export interface ReceiptElementStyle {
   fontSize: number;             // px @96dpi ที่ zoom=1
   bold: boolean;
@@ -73,6 +76,7 @@ export interface ReceiptElementStyle {
   align: ElementAlign;
   border: boolean;              // กรอบรอบ element (text/box/field)
   borderWidthMm: number;        // ใช้เมื่อ border=true หรือ type line/box
+  lineStyle?: LineStyle;        // สไตล์เส้น/ขอบ (default 'solid')
   color?: string;               // default token; UI เลือกจาก token เท่านั้น
 }
 

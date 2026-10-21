@@ -25,6 +25,7 @@ import {
   ReceiptFieldKey,
   ReceiptTemplate,
   ElementAlign,
+  LineStyle,
 } from '../../store/receiptStore';
 
 // ─── ป้ายกำกับภาษาไทย ──────────────────────────────────────────────────────────
@@ -90,6 +91,14 @@ const ADD_ELEMENTS: { label: string; type: ReceiptElementType; field?: ReceiptFi
   { label: 'กรอบ', type: 'box' },
   { label: 'โลโก้', type: 'image', field: 'logo' },
   { label: 'QR', type: 'qr', field: 'qr' },
+];
+
+// สไตล์เส้น/กรอบ — ไว้คาด/แบ่งข้อมูล
+const LINE_STYLES: { val: LineStyle; label: string }[] = [
+  { val: 'solid',  label: 'ทึบ' },
+  { val: 'dashed', label: 'ประ' },
+  { val: 'dotted', label: 'จุด' },
+  { val: 'double', label: 'คู่' },
 ];
 
 // ─── ค่าคงที่/validation (design §6) ────────────────────────────────────────────
@@ -524,6 +533,27 @@ export const WebReceiptDesignerScreen: React.FC = () => {
                   />
                 </View>
               </View>
+
+              {/* line/border style — แสดงเมื่อเป็นเส้น/กรอบ หรือเปิดกรอบ */}
+              {(selected.type === 'line' || selected.type === 'box' || selected.style.border) && (
+                <View style={s.numField}>
+                  <Text style={s.numLabel}>รูปแบบเส้น</Text>
+                  <View style={s.toolGroup}>
+                    {LINE_STYLES.map((ls) => {
+                      const active = (selected.style.lineStyle || 'solid') === ls.val;
+                      return (
+                        <TouchableOpacity
+                          key={ls.val}
+                          style={[s.segBtn, active && s.segBtnActive]}
+                          onPress={() => patchStyle({ lineStyle: ls.val })}
+                        >
+                          <Text style={[s.segText, active && s.segTextActive]}>{ls.label}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
 
               {/* actions */}
               <View style={s.rowBetween}>
