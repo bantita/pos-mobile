@@ -1,67 +1,176 @@
-# Implementation Plan — Four Deferred Features (worktree: d:\pos-mobile\.worktrees\deferred)
+# Implementation Plan — Receipt Layout Builder (drag-to-reorder)
 
-All paths are relative to the worktree root `d:\pos-mobile\.worktrees\deferred`. Honor the design-system steering: web screens use `src/constants/webColors.ts` (WebColors.*) and match sibling web screens (e.g. WebBranchManageScreen); mobile/shared screens use `Colors/Typography/Spacing` tokens. All user-facing text in Thai. TypeScript, no `any` abuse. Each new store follows the `productStore`/`branchStore` house style (zustand + persist via `persistStorage`) and calls `logAction(module, action, description, metadata?)` from `src/store/auditLogStore.ts` on mutations.
+Worktree: `d:\pos-mobile\.worktrees\receipt` (branch `feat/receipt-builder`).
+Do NOT `cd`; use `git -C` and absolute paths.
 
-Build/verify commands (from package.json): `npm run lint` = `tsc --noEmit`; `npm test` = `vitest run`. Baseline (do not regress): 13 pre-existing tsc errors in 6 files; 24 vitest tests pass, 3 suites fail to load (pre-existing). New code must add zero new tsc errors and zero new test failures.
+## Context discovered during exploration
 
-Key registration facts discovered:
-- Web routes are switch cases in `src/navigation/WebNavigator.tsx` (`renderContent`), with a Thai label in its local `PAGE_NAMES`, access gated via `canAccess(user.role, routeAccessKey)` (routes not in `rolePermissions` fall back to `'settings'` — see the `['documents','licenses','branches']` pattern).
-- Sidebar menu entries live in `NAV_ITEMS` in `src/components/web/WebSidebar.tsx`.
-- `canAccess` maps unknown routes 1:1 to a screen key; admin always passes. New back-office routes can reuse the `products`/`settings` access key.
+- **Store**: `src/store/receiptStore.ts` is plain zustand (no persist). Other stores use the house
+  persist pattern: `persist(() => ({...}), { name: 'pos-xxx', storage: createJSONStorage(() => persistStorage) })`
+  with `persistStorage` from `src/store/persistStorage.ts` (web=localStorage, mobile=AsyncStorage).
+- **Preview (Section 4)** and **print (`openPrintPopup`, Section 5)** both live in the SAME component
+  `SettingReceiptScreen` in `src/screens/web/WebSimpleScreens.tsx` (component starts ~line 1867;
+  `openPrintPopup` ~1891–1952; Section 4 preview ~2062–2123; Section 5 ~2125–2142; save ~2145–2152).
+  This is the ONLY real receipt layout render path.
+- **`ReceiptScreen.tsx`** (`src/screens/sale/ReceiptScreen.tsx`) is a native on-screen receipt with a
+  *simulated* print (setTimeout + Alert); it emits NO HTML and does not read `config.layout`. The task
+  brief's "ReceiptScreen print HTML" does not exist there — the actual print HTML is `openPrintPopup`.
+  Decision: PRINT PARITY is satisfied by driving `openPrintPopup` from the shared helper. `ReceiptScreen.tsx`
+  is left out of scope (changing its fixed native layout is not required and risks regressions); note this
+  in findings. If reviewers insist, a follow-up can refactor ReceiptScreen, but it is not a print HTML path.
+- **Current block order** (both preview and print): logo → shopName → shopAddr → shopTel → headerText →
+  (dash) → billInfo (bill#+date; print also shows taxId on that row) → (dash) → items → (dash) →
+  totals (รวมทั้งสิ้น) → payment (รับเงิน/เงินทอน) → (dash) → footerText → branchInfo (สาขา|เครื่อง).
+  NOTE: there is no standalone `taxId` block in the preview today; in print it is part of the billInfo row.
+  Decision for the `taxId` block id: render it as its own line `เลขผู้เสียภาษี: {shopTaxId}` placed by
+  default right after `billInfo` in the DEFAULT layout, `visible: true`. This keeps all 12 required ids real
+  and backward-compatible (taxId value still shows). Keep the taxId text inside the billInfo row too? No —
+  avoid duplication: remove taxId from the billInfo row and give it its own block so alignment/visibility work.
+- **Tests**: vitest, `environment: 'happy-dom'`, alias `@`→`./src`, command `npm test` (= `vitest run`).
+  Store tests mock `react-native` (`Platform.OS:'web'`) and `@react-native-async-storage/async-storage`,
+  then assert persist via `useStore.persist.getOptions().name`. happy-dom provides `localStorage`.
+- **Typecheck**: `npx tsc --noEmit` (script `npm run lint`). Baseline = 13 pre-existing errors, 48 tests pass,
+  3 pre-existing suite-load failures. Bar: NO NEW tsc errors in touched files; no test regressions.
+- **Tokens**: web screens use `WebColors` from `src/constants/webColors.ts`. Never hardcode colors.
+- zustand `^4.5.2` — persist + `partialize`/`merge`/`version`/`migrate` all available.
+
+## Block id → content mapping (fixed)
+
+`logo, shopName, shopAddr, shopTel, taxId, headerText, billInfo, items, totals, payment, footerText, branchInfo`
+
+Dashed separators are NOT blocks; render a dash between logical groups derived from the ordered visible
+list (see step 3 for the rule).
 
 ---
 
-- [ ] 1. Create `supplierStore` (Task 1 — Supplier Master).
-      Follow `src/store/branchStore.ts` house style: zustand + persist, name `'pos-suppliers'`, `storage: createJSONStorage(() => persistStorage)`, seeded from `MOCK_SUPPLIERS` (`src/data/mockInventory.ts`). Export function API: `getSuppliers()`, `getSupplier(id)`, `addSupplier(data)`, `updateSupplier(id, updates)`, `deleteSupplier(id)`. Each mutation calls `logAction('ผู้จำหน่าย', 'เพิ่ม'|'แก้ไข'|'ลบ', <desc>, { supplierId })`. Type `Supplier` already exists in `src/types/inventory.ts`.
-      Files: `src/store/supplierStore.ts`
-      Verify: `npm run lint` — no new tsc errors.
+- [ ] 1. Add the layout data model + persist + setters to the receipt store.
+      Add `ReceiptBlockId` union (the 12 ids above), `ReceiptBlockAlign = 'left'|'center'|'right'`,
+      and `ReceiptBlock = { id: ReceiptBlockId; visible: boolean; align?: ReceiptBlockAlign }`. Add
+      `layout: ReceiptBlock[]` to `ReceiptConfig`. Export `DEFAULT_LAYOUT: ReceiptBlock[]` in the CURRENT
+      order, all `visible: true`, sensible default aligns (logo/shopName/shopAddr/shopTel/taxId/headerText/
+      footerText/branchInfo = 'center'; billInfo/items/totals/payment = 'left'). Convert `useReceiptStore`
+      to `create<ReceiptStoreState>()(persist(() => ({ config: DEFAULT }), { name: 'pos-receipt',
+      storage: createJSONStorage(() => persistStorage), version: 1, partialize, merge/migrate }))`. Keep
+      `setConfig(partial)` working (merge into `config`). Add setters implemented via `useReceiptStore.setState`
+      as functions on the store OR exported helpers (match sibling house style — functions are fine):
+      `setLayout(layout)`, `reorderLayout(fromIndex,toIndex)`, `toggleBlock(id)`, `setBlockAlign(id,align)`.
+      Migration/merge: write a `mergeLayout(saved?: ReceiptBlock[]): ReceiptBlock[]` that starts from
+      `DEFAULT_LAYOUT`, applies saved order/visible/align for ids present in `saved`, drops unknown ids, and
+      appends any DEFAULT ids missing from `saved` (so an old persisted `pos-receipt` without `layout`, or a
+      future id, still yields a complete valid layout). Use it in persist `merge` (merge persisted state into
+      current, then `config.layout = mergeLayout(persisted?.config?.layout)`), so `layout` is always complete.
+      Files: `src/store/receiptStore.ts`
+      Verify: `cd` is denied — run from repo: `npm test` after step 2 adds the test. For this step alone,
+      run `npx tsc --noEmit` from `d:\pos-mobile\.worktrees\receipt` and confirm no NEW errors in `receiptStore.ts`.
 
-- [ ] 2. Build `WebSupplierScreen` and register it (Task 1).
-      CRUD management screen under `src/screens/web/WebSupplierScreen.tsx` modeled on `WebBranchManageScreen.tsx` (WebColors, card grid, inline form, `window.confirm` on delete). Fields: name (required), taxId, phone, contactName. Loading/error/empty states in Thai ("ยังไม่มีผู้จำหน่าย"). Register in `WebNavigator.tsx`: add `case 'suppliers': return <WebSupplierScreen />;`, add `suppliers: 'ผู้จำหน่าย'` to `PAGE_NAMES`, and add to `WebSidebar.tsx` `NAV_ITEMS` (`route: 'suppliers'`, icon `'business-outline'`, label `'ผู้จำหน่าย'`). Access: reuse `'products'` key (map in `navigate`/`routeAccessKey` the same way `branches` reuses `settings` — add `'suppliers'` to that reuse list or map it to `products`).
-      Files: `src/screens/web/WebSupplierScreen.tsx`, `src/navigation/WebNavigator.tsx`, `src/components/web/WebSidebar.tsx`
-      Verify: `npm run lint`; manual: reviewer opens สินค้า-area → ผู้จำหน่าย, adds/edits/deletes a supplier, reloads page, confirms persistence.
+- [ ] 2. Create a shared layout-ordering helper used by preview AND print.
+      New file `src/utils/receiptLayout.ts`. Export:
+      (a) `getOrderedBlocks(config: ReceiptConfig): ReceiptBlock[]` — returns `config.layout` filtered to
+      `visible !== false`, in array order (uses `mergeLayout` defensively if `layout` missing).
+      (b) a data descriptor for each visible block so BOTH renderers stay in sync — e.g.
+      `type ReceiptBlockContent = { id: ReceiptBlockId; align: ReceiptBlockAlign; lines: ... }` OR, simplest
+      and least divergent, build the PRINT HTML here: `buildReceiptHtml(config, data)` returning the full
+      popup HTML string by iterating `getOrderedBlocks`, emitting each block's markup with
+      `text-align:${align}`, and inserting a dashed `<div class="dash">` between the group boundaries
+      (after the header group ends, around billInfo/taxId, around items, around totals/payment — derive the
+      dash rule from which block ids are present rather than hardcoding indices: insert a dash before
+      `billInfo`, before `items`, before `totals`, and before `footerText` IF the preceding visible block
+      exists). `data` carries the mock sample (shop fields come from config; items/amounts are the Section-5
+      mock) so the helper has no React/DOM deps and is unit-testable. Keep the shop-field/logo values read
+      from `config`. All Thai text preserved exactly as today.
+      Files: `src/utils/receiptLayout.ts`
+      Verify: covered by step 8 test; `npx tsc --noEmit` shows no new errors in this file.
 
-- [ ] 3. Point the stock-receive supplier picker at `supplierStore` (Task 1).
-      In `src/screens/inventory/StockDocFormScreen.tsx` the receive flow already uses a `SimplePickerModal` fed by `MOCK_SUPPLIERS` (it is NOT free-text). Replace the `MOCK_SUPPLIERS` import/usages (`supplierName` lookup ~line 221 and picker items ~line 690) with `supplierStore.getSuppliers()` so newly-created suppliers appear. Keep the `'— ไม่ระบุ —'` option and all existing stock-doc save behavior (`supplierId`/`supplierName` on receive only). Note decision in findings: do NOT add `supplierId` to `ProductMaster` (ProductMaster has no supplier field today; linkage stays supplier↔stock-doc to keep risk low).
-      Files: `src/screens/inventory/StockDocFormScreen.tsx`
-      Verify: `npm run lint`; manual: create a supplier in step 2, open รับสินค้า form, confirm it appears in the picker and saves.
-
-- [ ] 4. Create `brandStore` (Task 2 — Brand CRUD).
-      `productStore` holds only products (no brands), so create a dedicated store like `branchStore`: zustand + persist, name `'pos-brands'`, seeded from `MOCK_BRANDS` (`src/data/mockProducts.ts`). API: `getBrands()`, `getBrand(id)`, `addBrand(data)`, `updateBrand(id, updates)`, `deleteBrand(id)` with `logAction('แบรนด์', ...)`. Add a helper `getBrandProductCount(brandId)` that counts `useProductStore.getState().products` with matching `brandId` (derive productCount live). `Brand` type exists in `src/types/product.ts`.
-      Files: `src/store/brandStore.ts`
-      Verify: `npm run lint` — no new tsc errors.
-
-- [ ] 5. Build `WebBrandScreen` and register it (Task 2).
-      `src/screens/web/WebBrandScreen.tsx` modeled on `WebBranchManageScreen.tsx`: CRUD, Thai labels, loading/error/empty ("ยังไม่มีแบรนด์"), `window.confirm` on delete, show live productCount via `brandStore.getBrandProductCount`. Register in `WebNavigator.tsx` (`case 'brands'`, `PAGE_NAMES.brands = 'แบรนด์'`, access key `'products'`) and `WebSidebar.tsx` `NAV_ITEMS` (icon `'ribbon-outline'`, label `'แบรนด์'`).
-      Files: `src/screens/web/WebBrandScreen.tsx`, `src/navigation/WebNavigator.tsx`, `src/components/web/WebSidebar.tsx`
-      Verify: `npm run lint`; manual: add a brand, confirm it persists after reload.
-
-- [ ] 6. Make brand pickers read from `brandStore` (Task 2).
-      Mobile `src/screens/product/AddEditProductScreen.tsx`: replace `MOCK_BRANDS` in the brand `PickerModal` items (~line 541) with `brandStore.getBrands().filter(b => b.status === 'active')`. Web `src/screens/web/WebProductScreen.tsx` product modal brand dropdown (~lines 672–686): replace `MOCK_BRANDS` reads with `brandStore.getBrands()`; also make the "มาสเตอร์ › ยี่ห้อ" tab (local `brands` state seeded from `MOCK_BRANDS`, handlers `handleAddBrand`/`handleSaveEditBrand`/`handleDeleteBrand`/`handleToggleBrandStatus` ~lines 922–959) read/write `brandStore` so edits persist and reflect in the picker. Keep product save (`brandId`/`brandName`) working. Pick ONE source of truth: the store.
-      Files: `src/screens/product/AddEditProductScreen.tsx`, `src/screens/web/WebProductScreen.tsx`
-      Verify: `npm run lint`; manual: add a brand in WebBrandScreen, confirm it appears in both product brand pickers and a product saves with it.
-
-- [ ] 7. Persist mobile product add/edit (Task 3 — Mobile Product Persist).
-      In `src/navigation/ProductNavigator.tsx`, `AddEditProductScreen.onSaved(saved: ProductMaster)` currently only calls `navigation.goBack()`. Wire it to persist: `AddProduct` → `useProductStore.getState().addProduct(saved)` then `goBack()`; `EditProduct` → `useProductStore.getState().updateProduct(saved.id, saved)` then `goBack()`. `onSaved` already receives the built `ProductMaster` (see `handleSave` in AddEditProductScreen). Persist in exactly ONE place (the navigator), do not add a second persist inside the screen. Leave the web flow (WebProductScreen) untouched.
-      Files: `src/navigation/ProductNavigator.tsx`
-      Verify: `npm run lint`; manual: on mobile/web-mobile viewport, add a product via ProductList → AddProduct, confirm it appears in the list after returning; edit it, confirm changes persist.
-
-- [ ] 8. Build the web Sync settings screen bound to `syncStore` (Task 4).
-      Create `src/screens/web/WebSyncSettingsScreen.tsx` bound to `useSyncStore` (`src/store/syncStore.ts`), mirroring `src/screens/sync/SyncQueueScreen.tsx` (already store-bound): live stats from `getStats()` (pending/syncing/success/failed/conflict/total), list of queued+failed items, a `'ซิงค์ทันที'` button calling `startSync()` (and optionally `retryAllFailed()` when failures exist), last-synced time from `lastSyncAt`, and when `getStats().conflict > 0` a button/section that opens conflict resolution reusing `ConflictResolutionScreen` (props `{ onBack, onResolved }`) or an inline resolver calling `resolveConflict(id, resolution)`. Thai labels, loading/empty/error states. Stays mock — keep `FEATURE_FLAGS.MOCK_SYNC` behavior; no real server. Use webColors tokens / match sibling web screens.
-      Files: `src/screens/web/WebSyncSettingsScreen.tsx`
-      Verify: `npm run lint` — no new tsc errors.
-
-- [ ] 9. Replace the Sync placeholder in web settings (Task 4).
-      In `src/screens/web/WebSimpleScreens.tsx`, the settings `subView === 'sync'` currently renders a `SimpleSubPage` placeholder (titled "Sync Monitor"). Replace it with `<WebSyncSettingsScreen onBack={() => setSubView(null)} />` (import it). Keep the existing settings tile (`key: 'sync'`) that routes to it.
+- [ ] 3. Refactor Section 4 preview to render from `getOrderedBlocks(config)`.
+      In `SettingReceiptScreen`, replace the hardcoded preview JSX (~2062–2123) with a map over
+      `getOrderedBlocks(config)`; for each block render the existing visual content (unchanged fonts/sizes/
+      WebColors), applying `textAlign: block.align` to the block's `Text`/row container. Skip `visible:false`
+      (already filtered). Keep dashed separators by the same group rule as the helper (before billInfo/items/
+      totals/footerText when a preceding visible block exists) so preview and print match. The preview must
+      read from the live store `config.layout` (so it reflects builder edits immediately) — use
+      `useReceiptStore(s => s.config)` or the existing `config`. Logo block still gated by `showLogo && logoPreview`;
+      taxId block renders `เลขผู้เสียภาษี: {shopTaxId}`; billInfo renders bill#+date (no taxId now); payment
+      renders รับเงิน/เงินทอน; branchInfo renders `{shopBranch} | {posRegNo}`.
       Files: `src/screens/web/WebSimpleScreens.tsx`
-      Verify: `npm run lint`; manual: ตั้งค่า → Sync Monitor tile opens the real screen; press ซิงค์ทันที and watch pending→syncing→success/conflict; when a conflict exists, open the resolver.
+      Verify: `npm test` green; `npx tsc --noEmit` no new errors; manual: preview still shows all blocks.
 
-- [ ] 10. Full integration verification.
-      Run the full build and test suite; confirm no regressions vs baseline.
-      Files: (none)
-      Verify: `npm run lint` (≤ 13 pre-existing tsc errors, none new) and `npm test` (≥ 24 tests pass, no new failures).
+- [ ] 4. Point `openPrintPopup` at the shared helper (PRINT PARITY).
+      Replace the inline `html` template in `openPrintPopup` (~1898–1949) with
+      `const html = buildReceiptHtml(config, mock)` from `src/utils/receiptLayout.ts`, passing the current
+      shop fields from the editor state (or read from `config` after save) and the Section-5 mock items/amounts.
+      Keep the `@page 80mm`, font-family, and popup-open logic. Remove the now-duplicated taxId-in-billInfo row
+      (taxId is its own ordered block). Keep the `alert('⚠️ กรุณาอนุญาต popup...')` guard.
+      Files: `src/screens/web/WebSimpleScreens.tsx`
+      Verify: `npx tsc --noEmit` no new errors; manual: Capture popup renders blocks in configured order.
+
+- [ ] 5. Decide the single source of field values for preview+print and wire save.
+      To avoid preview (local editor state) and print (also local editor state) diverging from the persisted
+      `config.layout`, keep the editor's shop-field local state as-is BUT source `layout` from the store
+      (`config.layout`) in BOTH preview and `buildReceiptHtml`. `handleSave` already persists shop fields via
+      `setConfig`; builder edits (step 6) call the layout setters directly so they persist immediately and do
+      not depend on the Save button. Confirm `handleSave` is unchanged for shop fields and still calls
+      `setShopNameStore`.
+      Files: `src/screens/web/WebSimpleScreens.tsx`
+      Verify: `npx tsc --noEmit` no new errors; manual: edit a field → Save → reload → field persists; reorder
+      a block → reload → order persists (persist key `pos-receipt`).
+
+- [ ] 6. Add the builder UI section 'จัดวางบิล (ลากเพื่อจัดลำดับ)' (web-only).
+      Insert a new card in `SettingReceiptScreen` (place it just before Section 4 so users reorder then see the
+      preview). Guard the interactive builder with `Platform.OS === 'web'`; on mobile render a read-only note
+      card ("ปรับลำดับบิลได้บนเวอร์ชันเว็บ"). The builder lists `config.layout` (full, incl. hidden) in order;
+      each row: (1) drag handle icon (`reorder-three-outline`); (2) Thai block name from a
+      `BLOCK_LABELS: Record<ReceiptBlockId,string>` map (โลโก้ / ชื่อร้าน / ที่อยู่ / เบอร์โทร / เลขผู้เสียภาษี /
+      ข้อความหัวบิล / ข้อมูลบิล / รายการสินค้า / ยอดรวม / การชำระเงิน / ข้อความท้ายบิล / สาขา·เครื่อง);
+      (3) a `Switch` bound to `visible` → `toggleBlock(id)`; (4) an align control (3 chips ซ้าย/กลาง/ขวา using
+      the existing `chip`/`chipActive` styles) → `setBlockAlign(id,align)`, shown only for blocks where align
+      makes sense (hide for `logo`? logo can center — keep align for all except skip where meaningless; simplest:
+      show for all 12); (5) up/down arrow buttons (`chevron-up`/`chevron-down`, disabled at ends) →
+      `reorderLayout(i,i-1)`/`reorderLayout(i,i+1)` as the GUARANTEED fallback. DRAG: on web, set
+      `draggable` and wire `onDragStart`/`onDragOver`/`onDrop` via the row's web DOM props (RN-Web passes through
+      DOM events; use a `dataSet`/ref + `onStartShouldSetResponder` is NOT needed — use the web-only path with
+      `{...(Platform.OS==='web' ? { draggable:true, onDragStart, onDragOver, onDrop } : {})}` typed as `any` only
+      on the DOM-event bag, no broad `any`). On drop, call `reorderLayout(fromIndex,dropIndex)`. All colors from
+      `WebColors`; min touch height 44 for arrow buttons. No new npm dependency (web DOM drag + arrows suffice).
+      Files: `src/screens/web/WebSimpleScreens.tsx`
+      Verify: `npx tsc --noEmit` no new errors; `npm test` green; manual on web: arrows reorder, switch toggles,
+      align chips change alignment, drag reorders, and preview/popup reflect changes; on mobile: read-only note.
+
+- [ ] 7. Keep all non-layout settings working (regression guard).
+      Confirm shop fields, logo upload/show toggle, paper size (note: Section 4 title says 80mm; leave paper
+      size handling unchanged), copies, footer text, and `taxInvoiceEnabled` are untouched by the refactor.
+      `setConfig` still merges partials; `DEFAULT` still carries all original fields plus `layout`.
+      Files: `src/screens/web/WebSimpleScreens.tsx`, `src/store/receiptStore.ts`
+      Verify: `npx tsc --noEmit` no new errors; `npm test` green; manual smoke of each field.
+
+- [ ] 8. Add focused unit tests for the store and the shared helper.
+      New `src/store/__tests__/receiptStore.test.ts` mirroring `categoryStore.test.ts` setup
+      (mock `react-native` `Platform.OS:'web'` and AsyncStorage). Cover: DEFAULT config includes a 12-block
+      `layout` all visible in the current order; `reorderLayout(from,to)` moves a block; `toggleBlock(id)`
+      flips `visible`; `setBlockAlign(id,'center')` sets align; `setConfig` still merges non-layout fields;
+      persist key is `pos-receipt` (`useReceiptStore.persist.getOptions().name`); `mergeLayout(undefined)`
+      and `mergeLayout([{id:'items',visible:false,align:'left'}])` both return a complete 12-block layout
+      (missing ids appended from DEFAULT, old `visible:false` honored, unknown ids dropped).
+      New `src/utils/__tests__/receiptLayout.test.ts`: `getOrderedBlocks` returns blocks in configured order
+      with `visible:false` removed (e.g. hide `headerText` → not present; reorder puts `footerText` before
+      `items` when configured); `buildReceiptHtml` output contains block markup in the configured order
+      (assert index-of one block's text < index-of another after reorder) and omits hidden blocks' text.
+      Files: `src/store/__tests__/receiptStore.test.ts`, `src/utils/__tests__/receiptLayout.test.ts`
+      Verify: from `d:\pos-mobile\.worktrees\receipt` run `npm test` — the two new suites pass; total passing
+      count increases from 48 with no new failures (the 3 pre-existing suite-load failures may remain).
+
+- [ ] 9. Full verification pass.
+      Run the project's typecheck and tests and confirm the baseline bar holds.
+      Verify: from `d:\pos-mobile\.worktrees\receipt`:
+      `npx tsc --noEmit` → no NEW errors beyond the 13 pre-existing (none in touched files
+      receiptStore.ts / receiptLayout.ts / WebSimpleScreens.tsx);
+      `npm test` → all previously-passing suites still pass plus the 2 new suites; only the 3 known
+      suite-load failures remain. Clean up any temp files.
 
 ## Notes / assumptions
-- `ProductMaster` gets NO `supplierId` field (Task 1 optional item declined — low value, ProductMaster has none today; keeping supplier↔stock-doc linkage avoids touching product type/variant territory which is out of scope).
-- Product-variant matrix is explicitly OUT OF SCOPE; do not introduce variant systems when editing product types/screens.
-- New back-office routes (`suppliers`, `brands`) reuse the `'products'` access key via the same fallback mechanism `branches`/`documents`/`licenses` use for `'settings'`.
+
+- `ReceiptScreen.tsx` is intentionally out of scope: it has no HTML print path (simulated print only), so
+  "print parity" is fully delivered via the shared `buildReceiptHtml` driving `openPrintPopup`. Recorded here
+  so the implementer doesn't chase a non-existent HTML builder in that file.
+- `taxId` becomes its own ordered block (previously only embedded in the print billInfo row); value still
+  renders, now with independent order/visibility/alignment. Duplicate taxId in billInfo is removed.
+- No new DnD dependency: web DOM `draggable` + up/down arrows meet requirement 2's "guaranteed-working fallback".

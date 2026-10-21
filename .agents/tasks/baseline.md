@@ -1,40 +1,41 @@
-# Baseline — feat/deferred worktree
+# Baseline — feat/receipt-builder
 
-Captured in the isolated worktree at `d:\pos-mobile\.worktrees\deferred` (branch `feat/deferred`, created from `main` @ 3d2e06a) immediately after a fresh `npm install`. Later steps compare against this to confirm they introduce no regressions.
+Worktree: `d:\pos-mobile\.worktrees\receipt`
+Branch: `feat/receipt-builder` (from `main` @ 586f214)
+Recorded: 2026-10-21
 
-## Environment
-- Worktree: `d:\pos-mobile\.worktrees\deferred`
-- Branch: `feat/deferred` (base: `main` @ 3d2e06a)
-- `npm install`: completed — 1247 packages added, 1248 audited.
-- Key deps verified present: `react-native-svg`, `react-native-qrcode-svg`.
+## Dependencies
 
-## TypeScript — `npx tsc --noEmit`
-Result: **13 errors in 6 files** (all pre-existing). Exit code 1.
+`npm install` completed: 1247 packages added, 1248 audited.
+(react-native-svg + react-native-qrcode-svg already present in package.json.)
 
-| File | Count | Errors |
-|------|-------|--------|
-| src/components/ui/BranchSelector.tsx | 3 | TS2339 Typography.bodySmall / titleMedium / bodyMedium do not exist (lines 100, 109, 116) |
-| src/components/ui/DatePicker.tsx | 4 | TS2769 style overload (lines 62, 89); TS2339 Typography.labelSmall / bodyMedium (lines 111, 127) |
-| src/screens/settings/PermissionMatrixScreen.tsx | 1 | TS2353 'supplier' not in Record<Module, string> (line 31) |
-| src/screens/settings/RoleManageScreen.tsx | 2 | TS2322 'supplier' not assignable to Module (line 20); TS2353 'supplier' not in Record<Module, string> (line 30) |
-| src/screens/web/WebUserStaffScreen.tsx | 2 | TS2304 Cannot find name 'Platform' (lines 482, 490) |
-| src/services/errorTracking.ts | 1 | TS2554 logAction expected 3-4 args, got 1 (line 34) |
+## TypeScript (`npx tsc --noEmit`)
 
-## Tests — `npm test` (vitest run)
-Result: **24 tests passed**; **3 passed suites, 3 failed suites** (all failures pre-existing). Exit code 1.
+Exit code: 1 — **13 pre-existing errors** (all expected, none related to the receipt-builder task):
 
-Passing suites / tests:
-- src/engine/adapter/__tests__/cartAdapter.test.ts — 14
-- src/utils/__tests__/priceResolver.test.ts — 5
-- src/store/__tests__/cartVat.test.ts — 5
-- Total: **24 passed**
+| File | Count | Notes |
+|------|-------|-------|
+| src/components/ui/BranchSelector.tsx | 3 | Typography props `bodySmall`, `titleMedium`, `bodyMedium` not on type |
+| src/components/ui/DatePicker.tsx | 4 | ViewStyle overload (x2) + Typography `labelSmall`, `bodyMedium` |
+| src/screens/settings/PermissionMatrixScreen.tsx | 1 | `supplier` not in `Record<Module, string>` |
+| src/screens/settings/RoleManageScreen.tsx | 2 | `supplier` not assignable to `Module` (x2) |
+| src/screens/web/WebUserStaffScreen.tsx | 2 | `Platform` not found (x2) |
+| src/services/errorTracking.ts | 1 | Expected 3-4 args, got 1 |
+| **TOTAL** | **13** | |
 
-Engine self-test (stdout from engine.test.ts run): **✅ Passed 39 / ❌ Failed 0 / Total 39**.
+## Tests (`npm test` → `vitest run`)
 
-Pre-existing failed suites (suite-load failures, NOT test assertion failures):
-1. `src/engine/__tests__/engine.test.ts` — "No test suite found in file" (runs its checks via stdout self-test rather than vitest cases).
-2. `src/services/sync/SyncService.test.ts` — Vite import-analysis: cannot resolve `./Libraries/Image/Image` from `react-native/index.js`.
-3. `src/store/__tests__/branchPermissionStore.test.ts` — same `react-native/index.js` import-analysis failure.
+Exit code: 1
 
-## Interpretation
-All 13 tsc errors and all 3 failed test suites are pre-existing baseline conditions. Any later step must leave these unchanged (or reduced) and must not introduce new tsc errors or new test failures.
+- **Engine self-test: 39 passed / 0 failed** (engine.test.ts stdout block)
+- **Unit tests: 48 passed** across 7 suites
+- **3 pre-existing suite-load failures** (do NOT count as test failures):
+  - `src/engine/__tests__/engine.test.ts` — "No test suite found" (self-test uses stdout, not vitest cases)
+  - `src/services/sync/SyncService.test.ts` — Vite import resolution: `react-native/index.js` → `./Libraries/Image/Image`
+  - `src/store/__tests__/branchPermissionStore.test.ts` — same react-native import resolution error
+
+Summary line: `Test Files  3 failed | 7 passed (10)` / `Tests  48 passed (48)`
+
+## Baseline status
+
+All error/failure counts match the expected pre-existing state. Safe to proceed with the receipt-builder feature; any NEW tsc error or test failure introduced by the task must be fixed.

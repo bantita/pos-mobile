@@ -1,5 +1,11 @@
 {
   "verdict": "APPROVED",
-  "summary": "All four deferred features are implemented correctly and verified: supplierStore + WebSupplierScreen + stock-receive picker, brandStore + WebBrandScreen + both product brand pickers and the master tab, mobile product persist via productStore exactly once (web untouched), and a syncStore-bound WebSyncSettingsScreen replacing the placeholder (mock-only). Design-system compliance holds (WebColors, Thai text, empty/error states, no any-abuse), the variant matrix was not introduced, lint stays at the 13-error baseline with none in new/edited files, and npm test shows 24 passing with only the 3 pre-existing suite-load failures.",
-  "findings": []
+  "findings": [
+    {
+      "severity": "non-blocking",
+      "label": "version without migrate",
+      "detail": "receiptStore persist declares version: 1 but no migrate function; migration/reconciliation is handled entirely in the custom merge via mergeLayout. This is correct and robust (self-heals partial/stale layouts on every rehydrate), but a future version bump that adds a migrate could run alongside merge and confuse a maintainer. Optional: drop version or add a comment that merge owns reconciliation. Not required to ship."
+    }
+  ],
+  "reviewDoc": "d:\\pos-mobile\\.worktrees\\receipt\\.agents\\tasks\\review.md"
 }
