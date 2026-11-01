@@ -1,0 +1,16 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    {
+      "severity": "LOW",
+      "title": "Native consumers render idb: refs raw",
+      "detail": "settings/CustomerDisplaySettingsScreen, sale/AdManagerScreen and sale/CustomerDisplayScreen pass ad.uri straight to <Image>. They are only reachable from the native navigators today, so this is latent. Add a comment or route them through useAdMediaUri if they ever run on web."
+    },
+    {
+      "severity": "LOW",
+      "title": "Orphaned IndexedDB blobs",
+      "detail": "Blobs are deleted only in removeAd. reorderAds with a shorter list, migrateCustomerDisplay dropping entries, or clearing the pos-customer-display key all leave unreferenced Blobs behind. Consider a sweep on hydration that deletes Blob ids not referenced by ads."
+    }
+  ],
+  "reviewDoc": "d:\\pos-mobile\\.worktrees\\adsettings\\.agents\\tasks\\adsettings\\review.md"
+}
