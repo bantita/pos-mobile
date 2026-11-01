@@ -17,8 +17,12 @@ const MB = 1024 * 1024;
 export const AD_LIMITS = {
   imageBytes: 1.5 * MB,
   videoBytes: 3 * MB,
-  /** งบรวมของ uri ทุกโฆษณา (ตัวอักษร) — localStorage ~5 MB ต่อ origin */
-  totalChars: 4_000_000,
+  /**
+   * งบรวมของข้อมูลโฆษณาที่เก็บใน localStorage (ตัวอักษร)
+   * ไฟล์ที่อัปโหลดเก็บใน IndexedDB (ad.uri = `idb:<id>` สั้นๆ) จึงแทบไม่กินงบนี้ —
+   * งบนี้กันไม่ให้ข้อมูลแบบ inline (เช่น data URL เดิม) กิน localStorage ที่ store อื่นใช้ร่วมกัน
+   */
+  totalChars: 1_000_000,
 };
 
 const VIDEO_EXT = /\.(mp4|webm|mov|m4v)(\?|#|$)/i;

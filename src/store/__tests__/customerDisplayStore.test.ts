@@ -11,6 +11,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 
 import { useCustomerDisplayStore, MOCK_ADS, PERSIST_KEY } from '../customerDisplayStore';
 import type { AdMedia } from '../../types/customerDisplay';
+import { setMediaBackend, makeMediaRef } from '../../utils/adMedia';
 
 const ad = (id: string, over: Partial<AdMedia> = {}): AdMedia => ({
   id, type: 'image', uri: `https://x.test/${id}.jpg`, duration: 5, ...over,
@@ -115,6 +116,30 @@ describe('nextAd / removeAd index safety', () => {
     st().removeAd('a');
     st().removeAd('b');
     expect(st().currentAdIndex).toBe(0);
+  });
+  test('removeAd deletes the uploaded file from media storage (idb: ref only)', async () => {
+    const map = new Map<string, Blob>([['m1', new Blob(['x'])]]);
+    setMediaBackend({
+      put: async (id, b) => { map.set(id, b); },
+      get: async (id) => map.get(id) ?? null,
+      delete: async (id) => { map.delete(id); },
+    });
+    useCustomerDisplayStore.setState({ ads: [ad('up', { uri: makeMediaRef('m1') }), ad('link')] });
+    st().removeAd('link');
+    st().removeAd('up');
+    await new Promise((r) => setTimeout(r, 0));
+    expect(map.size).toBe(0);
+    expect(ids()).toEqual([]);
+    setMediaBackend(null);
+  });
+});
+
+describe('storage footprint', () => {
+  test('uploaded ads persist only a short reference, not the file data', () => {
+    useCustomerDisplayStore.setState({ ads: [ad('up', { uri: makeMediaRef('m_1700000000000_abc123') })] });
+    const raw = localStorage.getItem(PERSIST_KEY) ?? '';
+    expect(raw).toContain('idb:m_1700000000000_abc123');
+    expect(raw.length).toBeLessThan(2000);
   });
 });
 

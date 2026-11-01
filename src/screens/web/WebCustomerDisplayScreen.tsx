@@ -21,6 +21,7 @@ import { useCartStore } from '../../store/cartStore';
 import { useCustomerDisplayStore } from '../../store/customerDisplayStore';
 import { WebColors } from '../../constants/webColors';
 import { getPlayableAds, DEFAULT_THANK_YOU } from '../../utils/adSettings';
+import { useAdMediaUri } from '../../utils/adMedia';
 
 const fmt = (n: number) => n.toLocaleString('th-TH', { minimumFractionDigits: 2 });
 
@@ -32,6 +33,8 @@ const AdSlide: React.FC = () => {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const ad = ads.length > 0 ? ads[currentAdIndex % ads.length] : undefined;
   const activeIdx = ads.length > 0 ? currentAdIndex % ads.length : 0;
+  // ไฟล์ที่อัปโหลดเก็บใน IndexedDB (idb:...) → แปลงเป็น object URL ก่อนแสดง
+  const { uri: mediaUri } = useAdMediaUri(ad?.uri);
 
   useEffect(() => {
     fadeAnim.setValue(0);
@@ -55,13 +58,13 @@ const AdSlide: React.FC = () => {
 
   return (
     <Animated.View style={[cd.adSlide, { opacity: fadeAnim }]}>
-      {ad.type === 'image' && ad.uri
-        ? <Image source={{ uri: ad.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-        : ad.type === 'video' && ad.uri && Platform.OS === 'web'
+      {ad.type === 'image' && mediaUri
+        ? <Image source={{ uri: mediaUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+        : ad.type === 'video' && mediaUri && Platform.OS === 'web'
           ? (
             <video
               key={ad.id}
-              src={ad.uri}
+              src={mediaUri}
               autoPlay
               muted
               loop

@@ -26,6 +26,9 @@ import {
   inferAdType, validateAdFile, validateAdUrl, validateDuration,
   getPlayableAds, estimateAdsChars,
 } from '../../utils/adSettings';
+import {
+  saveAdMedia, deleteAdMedia, dataUrlToBlob, isMediaStorageAvailable, useAdMediaUri,
+} from '../../utils/adMedia';
 import { WebCustomerDisplayScreen } from './WebCustomerDisplayScreen';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -66,13 +69,7 @@ const STEPS: { mode: DisplayMode; icon: IconName; title: string; desc: string }[
   { mode: 'payment_success', icon: 'checkmark-circle-outline', title: 'ชำระสำเร็จ',       desc: 'หลังรับเงิน แล้วกลับไปข้อ 1 อัตโนมัติ' },
 ];
 
-const readAsDataUrl = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => (typeof r.result === 'string' ? resolve(r.result) : reject(new Error('read')));
-    r.onerror = () => reject(r.error ?? new Error('read'));
-    r.readAsDataURL(file);
-  });
+const NO_MEDIA_STORAGE = 'เบราว์เซอร์นี้เก็บไฟล์ไม่ได้ — กรุณาวางลิงก์รูป/วิดีโอแทน';
 
 const stripExt = (name: string) => name.replace(/\.[^.]+$/, '').trim();
 
@@ -158,10 +155,15 @@ const AdCard: React.FC<AdCardProps> = ({ ad, index, total, onSaved, onSelect }) 
   const [moreOpen, setMoreOpen]     = useState(false);
   const [title, setTitle]           = useState(ad.title ?? '');
   const [subtitle, setSubtitle]     = useState(ad.subtitle ?? '');
+  const [focused, setFocused]       = useState<'title' | 'subtitle' | null>(null);
   const [thumbErr, setThumbErr]     = useState(false);
+  const media = useAdMediaUri(ad.uri);
   const enabled = ad.enabled !== false;
 
   useEffect(() => { setThumbErr(false); }, [ad.uri]);
+  // ค่าเปลี่ยนจากหน้าต่าง/แท็บอื่น → อัปเดตช่องที่ไม่ได้กำลังพิมพ์อยู่
+  useEffect(() => { if (focused !== 'title') setTitle(ad.title ?? ''); }, [ad.title]);
+  useEffect(() => { if (focused !== 'subtitle') setSubtitle(ad.subtitle ?? ''); }, [ad.subtitle]);
 
   const pickPreset = (d: number) => {
     setCustomOpen(false); setCustomErr(null);
@@ -194,16 +196,20 @@ const AdCard: React.FC<AdCardProps> = ({ ad, index, total, onSaved, onSelect }) 
         accessibilityRole="button"
         accessibilityLabel={`ดูโฆษณาลำดับ ${index + 1} ในตัวอย่าง`}
       >
-        {thumbErr ? (
+        {thumbErr || media.missing ? (
           <View style={s.thumbFallback}>
             <Ionicons name="warning-outline" size={THUMB_ICON} color={WebColors.warning} />
-            <Text style={s.thumbFallbackText}>โหลดรูปไม่ได้</Text>
+            <Text style={s.thumbFallbackText}>{media.missing ? 'ไม่พบไฟล์ในเครื่องนี้' : 'โหลดรูปไม่ได้'}</Text>
+          </View>
+        ) : !media.uri ? (
+          <View style={s.thumbFallback}>
+            <ActivityIndicator color={WebColors.white} />
           </View>
         ) : ad.type === 'image' ? (
-          <Image source={{ uri: ad.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" onError={() => setThumbErr(true)} />
+          <Image source={{ uri: media.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" onError={() => setThumbErr(true)} />
         ) : Platform.OS === 'web' ? (
           <video
-            src={ad.uri}
+            src={media.uri}
             muted
             preload="metadata"
             playsInline
@@ -326,7 +332,8 @@ const AdCard: React.FC<AdCardProps> = ({ ad, index, total, onSaved, onSelect }) 
               style={s.input}
               value={title}
               onChangeText={setTitle}
-              onBlur={commitText}
+              onFocus={() => setFocused('title')}
+              onBlur={() => { setFocused(null); commitText(); }}
               placeholder="เช่น โปรโมชั่นพิเศษ"
               placeholderTextColor={WebColors.textDisabled}
               accessibilityLabel="หัวข้อโฆษณา"
@@ -336,7 +343,8 @@ const AdCard: React.FC<AdCardProps> = ({ ad, index, total, onSaved, onSelect }) 
               style={s.input}
               value={subtitle}
               onChangeText={setSubtitle}
-              onBlur={commitText}
+              onFocus={() => setFocused('subtitle')}
+              onBlur={() => { setFocused(null); commitText(); }}
               placeholder="เช่น ลด 10% ทุกสินค้า"
               placeholderTextColor={WebColors.textDisabled}
               accessibilityLabel="คำอธิบายโฆษณา"
@@ -491,7 +499,7 @@ export const WebAdSettingsScreen: React.FC<Props> = ({ onBack }) => {
 
   const addFromUri = (uri: string, type: AdMediaType, title?: string): boolean => {
     if (estimateAdsChars(useCustomerDisplayStore.getState().ads) + uri.length > AD_LIMITS.totalChars) {
-      setError('พื้นที่เก็บโฆษณาเต็ม (สูงสุด 4 MB) — ลบโฆษณาบางรายการหรือวางลิงก์แทน');
+      setError('พื้นที่เก็บโฆษณาเต็ม — ลบโฆษณาบางรายการหรือวางลิงก์แทน');
       return false;
     }
     const created = addAdWithDefaults({ uri, type, title });
@@ -515,12 +523,14 @@ export const WebAdSettingsScreen: React.FC<Props> = ({ onBack }) => {
         if (err) { errors.push(`${file.name}: ${err}`); continue; }
         const type = inferAdType(file.type);
         if (!type) { errors.push(`${file.name}: รองรับเฉพาะไฟล์รูปภาพหรือวิดีโอ`); continue; }
+        if (!isMediaStorageAvailable()) { errors.push(NO_MEDIA_STORAGE); break; }
         try {
-          const dataUrl = await readAsDataUrl(file);
-          if (addFromUri(dataUrl, type, stripExt(file.name))) added++;
-          else break;
+          // เก็บไฟล์ใน IndexedDB — localStorage เก็บแค่ตัวอ้างอิงสั้นๆ
+          const ref = await saveAdMedia(file);
+          if (addFromUri(ref, type, stripExt(file.name))) added++;
+          else { void deleteAdMedia(ref).catch(() => {}); break; }
         } catch {
-          errors.push(`${file.name}: อ่านไฟล์ไม่สำเร็จ ลองใหม่อีกครั้ง`);
+          errors.push(`${file.name}: บันทึกไฟล์ไม่สำเร็จ (พื้นที่เบราว์เซอร์อาจเต็ม) ลองใหม่อีกครั้ง`);
         }
       }
     } finally {
@@ -535,12 +545,32 @@ export const WebAdSettingsScreen: React.FC<Props> = ({ onBack }) => {
     else setUrlOpen(true);
   };
 
-  const addUrl = () => {
+  const addUrl = async () => {
     const err = validateAdUrl(url);
     const type = err ? null : inferAdType(url);
     if (err || !type) { setUrlErr(err ?? 'ลิงก์ไม่ถูกต้อง'); return; }
     setUrlErr(null);
-    if (addFromUri(url.trim(), type)) { setUrl(''); notify('เพิ่มโฆษณาแล้ว'); }
+    const v = url.trim();
+    if (v.toLowerCase().startsWith('data:')) {
+      // data URL ที่วางมา → เก็บเป็นไฟล์ใน IndexedDB แทน localStorage
+      const blob = dataUrlToBlob(v);
+      if (!blob) { setUrlErr('ลิงก์ไม่ถูกต้อง'); return; }
+      const fileErr = validateAdFile({ type: blob.type, size: blob.size });
+      if (fileErr) { setUrlErr(fileErr); return; }
+      if (!isMediaStorageAvailable()) { setUrlErr(NO_MEDIA_STORAGE); return; }
+      setBusy(true);
+      try {
+        const ref = await saveAdMedia(blob);
+        if (addFromUri(ref, type)) { setUrl(''); notify('เพิ่มโฆษณาแล้ว'); }
+        else void deleteAdMedia(ref).catch(() => {});
+      } catch {
+        setUrlErr('บันทึกไฟล์ไม่สำเร็จ ลองใหม่อีกครั้ง');
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    if (addFromUri(v, type)) { setUrl(''); notify('เพิ่มโฆษณาแล้ว'); }
   };
 
   const addSample = (img: { label: string; uri: string }) => {
@@ -862,8 +892,9 @@ export const WebAdSettingsScreen: React.FC<Props> = ({ onBack }) => {
                   <Text style={s.helper}>แสดงที่มุมขวาบนของจอ 2 และแสดงแทนโฆษณาเมื่อปิดโฆษณา</Text>
                   <Text style={s.smallLabel}>พื้นที่เก็บโฆษณาในเครื่องนี้</Text>
                   <Text style={s.helper}>
-                    ใช้ไป {(usedChars / MB).toFixed(1)} / {(AD_LIMITS.totalChars / MB).toFixed(1)} MB —
-                    ไฟล์ที่อัปโหลดเก็บไว้ในเบราว์เซอร์นี้ ถ้าเต็มให้ลบบางรายการหรือใช้ลิงก์แทน
+                    ไฟล์ที่อัปโหลดเก็บไว้ในเบราว์เซอร์นี้แยกจากข้อมูลการขาย จึงไม่กินพื้นที่ของระบบขาย
+                    (ข้อมูลการตั้งค่าโฆษณาใช้ไป {(usedChars / MB).toFixed(2)} / {(AD_LIMITS.totalChars / MB).toFixed(1)} MB)
+                    — ถ้าล้างข้อมูลเบราว์เซอร์ ไฟล์จะหายและต้องอัปโหลดใหม่
                   </Text>
                 </View>
               )}

@@ -14,6 +14,7 @@ import {
   MAX_SUCCESS_DURATION,
 } from '../utils/adSettings';
 import type { AdMediaType } from '../types/customerDisplay';
+import { isMediaRef, deleteAdMedia } from '../utils/adMedia';
 
 // ─── Mock Ads ─────────────────────────────────────────────────────────────────
 export const MOCK_ADS: AdMedia[] = [
@@ -283,7 +284,12 @@ export const useCustomerDisplayStore = create<CustomerDisplayStoreState>()(
           commitAds(next);
         },
 
-        removeAd: (id) => commitAds(get().ads.filter((a) => a.id !== id)),
+        removeAd: (id) => {
+          const target = get().ads.find((a) => a.id === id);
+          commitAds(get().ads.filter((a) => a.id !== id));
+          // ลบไฟล์ที่อัปโหลดออกจาก IndexedDB ด้วย (ลิงก์ปกติไม่ต้องทำอะไร)
+          if (target && isMediaRef(target.uri)) void deleteAdMedia(target.uri).catch(() => {});
+        },
 
         reorderAds: (ads) => commitAds(ads),
 
