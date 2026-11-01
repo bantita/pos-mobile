@@ -13,6 +13,8 @@ export interface AdMedia {
   duration: number;      // วินาที ก่อนเลื่อนไปอันถัดไป
   title?: string;
   subtitle?: string;
+  /** เปิด/ปิดการแสดงรายการนี้ — undefined = เปิด (ข้อมูลเก่า) */
+  enabled?: boolean;
 }
 
 export interface CustomerDisplayState {
