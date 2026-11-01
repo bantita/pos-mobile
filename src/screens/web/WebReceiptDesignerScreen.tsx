@@ -13,7 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { WebColors } from '../../constants/webColors';
 import { ReceiptCanvas } from '../../components/receipt/ReceiptCanvas';
-import { buildTemplateHtml, makeSampleData } from '../../utils/receiptTemplate';
+import { buildTemplateHtml, makeSampleData, PX_PER_MM } from '../../utils/receiptTemplate';
 import {
   useReceiptStore,
   PAPER_PRESETS,
@@ -76,6 +76,8 @@ const PRESET_OPTIONS: { id: PaperPresetId; label: string }[] = [
 ];
 
 const ZOOM_OPTIONS = [0.75, 1, 1.5];
+// ระยะขอบรอบกระดาษในพื้นที่แก้ไข (px)
+const CANVAS_PAD = 24;
 
 const ALIGN_OPTIONS: { id: ElementAlign; icon: string }[] = [
   { id: 'left', icon: 'text-outline' },
@@ -129,7 +131,27 @@ export const WebReceiptDesignerScreen: React.FC = () => {
   const template: ReceiptTemplate = config.template ?? DEFAULT_TEMPLATE;
   const paper = template.paper;
 
-  const [zoom, setZoom] = useState(1);
+  // 'fit' = ย่อ/ขยายให้กระดาษพอดีพื้นที่แก้ไข (ค่าเริ่มต้น)
+  const [zoomMode, setZoomMode] = useState<'fit' | number>('fit');
+  const [area, setArea] = useState({ w: 0, h: 0 });
+
+  // ความสูงกระดาษ (มม.) — ตรงกับ ReceiptCanvas: fixed หรือ content-driven
+  const paperHeightMm = paper.heightMm != null
+    ? paper.heightMm
+    : Math.max(10, template.elements.reduce((m, e) => Math.max(m, e.yMm + e.hMm), 0) + paper.marginMm);
+  const paperWpx = paper.widthMm * PX_PER_MM;
+  const paperHpx = paperHeightMm * PX_PER_MM;
+  // กระดาษความสูงคงที่ (A4/A5/กำหนดเอง) → พอดีทั้งกว้างและสูง (เห็นทั้งหน้า)
+  // กระดาษม้วน (สูงอัตโนมัติ) → พอดีตามความกว้างเท่านั้น เพื่อไม่ให้ zoom เปลี่ยนระหว่างลากองค์ประกอบ
+  const fitZoom = area.w > 0 && area.h > 0
+    ? paper.heightMm != null
+      ? Math.max(0.25, Math.min(2, (area.w - 2 * CANVAS_PAD) / paperWpx, (area.h - 2 * CANVAS_PAD) / paperHpx))
+      : Math.max(0.25, Math.min(1.5, (area.w - 2 * CANVAS_PAD) / paperWpx))
+    : 1;
+  const zoom = zoomMode === 'fit' ? fitZoom : zoomMode;
+  const fitsW = paperWpx * zoom + 2 * CANVAS_PAD <= area.w + 1;
+  const fitsH = paperHpx * zoom + 2 * CANVAS_PAD <= area.h + 1;
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -344,13 +366,19 @@ export const WebReceiptDesignerScreen: React.FC = () => {
 
         {/* zoom */}
         <View style={s.toolGroup}>
+          <TouchableOpacity
+            style={[s.segBtn, zoomMode === 'fit' && s.segBtnActive]}
+            onPress={() => setZoomMode('fit')}
+          >
+            <Text style={[s.segText, zoomMode === 'fit' && s.segTextActive]}>พอดีจอ</Text>
+          </TouchableOpacity>
           {ZOOM_OPTIONS.map((z) => (
             <TouchableOpacity
               key={z}
-              style={[s.segBtn, zoom === z && s.segBtnActive]}
-              onPress={() => setZoom(z)}
+              style={[s.segBtn, zoomMode === z && s.segBtnActive]}
+              onPress={() => setZoomMode(z)}
             >
-              <Text style={[s.segText, zoom === z && s.segTextActive]}>{z}x</Text>
+              <Text style={[s.segText, zoomMode === z && s.segTextActive]}>{z}x</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -389,7 +417,24 @@ export const WebReceiptDesignerScreen: React.FC = () => {
 
       {/* ── Body: canvas + inspector ── */}
       <View style={s.body}>
-        <ScrollView style={s.canvasScroll} contentContainerStyle={s.canvasContent}>
+        {/* พื้นที่แก้ไข: scroll ได้ทั้งแนวตั้ง/แนวนอน, จัดกึ่งกลางเมื่อกระดาษพอดี
+            (เมื่อใหญ่กว่าพื้นที่จะชิดซ้าย/บน เพื่อไม่ให้ขอบกระดาษถูกตัดหายเลื่อนไม่ถึง) */}
+        <View
+          style={s.canvasScroll}
+          onLayout={(e) => {
+            const { width, height } = e.nativeEvent.layout;
+            setArea((a) => (Math.abs(a.w - width) > 1 || Math.abs(a.h - height) > 1 ? { w: width, h: height } : a));
+          }}
+        >
+          <View
+            style={[
+              s.canvasContent,
+              {
+                alignItems: fitsW ? 'center' : 'flex-start',
+                justifyContent: fitsH ? 'center' : 'flex-start',
+              },
+            ]}
+          >
           <ReceiptCanvas
             template={template}
             data={data}
@@ -400,7 +445,8 @@ export const WebReceiptDesignerScreen: React.FC = () => {
             onMove={commitMove}
             onResize={commitResize}
           />
-        </ScrollView>
+          </View>
+        </View>
 
         {/* Inspector */}
         <ScrollView style={s.inspector} contentContainerStyle={{ padding: 14, gap: 12 }}>
@@ -664,12 +710,15 @@ const s = StyleSheet.create({
 
   // body
   body: { flex: 1, flexDirection: 'row' },
-  canvasScroll: { flex: 1, backgroundColor: WebColors.gray100 },
-  canvasContent: { alignItems: 'center', padding: 24 },
+  canvasScroll: {
+    flex: 1, minWidth: 0, backgroundColor: WebColors.gray100,
+    ...(Platform.OS === 'web' ? { overflow: 'auto' as any } : { overflow: 'hidden' }),
+  },
+  canvasContent: { minWidth: '100%', minHeight: '100%', padding: CANVAS_PAD },
 
-  // inspector
+  // inspector — กว้างคงที่ ให้พื้นที่แก้ไขได้ส่วนที่เหลือทั้งหมด
   inspector: {
-    width: 280, flexShrink: 0,
+    width: 300, minWidth: 300, maxWidth: 300, flexShrink: 0, flexGrow: 0,
     backgroundColor: WebColors.cardBg,
     borderLeftWidth: 1, borderLeftColor: WebColors.cardBorder,
   },
