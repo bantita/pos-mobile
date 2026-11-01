@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { WebColors } from '../../constants/webColors';
 import * as supplierStore from '../../store/supplierStore';
 import { Supplier } from '../../types/inventory';
+import { MasterImportExportPanel } from '../../components/web/MasterImportExportPanel';
 
 export const WebSupplierScreen: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
@@ -60,10 +61,13 @@ export const WebSupplierScreen: React.FC = () => {
       <View style={st.section}>
         <View style={st.headerRow}>
           <Text style={st.title}>จัดการผู้จำหน่าย</Text>
-          <TouchableOpacity style={st.addBtn} onPress={() => { setShowForm(true); setEditId(''); setName(''); setTaxId(''); setPhone(''); setContactName(''); }}>
-            <Ionicons name="add-outline" size={18} color="#fff" />
-            <Text style={st.addText}>เพิ่มผู้จำหน่าย</Text>
-          </TouchableOpacity>
+          <View style={st.headerActions}>
+            <MasterImportExportPanel entity="supplier" compact count={suppliers.length} onApplied={() => setRefreshKey(k => k + 1)} />
+            <TouchableOpacity style={st.addBtn} onPress={() => { setShowForm(true); setEditId(''); setName(''); setTaxId(''); setPhone(''); setContactName(''); }}>
+              <Ionicons name="add-outline" size={18} color={WebColors.white} />
+              <Text style={st.addText}>เพิ่มผู้จำหน่าย</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {showForm && (
@@ -113,7 +117,8 @@ const st = StyleSheet.create({
   content: { padding: 20, gap: 20 },
   section: { gap: 12 },
   title: { fontSize: 17, fontWeight: '800', color: WebColors.text },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
+  headerActions: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', flexShrink: 1 },
   addBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: WebColors.primary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
   addText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   form: { backgroundColor: WebColors.cardBg, borderRadius: 12, padding: 20, gap: 12, borderWidth: 1, borderColor: WebColors.cardBorder, maxWidth: 450 },

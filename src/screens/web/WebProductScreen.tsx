@@ -19,6 +19,8 @@ import { useProductStore } from '../../store/productStore';
 import * as brandStore from '../../store/brandStore';
 import * as categoryStore from '../../store/categoryStore';
 import { getSuppliers } from '../../store/supplierStore';
+import { MasterImportExportPanel } from '../../components/web/MasterImportExportPanel';
+import { downloadMasterFile } from '../../utils/masterPorts';
 
 const fmt = (n: number) => n.toLocaleString('th-TH', { minimumFractionDigits: 2 });
 
@@ -1432,10 +1434,13 @@ const MasterScreen: React.FC<{ allProducts: typeof MOCK_PRODUCTS }> = ({ allProd
               <Text style={ms.panelTitle}>ยี่ห้อสินค้า</Text>
               <Text style={ms.panelSub}>{brands.length} ยี่ห้อ</Text>
             </View>
-            <TouchableOpacity style={ms.addBtn} onPress={() => { setShowAddBrand(true); setNewBrandName(''); setNewBrandStatus('active'); }}>
-              <Ionicons name="add" size={15} color="#fff" />
-              <Text style={ms.addBtnText}>+ เพิ่มยี่ห้อ</Text>
-            </TouchableOpacity>
+            <View style={ms.panelActions}>
+              <MasterImportExportPanel entity="brand" compact count={brands.length} onApplied={() => setBrandRefreshKey(k => k + 1)} />
+              <TouchableOpacity style={ms.addBtn} onPress={() => { setShowAddBrand(true); setNewBrandName(''); setNewBrandStatus('active'); }}>
+                <Ionicons name="add" size={15} color={WebColors.white} />
+                <Text style={ms.addBtnText}>+ เพิ่มยี่ห้อ</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Add brand inline form */}
@@ -1549,10 +1554,13 @@ const MasterScreen: React.FC<{ allProducts: typeof MOCK_PRODUCTS }> = ({ allProd
               <Text style={ms.panelTitle}>หมวดหมู่สินค้า</Text>
               <Text style={ms.panelSub}>{categories.length} หมวด</Text>
             </View>
-            <TouchableOpacity style={ms.addBtn} onPress={() => { setShowAddCategory(true); setNewCategoryName(''); setNewCategoryStatus('active'); }}>
-              <Ionicons name="add" size={15} color="#fff" />
-              <Text style={ms.addBtnText}>+ เพิ่มหมวด</Text>
-            </TouchableOpacity>
+            <View style={ms.panelActions}>
+              <MasterImportExportPanel entity="category" compact count={categories.length} onApplied={() => setCategoryRefreshKey(k => k + 1)} />
+              <TouchableOpacity style={ms.addBtn} onPress={() => { setShowAddCategory(true); setNewCategoryName(''); setNewCategoryStatus('active'); }}>
+                <Ionicons name="add" size={15} color={WebColors.white} />
+                <Text style={ms.addBtnText}>+ เพิ่มหมวด</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Add category inline form */}
@@ -1684,6 +1692,7 @@ const ms: any = StyleSheet.create({
   },
   panelTitle: { fontSize: 13, fontWeight: '700', color: WebColors.text },
   panelSub: { fontSize: 13, color: WebColors.textSecondary, marginTop: 2 },
+  panelActions: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', flexShrink: 1 },
   // Buttons
   addBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
@@ -1834,6 +1843,16 @@ export const WebProductScreen: React.FC = () => {
     return matchS && matchCat && matchSt;
   }), [products, search, catFilter, statusFilter]);
 
+  /** ปุ่ม Export บน toolbar — ส่งออกสินค้าทั้งหมดเป็น .xlsx (รูปแบบเดียวกับแท็บ Import/Export) */
+  const handleQuickExport = async () => {
+    if (products.length === 0) { window.alert('ยังไม่มีสินค้าให้ส่งออก'); return; }
+    try {
+      await downloadMasterFile('product', 'export', 'xlsx');
+    } catch {
+      window.alert('ส่งออกไฟล์ไม่สำเร็จ');
+    }
+  };
+
   const getStatusBadge = (p: ProductMaster) => {
     if (p.status === 'inactive') return { label: 'ปิดใช้',    color: WebColors.textSecondary, bg: WebColors.gray100 };
     if (p.stockQty === 0)        return { label: 'หมดสต๊อก',  color: WebColors.danger,        bg: WebColors.dangerLight };
@@ -1915,7 +1934,12 @@ export const WebProductScreen: React.FC = () => {
                 </TouchableOpacity>
               ))}
             </View>
-            <TouchableOpacity style={s.exportBtn}>
+            <TouchableOpacity
+              style={s.exportBtn}
+              onPress={handleQuickExport}
+              accessibilityRole="button"
+              accessibilityLabel="ส่งออกสินค้าทั้งหมดเป็น Excel"
+            >
               <Ionicons name="cloud-download-outline" size={14} color={WebColors.textSecondary} />
               <Text style={s.exportBtnText}>Export</Text>
             </TouchableOpacity>
@@ -2157,32 +2181,7 @@ export const WebProductScreen: React.FC = () => {
       {subView === 'import' && (
         <View style={s.subContent}>
           <Text style={s.subTitle}>Import / Export สินค้า</Text>
-          <View style={s.importGrid}>
-            <View style={s.importCard}>
-              <Ionicons name="cloud-upload-outline" size={32} color={WebColors.primary} />
-              <Text style={s.importCardTitle}>Import จาก Excel</Text>
-              <Text style={s.importCardSub}>รองรับ .xlsx, .csv ขนาดไม่เกิน 10MB</Text>
-              <TouchableOpacity style={s.importBtn}>
-                <Text style={s.importBtnText}>เลือกไฟล์</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={s.importCard}>
-              <Ionicons name="cloud-download-outline" size={32} color={WebColors.success} />
-              <Text style={s.importCardTitle}>Export สินค้าทั้งหมด</Text>
-              <Text style={s.importCardSub}>{products.length} รายการ</Text>
-              <TouchableOpacity style={[s.importBtn, { backgroundColor: WebColors.success }]}>
-                <Text style={s.importBtnText}>Export Excel</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={s.importCard}>
-              <Ionicons name="document-text-outline" size={32} color={WebColors.warning} />
-              <Text style={s.importCardTitle}>Download Template</Text>
-              <Text style={s.importCardSub}>แบบฟอร์มสำหรับกรอกข้อมูล</Text>
-              <TouchableOpacity style={[s.importBtn, { backgroundColor: WebColors.warning }]}>
-                <Text style={s.importBtnText}>ดาวน์โหลด</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+          <MasterImportExportPanel entity="product" count={products.length} />
         </View>
       )}
 
@@ -2329,19 +2328,6 @@ const s = StyleSheet.create({
   subContent: { flex: 1, gap: 16 },
   subHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   subTitle: { fontSize: 14, fontWeight: '700', color: WebColors.text },
-  importGrid: { flexDirection: 'row', gap: 16 },
-  importCard: {
-    flex: 1, backgroundColor: '#fff', borderRadius: 12,
-    padding: 24, alignItems: 'center', gap: 10,
-    borderWidth: 1, borderColor: WebColors.border,
-  },
-  importCardTitle: { fontSize: 12, fontWeight: '700', color: WebColors.text },
-  importCardSub: { fontSize: 12, color: WebColors.textSecondary, textAlign: 'center' },
-  importBtn: {
-    backgroundColor: WebColors.primary, borderRadius: 8,
-    paddingHorizontal: 20, paddingVertical: 10, marginTop: 4,
-  },
-  importBtnText: { fontSize: 12, fontWeight: '700', color: '#fff' },
   catGrid: { gap: 8 },
   catCard: {
     flexDirection: 'row', alignItems: 'center', gap: 12,

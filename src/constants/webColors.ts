@@ -45,6 +45,7 @@ export const WebColors = {
   textDisabled: Colors.textMuted,
 
   border: Colors.border,
+  overlay: Colors.overlay,
 
   white: Colors.white,
   purple: '#5B3FA0',

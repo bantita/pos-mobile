@@ -90,15 +90,3 @@ export interface ProductMaster {
   createdAt: Date;
   updatedAt: Date;
 }
-
-export interface ImportRow {
-  rowNo: number;
-  code: string;
-  barcode: string;
-  name: string;
-  category: string;
-  unit: string;
-  costPrice: number;
-  salePrice: number;
-  errors: string[];
-}
