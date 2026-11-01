@@ -27,6 +27,7 @@ import { useSaleHistoryStore } from '../../store/saleHistoryStore';
 import { useShiftStore } from '../../store/shiftStore';
 import { usePOSPermissionStore, POSAction, POS_ACTION_LABELS } from '../../store/posPermissionStore';
 import { logAction } from '../../store/auditLogStore';
+import { useAuthStore } from '../../store/authStore';
 import { Product, CartItem, Payment } from '../../types/sale';
 import { Member } from '../../types/member';
 import { ProductMaster, ProductVariant } from '../../types/product';
@@ -1290,6 +1291,9 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
   const { mode: displayMode, setMode: setDisplayMode } = useCustomerDisplayStore();
   const { products: masterProducts } = useProductStore();
   const { activeBranchId, activeBranch } = useBranchGuard();
+  // ชื่อแคชเชียร์ = ผู้ใช้ที่ login อยู่
+  const currentUser = useAuthStore((st) => st.user);
+  const cashierName = currentUser?.name || 'แคชเชียร์';
   const shift = useShiftStore();
   const posPerms = usePOSPermissionStore();
   const [showOpenShift, setShowOpenShift] = useState(!shift.isShiftOpen());
@@ -1704,7 +1708,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
             <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.text, textAlign: 'center' }}>เปิดกะ — นับเงินตั้งต้นในลิ้นชัก</Text>
             <Text style={{ fontSize: 11, color: Colors.textSecondary, textAlign: 'center' }}>ใส่จำนวนเหรียญ/ธนบัตรแต่ละประเภท</Text>
             <CashCountForm value={shiftOpenAmt} onChange={setShiftOpenAmt} />
-            <TouchableOpacity style={{ backgroundColor: WebColors.primary, borderRadius: 8, paddingVertical: 12, alignItems: 'center' }} onPress={() => { shift.openShift({ posId: 'pos-001', posName: 'POS 1', cashierName: 'แคชเชียร์', openingAmount: parseInt(shiftOpenAmt) || 0 }); setShowOpenShift(false); }}>
+            <TouchableOpacity style={{ backgroundColor: WebColors.primary, borderRadius: 8, paddingVertical: 12, alignItems: 'center' }} onPress={() => { shift.openShift({ posId: 'pos-001', posName: 'POS 1', cashierName, openingAmount: parseInt(shiftOpenAmt) || 0 }); setShowOpenShift(false); }}>
               <Text style={{ fontSize: 14, fontWeight: '700', color: '#fff' }}>เปิดกะ (฿{(parseInt(shiftOpenAmt) || 0).toLocaleString()})</Text>
             </TouchableOpacity>
           </View>
@@ -2288,6 +2292,13 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
           </View>
         </View>
 
+        {/* ── Cashier (from login) ── */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: WebColors.border }}>
+          <Ionicons name="person-outline" size={14} color={WebColors.textSecondary} />
+          <Text style={{ fontSize: 12, color: WebColors.textSecondary }}>แคชเชียร์:</Text>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: WebColors.text }} numberOfLines={1}>{cashierName}</Text>
+        </View>
+
         {/* ── Member Selection Badge ── */}
         <View style={s.crmRow}>
           {selectedMember ? (
@@ -2664,7 +2675,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                     billNo:    `INV-${thai}-${String(invoices.length + 1).padStart(4,'0')}`,
                     date:      `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${thai}`,
                     time:      `${pad(now.getHours())}:${pad(now.getMinutes())}`,
-                    cashier:   'แคชเชียร์',
+                    cashier:   cashierName,
                     payMethod: splitPayments.map(sp => sp.label).join(' + '),
                     items:     items.map(i => {
                       const usePrice = customPrices[i.product.id] ?? i.unitPrice;
@@ -2734,7 +2745,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                     serviceCharge: 0, vatAmount: vat, grandTotal,
                     receivedAmount: splitPayments.reduce((s, p) => s + p.amount, 0),
                     changeAmount: Math.max(0, splitPayments.reduce((s, p) => s + p.amount, 0) - grandTotal),
-                    cashierName: 'แคชเชียร์', posName: 'POS 1',
+                    cashierName, posName: 'POS 1',
                     memberName: selectedMember?.name, pointsEarned: selectedMember ? Math.floor(grandTotal / pointConfig.earnRate) : 0,
                     status: 'completed', createdAt: new Date(),
                   });
