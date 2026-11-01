@@ -34,6 +34,7 @@ import { useAuthStore } from '../../store/authStore';
 import { Product, CartItem, Payment } from '../../types/sale';
 import { Member } from '../../types/member';
 import { ProductMaster, ProductVariant } from '../../types/product';
+import { DisplayMode } from '../../types/customerDisplay';
 import { WebCustomerDisplayScreen } from './WebCustomerDisplayScreen';
 import { useReceiptStore, DEFAULT_TEMPLATE } from '../../store/receiptStore';
 import { buildTemplateHtml, ReceiptRenderData } from '../../utils/receiptTemplate';
@@ -1292,6 +1293,11 @@ const CashCountForm: React.FC<{ value: string; onChange: (v: string) => void }> 
 export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
   const { items, addItem, addServiceItem, removeItem, updateQty, clearCart, holdBill, recallBill, holdBills } = useCartStore();
   const { mode: displayMode, setMode: setDisplayMode } = useCustomerDisplayStore();
+  // จอ 2: มีสินค้าในบิล → "รายการสินค้า", ไม่มี → "โฆษณา" (โหมดชำระเงินคงเดิม)
+  const effectiveDisplayMode: DisplayMode =
+    displayMode === 'idle' || displayMode === 'cart'
+      ? (items.length > 0 ? 'cart' : 'idle')
+      : displayMode;
   const { products: masterProducts } = useProductStore();
   const { activeBranchId, activeBranch } = useBranchGuard();
   // ชื่อแคชเชียร์ = ผู้ใช้ที่ login อยู่
@@ -1591,7 +1597,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
     }, 0);
 
     useCustomerDisplayStore.getState().broadcastDisplay({
-      mode:             displayMode as any,
+      mode:             effectiveDisplayMode,
       displayItems:     displayItemsPayload,
       discountOverride: billDiscAmt + itemDiscountTotal,
       grandOverride:    grandTotal,
@@ -2696,7 +2702,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
             )}
 
             <View style={m.actions}>
-              <TouchableOpacity style={m.cancelBtn} onPress={() => { setPayModal(false); setSplitPayments([]); }}><Text style={m.cancelText}>ยกเลิก</Text></TouchableOpacity>
+              <TouchableOpacity style={m.cancelBtn} onPress={() => { setPayModal(false); setSplitPayments([]); setDisplayMode('idle'); useCustomerDisplayStore.getState().broadcastDisplay({ mode: 'idle' }); }}><Text style={m.cancelText}>ยกเลิก</Text></TouchableOpacity>
               <TouchableOpacity
                 style={[m.okBtn, splitPayments.reduce((s, p) => s + p.amount, 0) < grandTotal && m.okBtnDisabled]}
                 disabled={splitPayments.reduce((s, p) => s + p.amount, 0) < grandTotal}
@@ -2792,11 +2798,11 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                   // ── จอ 2: แสดง "ชำระเรียบร้อย" ──
                   setDisplayMode('payment_success');
                   useCustomerDisplayStore.getState().broadcastDisplay({ mode: 'payment_success', paidAmount: grandTotal, changeAmount: change });
-                  // กลับไป idle หลัง 5 วินาที
+                  // กลับไป idle หลังเวลาที่ตั้งไว้ในหน้าโฆษณาจอ 2 (ค่าเริ่มต้น 5 วินาที)
                   setTimeout(() => {
                     setDisplayMode('idle');
                     useCustomerDisplayStore.getState().broadcastDisplay({ mode: 'idle' });
-                  }, 5000);
+                  }, useCustomerDisplayStore.getState().successDurationSec * 1000);
 
                   clearCart();
                   setItemDiscounts({});
@@ -2853,7 +2859,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
             {/* Display content */}
             <View style={s.displayContent}>
               <WebCustomerDisplayScreen
-                mode={displayMode as any}
+                mode={effectiveDisplayMode}
                 embedded
                 onClose={() => setShowDisplay(false)}
                 discountOverride={billDiscAmt + items.reduce((s, i) => {

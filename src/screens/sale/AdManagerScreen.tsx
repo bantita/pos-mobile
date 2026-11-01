@@ -14,6 +14,7 @@ import { AdMedia, AdMediaType } from '../../types/customerDisplay';
 import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
 import { Spacing, BorderRadius } from '../../constants/spacing';
+import { DURATION_PRESETS, DEFAULT_AD_DURATION } from '../../utils/adSettings';
 
 interface Props { onBack: () => void }
 
@@ -24,7 +25,7 @@ const SAMPLE_IMAGES = [
   { label: 'เครื่องดื่ม', uri: 'https://images.unsplash.com/photo-1581456495146-65a71b2c8ca1?w=600' },
 ];
 
-const DURATION_OPTIONS = [3, 5, 8, 10, 15];
+const DURATION_OPTIONS = DURATION_PRESETS;
 
 export const AdManagerScreen: React.FC<Props> = ({ onBack }) => {
   const { ads, addAd, removeAd } = useCustomerDisplayStore();
@@ -35,7 +36,7 @@ export const AdManagerScreen: React.FC<Props> = ({ onBack }) => {
   const [uri, setUri]               = useState('');
   const [title, setTitle]           = useState('');
   const [subtitle, setSubtitle]     = useState('');
-  const [duration, setDuration]     = useState(5);
+  const [duration, setDuration]     = useState<number>(DEFAULT_AD_DURATION);
   const [previewUri, setPreviewUri] = useState('');
 
   const handleAdd = () => {
@@ -50,7 +51,7 @@ export const AdManagerScreen: React.FC<Props> = ({ onBack }) => {
     };
     addAd(newAd);
     setShowAddModal(false);
-    setUri(''); setTitle(''); setSubtitle(''); setDuration(5);
+    setUri(''); setTitle(''); setSubtitle(''); setDuration(DEFAULT_AD_DURATION);
     Alert.alert('✅ เพิ่มสำเร็จ', `เพิ่มสื่อโฆษณา ${adType === 'image' ? 'รูปภาพ' : 'วิดีโอ'} แล้ว`);
   };
 
@@ -269,7 +270,7 @@ export const AdManagerScreen: React.FC<Props> = ({ onBack }) => {
                     onPress={() => setDuration(d)}
                   >
                     <Text style={[styles.durationText, duration === d && styles.durationTextActive]}>
-                      {d}s
+                      {d} วินาที
                     </Text>
                   </TouchableOpacity>
                 ))}

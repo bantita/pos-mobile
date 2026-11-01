@@ -21,6 +21,7 @@ import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
 import { Spacing, BorderRadius } from '../../constants/spacing';
 import { formatCurrency } from '../../utils/format';
+import { getPlayableAds } from '../../utils/adSettings';
 
 const { width: W, height: H } = Dimensions.get('window');
 
@@ -60,7 +61,10 @@ const AdSlide: React.FC<{
 
 // ─── Idle Screen (Ad Slideshow) ───────────────────────────────────────────────
 const IdleScreen: React.FC = () => {
-  const { ads, currentAdIndex, nextAd, shopName } = useCustomerDisplayStore();
+  const { ads: allAds, adsEnabled, currentAdIndex: rawIndex, nextAd, shopName } = useCustomerDisplayStore();
+  // เล่นเฉพาะโฆษณาที่เปิดอยู่ + index ไม่หลุดช่วง
+  const ads = getPlayableAds(allAds, adsEnabled);
+  const currentAdIndex = ads.length > 0 ? rawIndex % ads.length : 0;
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const dotAnim = useRef(new Animated.Value(1)).current;
 
@@ -71,7 +75,7 @@ const IdleScreen: React.FC = () => {
       nextAd();
     }, (current?.duration ?? 5) * 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [currentAdIndex, ads]);
+  }, [currentAdIndex, allAds, adsEnabled]);
 
   // dot pulse
   useEffect(() => {

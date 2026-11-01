@@ -20,40 +20,56 @@ import { Ionicons } from '@expo/vector-icons';
 import { useCartStore } from '../../store/cartStore';
 import { useCustomerDisplayStore } from '../../store/customerDisplayStore';
 import { WebColors } from '../../constants/webColors';
+import { getPlayableAds, DEFAULT_THANK_YOU } from '../../utils/adSettings';
 
 const fmt = (n: number) => n.toLocaleString('th-TH', { minimumFractionDigits: 2 });
 
 // ─── Ad Slideshow (ใช้ใน RIGHT panel ล่าง) ───────────────────────────────────
 const AdSlide: React.FC = () => {
-  const { ads, currentAdIndex, nextAd, shopName } = useCustomerDisplayStore();
+  const { ads: allAds, adsEnabled, currentAdIndex, nextAd, shopName } = useCustomerDisplayStore();
+  const ads = getPlayableAds(allAds, adsEnabled);
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const ad = ads.length > 0 ? ads[currentAdIndex % ads.length] : undefined;
+  const activeIdx = ads.length > 0 ? currentAdIndex % ads.length : 0;
 
   useEffect(() => {
     fadeAnim.setValue(0);
     Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
-    if (ads.length > 0) {
-      const dur = (ads[currentAdIndex]?.duration ?? 5) * 1000;
+    if (ad) {
+      const dur = (ad.duration > 0 ? ad.duration : 5) * 1000;
       timerRef.current = setInterval(nextAd, dur);
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [currentAdIndex, ads.length]);
+  }, [currentAdIndex, ads.length, ad?.id, ad?.duration]);
 
-  if (ads.length === 0) {
+  if (!ad) {
+    // ปิดโฆษณา → แสดงชื่อร้าน / ไม่มีโฆษณา → ข้อความว่าง
     return (
       <View style={cd.adEmpty}>
-        <Ionicons name="images-outline" size={32} color={WebColors.gray300} />
-        <Text style={cd.adEmptyTxt}>ยังไม่มีโฆษณา</Text>
+        <Ionicons name={adsEnabled ? 'images-outline' : 'storefront-outline'} size={32} color={WebColors.gray300} />
+        <Text style={cd.adEmptyTxt}>{adsEnabled && allAds.length === 0 ? 'ยังไม่มีโฆษณา' : shopName}</Text>
       </View>
     );
   }
 
-  const ad = ads[currentAdIndex];
   return (
     <Animated.View style={[cd.adSlide, { opacity: fadeAnim }]}>
-      {ad?.type === 'image' && ad.uri
+      {ad.type === 'image' && ad.uri
         ? <Image source={{ uri: ad.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-        : <View style={[StyleSheet.absoluteFill, { backgroundColor: WebColors.grayDark }]} />}
+        : ad.type === 'video' && ad.uri && Platform.OS === 'web'
+          ? (
+            <video
+              key={ad.id}
+              src={ad.uri}
+              autoPlay
+              muted
+              loop
+              playsInline
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          )
+          : <View style={[StyleSheet.absoluteFill, { backgroundColor: WebColors.grayDark }]} />}
       <View style={cd.adDim} />
       {(ad?.title || ad?.subtitle) && (
         <View style={cd.adCaption}>
@@ -64,7 +80,7 @@ const AdSlide: React.FC = () => {
       {ads.length > 1 && (
         <View style={cd.dots}>
           {ads.map((_, i) => (
-            <View key={i} style={[cd.dot, i === currentAdIndex && cd.dotActive]} />
+            <View key={i} style={[cd.dot, i === activeIdx && cd.dotActive]} />
           ))}
         </View>
       )}
@@ -93,18 +109,24 @@ interface Props {
   displayItems?: DisplayItem[]; // items ที่คำนวณแล้วจากจอ 1
   onClose?: () => void;
   embedded?: boolean;
+  /** ซ่อนกล่องข้อมูลสมาชิก (ใช้ในหน้าตัวอย่าง) */
+  hideMemberInfo?: boolean;
+  /** ยอดรวมก่อนลด (ใช้ในหน้าตัวอย่าง) — ไม่ส่ง = ใช้จากตะกร้า */
+  subtotalOverride?: number;
 }
 
 export const WebCustomerDisplayScreen: React.FC<Props> = ({
-  mode: propMode, paidAmount = 0, changeAmount = 0,
+  mode: propMode, paidAmount = 0, changeAmount,
   discountOverride, grandOverride, displayItems,
-  onClose, embedded = false,
+  onClose, embedded = false, hideMemberInfo = false, subtotalOverride,
 }) => {
   const store      = useCustomerDisplayStore();
   const cart       = useCartStore();
   const activeMode = propMode ?? store.mode;
+  const change     = changeAmount ?? store.changeAmount;
+  const thankYou   = store.thankYouMessage || DEFAULT_THANK_YOU;
 
-  const subtotal  = cart.getSubtotal();
+  const subtotal  = subtotalOverride ?? cart.getSubtotal();
   // ใช้ค่าที่ส่งมาจากจอ 1 ก่อน ถ้าไม่มีค่าให้ fallback เป็น cartStore
   const discTotal = discountOverride !== undefined ? discountOverride
     : store.syncedDiscount > 0 ? store.syncedDiscount
@@ -141,7 +163,7 @@ export const WebCustomerDisplayScreen: React.FC<Props> = ({
   }, [activeMode]);
 
   useEffect(() => {
-    if (paidAmount) store.setPaidInfo(paidAmount, changeAmount);
+    if (paidAmount) store.setPaidInfo(paidAmount, changeAmount ?? 0);
   }, [paidAmount, changeAmount]);
 
   // ── สี/ข้อความตาม mode ──
@@ -199,9 +221,9 @@ export const WebCustomerDisplayScreen: React.FC<Props> = ({
       return (
         <View style={[cd.banner, { backgroundColor: WebColors.successLight, borderColor: WebColors.success }]}>
           <Ionicons name="checkmark-circle-outline" size={18} color={WebColors.success} />
-          <Text style={[cd.bannerTxt, { color: WebColors.success }]}>ชำระเงินสำเร็จ!</Text>
-          {store.changeAmount > 0 && (
-            <Text style={cd.changeTxt}>เงินทอน ฿ {fmt(store.changeAmount)}</Text>
+          <Text style={[cd.bannerTxt, { color: WebColors.success }]}>{thankYou}</Text>
+          {change > 0 && (
+            <Text style={cd.changeTxt}>เงินทอน ฿ {fmt(change)}</Text>
           )}
         </View>
       );
@@ -293,7 +315,7 @@ export const WebCustomerDisplayScreen: React.FC<Props> = ({
           </View>
 
           {/* Member Info */}
-          {store.memberInfo && (
+          {store.memberInfo && !hideMemberInfo && (
             <View style={{ backgroundColor: WebColors.warningLight, borderRadius: 10, padding: 10, marginBottom: 8 }}>
               <Text style={{ fontSize: 12, fontWeight: '700', color: WebColors.warning }}>{store.memberInfo.name}</Text>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
@@ -326,10 +348,10 @@ export const WebCustomerDisplayScreen: React.FC<Props> = ({
             {activeMode === 'payment_success' && (
               <View style={[cd.adOverlay, { backgroundColor: 'rgba(22,163,74,0.88)' }]}>
                 <Ionicons name="checkmark-circle" size={56} color={WebColors.white} />
-                <Text style={[cd.adOverlayTxt, { color: WebColors.white }]}>ชำระเงินสำเร็จ!</Text>
-                {store.changeAmount > 0 && (
+                <Text style={[cd.adOverlayTxt, { color: WebColors.white }]}>{thankYou}</Text>
+                {change > 0 && (
                   <Text style={[cd.adOverlayAmt, { color: WebColors.white, fontSize: 19 }]}>
-                    เงินทอน ฿ {fmt(store.changeAmount)}
+                    เงินทอน ฿ {fmt(change)}
                   </Text>
                 )}
               </View>
