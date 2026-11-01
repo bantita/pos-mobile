@@ -1,0 +1,11 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    { "severity": "LOW", "confidence": "likely", "title": "Stacking differs between mobile and web POS", "detail": "On mobile, a NO_STACK coupon/promo (stackable:false, e.g. CRM coupons) applied first causes the synthetic staff discount to be rejected. On web, memberTypeDiscount always applies alongside the coupon. Align the behaviour or document the difference explicitly." },
+    { "severity": "LOW", "confidence": "confirmed", "title": "Customer display discount leaves out the type discount", "detail": "WebPOSScreen ~1592 discountOverride = billDiscAmt + itemDiscountTotal leaves memberTypeDiscount out while grandOverride includes it. Coupons already behave this way; record as a follow-up for the customer-display workflow (out of scope here)." },
+    { "severity": "LOW", "confidence": "confirmed", "title": "No chat icon on the mobile member list", "detail": "MemberListScreen added only a call button; WebCRM has call + sms. Add a 44px chatbubble -> sms: button." },
+    { "severity": "LOW", "confidence": "confirmed", "title": "New web screen bypasses the shared UI kit", "detail": "WebMemberTypeScreen uses its own buttons/cards/badges/banner instead of @/components/ui Button/Card/Badge/Alert, a local TOUCH=44 instead of ComponentSize.button.md, and raw values (paddingVertical 2, maxWidth 420/460, flexBasis 260). A rewritten line in WebCRMScreen keeps the hex '#6B5B57'." },
+    { "severity": "LOW", "confidence": "confirmed", "title": "Web POS discount composition has no tests", "detail": "No test covers WebPOS grandTotal/discountTotal with a type discount + coupon + points, and the UI was not run. Do the manual walkthrough before release." }
+  ],
+  "reviewDoc": "d:\\pos-mobile\\.worktrees\\membertype\\.agents\\tasks\\member-types\\review.md"
+}
