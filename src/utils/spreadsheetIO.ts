@@ -142,8 +142,18 @@ const FILE_BASE: Record<MasterEntity, string> = {
   supplier: 'suppliers',
 };
 
-export function exportFileName(entity: MasterEntity, kind: 'export' | 'template', fmt: FileFormat, date: Date = new Date()): string {
+/**
+ * ชื่อไฟล์ดาวน์โหลด
+ *   export  → products_export_YYYYMMDD
+ *   backup  → products_backup_YYYYMMDD_HHmm (สำรองข้อมูลก่อนนำเข้า)
+ *   errors  → products_import_errors_YYYYMMDD_HHmm (รายการข้อผิดพลาดจากการนำเข้า)
+ */
+export function exportFileName(entity: MasterEntity, kind: 'export' | 'template' | 'backup' | 'errors', fmt: FileFormat, date: Date = new Date()): string {
   if (kind === 'template') return `${FILE_BASE[entity]}_import_template.${fmt}`;
-  const ymd = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const ymd = `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}`;
+  const hm = `${pad(date.getHours())}${pad(date.getMinutes())}`;
+  if (kind === 'backup') return `${FILE_BASE[entity]}_backup_${ymd}_${hm}.${fmt}`;
+  if (kind === 'errors') return `${FILE_BASE[entity]}_import_errors_${ymd}_${hm}.${fmt}`;
   return `${FILE_BASE[entity]}_export_${ymd}.${fmt}`;
 }

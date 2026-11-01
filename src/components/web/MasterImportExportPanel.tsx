@@ -2,20 +2,21 @@
  * MasterImportExportPanel — ปุ่ม/การ์ด Import · Export · Template ของมาสเตอร์ (เว็บ)
  * ใช้ร่วมกันใน: สินค้า (แท็บ Import/Export), มาสเตอร์ → ยี่ห้อ/หมวดหมู่, จัดการแบรนด์, จัดการผู้จำหน่าย
  *
- * ขั้นตอนนำเข้า: เลือกไฟล์ (.xlsx/.csv ≤ 10MB) → ตรวจสอบ → แสดงตัวอย่าง (เพิ่มใหม่ / อัปเดต /
- * ข้อผิดพลาด) → ยืนยัน → บันทึกเฉพาะรายการที่ถูกต้อง + audit log
+ * ขั้นตอนนำเข้า (useMasterMigration + MasterMigrationWizard):
+ *   1 เลือกไฟล์ (.xlsx/.csv ≤ 10MB) → 2 ตรวจสอบข้อมูล (ไมเกรต: เพิ่มใหม่ / อัปเดต ค่าเดิม → ค่าใหม่ /
+ *   ไม่เปลี่ยน / ข้อผิดพลาด) → 3 ยืนยันอีกครั้ง (+ ดาวน์โหลดข้อมูลสำรอง) → 4 ผลลัพธ์ + audit log
  */
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, ActivityIndicator, Platform,
+  View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { WebColors } from '../../constants/webColors';
-import {
-  ENTITY_LABELS, ImportPlan, ImportResult, MasterEntity, applyImport, planImport, plannedWrites,
-} from '../../utils/masterImportExport';
-import { FileFormat, ImportFileError, pickFile, readFileToWorkbook } from '../../utils/spreadsheetIO';
-import { downloadMasterFile, getImportContext, getMasterCount, storePorts } from '../../utils/masterPorts';
+import { ENTITY_LABELS, ImportResult, MasterEntity, MigrationResult } from '../../utils/masterImportExport';
+import { FileFormat } from '../../utils/spreadsheetIO';
+import { downloadMasterFile, getMasterCount } from '../../utils/masterPorts';
+import { useMasterMigration } from '../../hooks/useMasterMigration';
+import { MasterMigrationWizard } from './MasterMigrationWizard';
 
 export interface MasterImportExportPanelProps {
   entity: MasterEntity;
@@ -27,9 +28,7 @@ export interface MasterImportExportPanelProps {
   count?: number;
 }
 
-type Busy = 'import' | 'export' | 'template' | 'apply' | null;
-
-const MAX_ERRORS_SHOWN = 200;
+type Busy = 'export' | 'template' | null;
 
 const PRODUCT_HELP = [
   '1 แถว = 1 หน่วยนับ — สินค้าหลายหน่วยใส่รหัสสินค้าซ้ำหลายแถว (หน่วยหลัก Y ต้องมีอัตราส่วน 1)',
@@ -58,68 +57,46 @@ const FormatToggle: React.FC<{ value: FileFormat; onChange: (f: FileFormat) => v
 );
 
 export const MasterImportExportPanel: React.FC<MasterImportExportPanelProps> = ({ entity, compact = false, onApplied, count }) => {
-  const [busy, setBusy] = useState<Busy>(null);
+  const [downloading, setDownloading] = useState<Busy>(null);
   const [exportFmt, setExportFmt] = useState<FileFormat>('xlsx');
   const [templateFmt, setTemplateFmt] = useState<FileFormat>('xlsx');
-  const [plan, setPlan] = useState<ImportPlan | null>(null);
-  const [fileName, setFileName] = useState('');
-  const [error, setError] = useState('');
+  const [downloadError, setDownloadError] = useState('');
   const [result, setResult] = useState<ImportResult | null>(null);
   const [, setRefresh] = useState(0);
+
+  const handleApplied = useCallback((res: MigrationResult) => {
+    setResult(res);
+    setRefresh(k => k + 1);
+    onApplied?.();
+  }, [onApplied]);
+  const flow = useMasterMigration(entity, { onApplied: handleApplied });
 
   const label = ENTITY_LABELS[entity];
   const total = count ?? getMasterCount(entity);
   const isWeb = Platform.OS === 'web';
+  /** ข้อผิดพลาดขั้นเลือกไฟล์ (ขั้น 2–4 แสดงใน wizard) */
+  const error = downloadError || (flow.step === 1 ? flow.error : '');
+  const clearError = () => { setDownloadError(''); flow.setError(''); };
+  const busy: Busy | 'import' = flow.busy === 'read' ? 'import' : downloading;
+  /** ผลลัพธ์แสดงเป็นแถบสีเขียวหลังปิด wizard */
+  const shownResult = flow.step === 1 ? result : null;
 
-  const handleImport = async () => {
-    setError(''); setResult(null);
-    if (!isWeb) { setError('นำเข้าไฟล์ได้เฉพาะบนเว็บ'); return; }
-    const file = await pickFile();
-    if (!file) return;
-    setBusy('import');
-    try {
-      const wb = await readFileToWorkbook(entity, file);
-      const p = planImport(entity, wb, getImportContext());
-      if (p.fileErrors.length > 0) {
-        setError(p.fileErrors.join('\n'));
-      } else {
-        setFileName(file.name);
-        setPlan(p);
-      }
-    } catch (e) {
-      setError(e instanceof ImportFileError ? e.message : 'อ่านไฟล์ไม่สำเร็จ กรุณาตรวจสอบรูปแบบไฟล์');
-    } finally {
-      setBusy(null);
-    }
+  const handleImport = () => {
+    clearError(); setResult(null);
+    void flow.pickAndReview();
   };
 
   const handleDownload = async (kind: 'export' | 'template', fmt: FileFormat) => {
-    setError(''); setResult(null);
-    if (!isWeb) { setError('ดาวน์โหลดไฟล์ได้เฉพาะบนเว็บ'); return; }
-    if (kind === 'export' && total === 0) { setError(`ยังไม่มีข้อมูล${label}ให้ส่งออก`); return; }
-    setBusy(kind);
+    clearError(); setResult(null);
+    if (!isWeb) { setDownloadError('ดาวน์โหลดไฟล์ได้เฉพาะบนเว็บ'); return; }
+    if (kind === 'export' && total === 0) { setDownloadError(`ยังไม่มีข้อมูล${label}ให้ส่งออก`); return; }
+    setDownloading(kind);
     try {
       await downloadMasterFile(entity, kind, fmt);
     } catch {
-      setError(kind === 'export' ? 'ส่งออกไฟล์ไม่สำเร็จ' : 'ดาวน์โหลด Template ไม่สำเร็จ');
+      setDownloadError(kind === 'export' ? 'ส่งออกไฟล์ไม่สำเร็จ' : 'ดาวน์โหลด Template ไม่สำเร็จ');
     } finally {
-      setBusy(null);
-    }
-  };
-
-  const handleConfirm = () => {
-    if (!plan) return;
-    setBusy('apply');
-    try {
-      const res = applyImport(plan, storePorts);
-      setResult(res);
-      setPlan(null);
-      setRefresh(k => k + 1);
-      onApplied?.();
-    } catch {
-      setError('บันทึกข้อมูลไม่สำเร็จ');
-    } finally {
-      setBusy(null);
+      setDownloading(null);
     }
   };
 
@@ -137,15 +114,15 @@ export const MasterImportExportPanel: React.FC<MasterImportExportPanelProps> = (
         <View style={st.bannerError} accessibilityRole="alert">
           <Ionicons name="alert-circle" size={16} color={WebColors.danger} />
           <Text style={st.bannerErrorText}>{error}</Text>
-          <TouchableOpacity style={st.iconBtn} onPress={() => setError('')} accessibilityRole="button" accessibilityLabel="ปิดข้อความ">
+          <TouchableOpacity style={st.iconBtn} onPress={clearError} accessibilityRole="button" accessibilityLabel="ปิดข้อความ">
             <Ionicons name="close" size={16} color={WebColors.danger} />
           </TouchableOpacity>
         </View>
       )}
-      {result && (
+      {shownResult && (
         <View style={st.bannerSuccess} accessibilityRole="alert">
           <Ionicons name="checkmark-circle" size={16} color={WebColors.success} />
-          <Text style={st.bannerSuccessText}>{resultText(result)}</Text>
+          <Text style={st.bannerSuccessText}>{resultText(shownResult)}</Text>
           <TouchableOpacity style={st.iconBtn} onPress={() => setResult(null)} accessibilityRole="button" accessibilityLabel="ปิดข้อความ">
             <Ionicons name="close" size={16} color={WebColors.success} />
           </TouchableOpacity>
@@ -154,92 +131,10 @@ export const MasterImportExportPanel: React.FC<MasterImportExportPanelProps> = (
     </>
   );
 
-  // ─── Preview modal ────────────────────────────────────────────────────────
-  const writes = plan ? plannedWrites(plan) : 0;
-  const newMasterCount = plan ? plan.newMasters.categories.length + plan.newMasters.brands.length + plan.newMasters.suppliers.length : 0;
-  const isEmptyPlan = plan ? writes + plan.unchanged + plan.skippedRecords + plan.errors.length === 0 : false;
+  // ─── Review / confirm / result (ขั้น 2–4) ─────────────────────────────────
+  const preview = <MasterMigrationWizard flow={flow} />;
 
-  const stat = (title: string, value: number, color: string, bg: string) => (
-    <View style={[st.stat, { backgroundColor: bg }]}>
-      <Text style={[st.statValue, { color }]}>{value}</Text>
-      <Text style={st.statLabel}>{title}</Text>
-    </View>
-  );
-
-  const preview = (
-    <Modal visible={plan !== null} transparent animationType="fade" onRequestClose={() => setPlan(null)}>
-      <View style={st.overlay}>
-        <View style={st.modal}>
-          <View style={st.modalHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={st.modalTitle}>ตรวจสอบข้อมูลก่อนนำเข้า{label}</Text>
-              <Text style={st.modalSub} numberOfLines={1}>{fileName}</Text>
-            </View>
-            <TouchableOpacity style={st.iconBtn} onPress={() => setPlan(null)} accessibilityRole="button" accessibilityLabel="ปิด">
-              <Ionicons name="close" size={20} color={WebColors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-
-          {plan && isEmptyPlan ? (
-            <View style={st.empty}>
-              <Ionicons name="file-tray-outline" size={40} color={WebColors.border} />
-              <Text style={st.emptyText}>ไม่มีข้อมูลในไฟล์</Text>
-            </View>
-          ) : plan && (
-            <ScrollView style={st.modalBody} contentContainerStyle={{ gap: 12 }}>
-              <View style={st.statRow}>
-                {stat('เพิ่มใหม่', plan.creates.length, WebColors.success, WebColors.successLight)}
-                {stat('อัปเดต', plan.updates.length, WebColors.info, WebColors.infoLight)}
-                {stat('ไม่เปลี่ยนแปลง', plan.unchanged, WebColors.textSecondary, WebColors.gray100)}
-                {entity === 'product' && stat('สร้างมาสเตอร์ใหม่', newMasterCount, WebColors.purple, WebColors.purpleLight)}
-                {stat('ข้อผิดพลาด (ข้าม)', plan.skippedRecords, plan.skippedRecords > 0 ? WebColors.danger : WebColors.textSecondary, plan.skippedRecords > 0 ? WebColors.dangerLight : WebColors.gray100)}
-              </View>
-
-              {newMasterCount > 0 && (
-                <View style={st.infoBox}>
-                  <Text style={st.infoTitle}>มาสเตอร์ที่จะสร้างใหม่ {newMasterCount} รายการ</Text>
-                  {plan.newMasters.categories.length > 0 && <Text style={st.infoText}>หมวดหมู่: {plan.newMasters.categories.join(', ')}</Text>}
-                  {plan.newMasters.brands.length > 0 && <Text style={st.infoText}>แบรนด์: {plan.newMasters.brands.join(', ')}</Text>}
-                  {plan.newMasters.suppliers.length > 0 && <Text style={st.infoText}>ผู้จำหน่าย: {plan.newMasters.suppliers.join(', ')}</Text>}
-                </View>
-              )}
-
-              {plan.errors.length > 0 && (
-                <View style={st.errorBox}>
-                  <Text style={st.errorTitle}>รายละเอียดข้อผิดพลาด ({plan.errors.length}) — รายการเหล่านี้จะถูกข้าม</Text>
-                  {plan.errors.slice(0, MAX_ERRORS_SHOWN).map((e, i) => (
-                    <Text key={`${e.sheet ?? ''}-${e.row}-${i}`} style={st.errorText}>• {e.message}</Text>
-                  ))}
-                  {plan.errors.length > MAX_ERRORS_SHOWN && (
-                    <Text style={st.errorText}>และอีก {plan.errors.length - MAX_ERRORS_SHOWN} รายการ</Text>
-                  )}
-                </View>
-              )}
-            </ScrollView>
-          )}
-
-          <View style={st.modalFooter}>
-            <TouchableOpacity style={st.cancelBtn} onPress={() => setPlan(null)} accessibilityRole="button">
-              <Text style={st.cancelText}>ยกเลิก</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[st.confirmBtn, (writes === 0 || busy === 'apply') && st.btnDisabled]}
-              onPress={handleConfirm}
-              disabled={writes === 0 || busy === 'apply'}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: writes === 0 }}
-            >
-              {busy === 'apply'
-                ? <ActivityIndicator size="small" color={WebColors.white} />
-                : <Text style={st.confirmText}>{writes === 0 ? 'ไม่มีรายการที่ต้องบันทึก' : `ยืนยันนำเข้า ${writes} รายการ`}</Text>}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-
-  const btnContent = (kind: Busy, icon: React.ComponentProps<typeof Ionicons>['name'], text: string, color: string) => (
+  const btnContent = (kind: Busy | 'import', icon: React.ComponentProps<typeof Ionicons>['name'], text: string, color: string) => (
     busy === kind
       ? <ActivityIndicator size="small" color={color} />
       : <>
@@ -352,28 +247,4 @@ const st = StyleSheet.create({
   bannerErrorText: { flex: 1, fontSize: 12, color: WebColors.danger },
   bannerSuccess: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: WebColors.successLight, borderRadius: 8, padding: 10, alignSelf: 'stretch' },
   bannerSuccessText: { flex: 1, fontSize: 12, color: WebColors.success, fontWeight: '600' },
-  // modal
-  overlay: { flex: 1, backgroundColor: WebColors.overlay, alignItems: 'center', justifyContent: 'center', padding: 20 },
-  modal: { backgroundColor: WebColors.cardBg, borderRadius: 12, width: '100%', maxWidth: 680, maxHeight: '90%', overflow: 'hidden' },
-  modalHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderBottomWidth: 1, borderBottomColor: WebColors.border },
-  modalTitle: { fontSize: 15, fontWeight: '800', color: WebColors.text },
-  modalSub: { fontSize: 12, color: WebColors.textSecondary },
-  modalBody: { padding: 16 },
-  modalFooter: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, padding: 16, borderTopWidth: 1, borderTopColor: WebColors.border },
-  statRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  stat: { flex: 1, minWidth: 110, borderRadius: 8, padding: 12, alignItems: 'center', gap: 2 },
-  statValue: { fontSize: 22, fontWeight: '800' },
-  statLabel: { fontSize: 11, color: WebColors.textSecondary, textAlign: 'center' },
-  infoBox: { backgroundColor: WebColors.purpleLight, borderRadius: 8, padding: 12, gap: 4 },
-  infoTitle: { fontSize: 12, fontWeight: '700', color: WebColors.purple },
-  infoText: { fontSize: 12, color: WebColors.text },
-  errorBox: { backgroundColor: WebColors.dangerLight, borderRadius: 8, padding: 12, gap: 4 },
-  errorTitle: { fontSize: 12, fontWeight: '700', color: WebColors.danger, marginBottom: 4 },
-  errorText: { fontSize: 12, color: WebColors.danger },
-  empty: { alignItems: 'center', paddingVertical: 40, gap: 10 },
-  emptyText: { fontSize: 13, color: WebColors.textSecondary },
-  cancelBtn: { minHeight: 44, paddingHorizontal: 16, borderRadius: 8, borderWidth: 1, borderColor: WebColors.border, alignItems: 'center', justifyContent: 'center' },
-  cancelText: { fontSize: 13, fontWeight: '600', color: WebColors.textSecondary },
-  confirmBtn: { minHeight: 44, minWidth: 160, paddingHorizontal: 16, borderRadius: 8, backgroundColor: WebColors.primary, alignItems: 'center', justifyContent: 'center' },
-  confirmText: { fontSize: 13, fontWeight: '700', color: WebColors.white },
 });

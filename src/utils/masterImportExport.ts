@@ -9,7 +9,9 @@
  *   แปลงเป็น/จาก CSV ได้ที่นี่ ส่วน .xlsx แปลงใน spreadsheetIO.ts (SheetJS)
  *
  * ขั้นตอน: buildTemplate / export*  →  ไฟล์  →  plan*Import (parse + validate, ไม่แก้ข้อมูล)
- *          →  แสดงตัวอย่าง (เพิ่มใหม่ / อัปเดต / ข้อผิดพลาด)  →  applyImport(plan, ports)
+ *          →  buildMigrationPlan (ไมเกรต: รายการละ 1 แถว เพิ่มใหม่ / อัปเดต (ค่าเดิม → ค่าใหม่) /
+ *             ไม่เปลี่ยน / ข้อผิดพลาด, ไม่แก้ข้อมูล)  →  ผู้ใช้ตรวจสอบ  →  ยืนยันอีกครั้ง
+ *          →  applyMigration(plan, ports) (= applyImport ของแผนเดียวกับที่ตรวจสอบ)
  */
 import type { ProductMaster, ProductUOM, ProductOption, ProductVariant, Category, Brand } from '../types/product';
 import type { Supplier } from '../types/inventory';
@@ -48,6 +50,8 @@ export interface RowError {
   sheet?: string;
   /** ข้อความภาษาไทยเต็ม เช่น "แถว 5: ราคาขายต้องเป็นตัวเลข" */
   message: string;
+  /** รหัสสินค้า / ชื่อรายการที่แถวนี้อ้างถึง (ใช้จัดกลุ่มในหน้าตรวจสอบข้อมูล) */
+  key?: string;
 }
 
 export interface ImportContext {
@@ -69,6 +73,8 @@ interface PlanBase {
   skippedRecords: number;
   /** รายการที่มีอยู่แล้วและข้อมูลในไฟล์เหมือนเดิมทุกอย่าง */
   unchanged: number;
+  /** รายการที่ไม่เปลี่ยนแปลง (id ในระบบ + รหัส/ชื่อ) — จำนวนเท่ากับ unchanged */
+  unchangedItems: { id: string; key: string }[];
 }
 
 export interface CategoryDraft {
@@ -330,7 +336,7 @@ function isUnchanged<T extends object>(existing: T, data: Partial<T>): boolean {
 
 const emptyBase = (): PlanBase => ({
   newMasters: { categories: [], brands: [], suppliers: [] },
-  errors: [], fileErrors: [], skippedRows: 0, skippedRecords: 0, unchanged: 0,
+  errors: [], fileErrors: [], skippedRows: 0, skippedRecords: 0, unchanged: 0, unchangedItems: [],
 });
 
 // ─── CSV ──────────────────────────────────────────────────────────────────────
@@ -631,13 +637,20 @@ function readTable(sheet: Sheet | undefined, columns: ColumnDef[], allowEmpty = 
 
 class ErrorBag {
   list: RowError[] = [];
+  /** รหัส/ชื่อของรายการที่กำลังตรวจ — ใส่ลงใน RowError.key ทุกข้อ */
+  key?: string;
   constructor(private sheet?: string) {}
+  private push(rowNo: number, message: string): void {
+    const e: RowError = { row: rowNo, sheet: this.sheet, message };
+    if (this.key) e.key = this.key;
+    this.list.push(e);
+  }
   row(rowNo: number, msg: string): void {
     const prefix = this.sheet === SHEET_NAMES.variant ? `${SHEET_NAMES.variant} แถว` : 'แถว';
-    this.list.push({ row: rowNo, sheet: this.sheet, message: `${prefix} ${rowNo}: ${msg}` });
+    this.push(rowNo, `${prefix} ${rowNo}: ${msg}`);
   }
   raw(rowNo: number, message: string): void {
-    this.list.push({ row: rowNo, sheet: this.sheet, message });
+    this.push(rowNo, message);
   }
   get size(): number { return this.list.length; }
 }
@@ -799,6 +812,8 @@ export function planProductImport(wb: Workbook, ctx: ImportContext): ProductImpo
     const pBefore = pBag.size;
     const vBefore = vBag.size;
     const { code, rows } = g;
+    pBag.key = code;
+    vBag.key = code;
     const first = rows[0];
     const existing = existingByCode.get(codeKey);
 
@@ -1024,6 +1039,7 @@ export function planProductImport(wb: Workbook, ctx: ImportContext): ProductImpo
   variantGroups.forEach((vg, codeKey) => {
     if (groups.has(codeKey)) return;
     seq++;
+    vBag.key = vg.code;
     const existing = existingByCode.get(codeKey);
     if (!existing) {
       vg.rows.forEach(r => vBag.row(r.rowNo, `ไม่พบสินค้า ${vg.code}`));
@@ -1068,6 +1084,7 @@ export function planProductImport(wb: Workbook, ctx: ImportContext): ProductImpo
         const other = list.find(x => x.code !== o.code);
         const at = fileBarcodes.get(bc);
         const bag = at?.sheet === SHEET_NAMES.variant ? vBag : pBag;
+        bag.key = pp.code;
         bag.row(at?.rowNo ?? pp.firstRow, `บาร์โค้ด ${bc} ซ้ำกับสินค้า ${other?.code ?? ''}`);
         rejected.add(pp);
         rejectedNow++;
@@ -1087,8 +1104,10 @@ export function planProductImport(wb: Workbook, ctx: ImportContext): ProductImpo
     p.masters.suppliers.forEach(n => pushUnique(plan.newMasters.suppliers, n));
     if (p.create) plan.creates.push(p.create);
     else if (p.existing && p.update) {
-      if (isUnchanged(p.existing, p.update)) plan.unchanged++;
-      else plan.updates.push({ id: p.existing.id, code: p.existing.code, data: p.update });
+      if (isUnchanged(p.existing, p.update)) {
+        plan.unchanged++;
+        plan.unchangedItems.push({ id: p.existing.id, key: p.existing.code });
+      } else plan.updates.push({ id: p.existing.id, code: p.existing.code, data: p.update });
     }
   });
 
@@ -1133,6 +1152,7 @@ export function planCategoryImport(wb: Workbook, ctx: ImportContext): CategoryIm
   table.rows.forEach(r => {
     const before = bag.size;
     const name = r.get('name');
+    bag.key = name || undefined;
     if (!name) bag.row(r.rowNo, 'กรุณากรอกชื่อหมวดหมู่');
     const status = readStatus(r, bag);
     const parent = r.get('parent');
@@ -1154,6 +1174,7 @@ export function planCategoryImport(wb: Workbook, ctx: ImportContext): CategoryIm
       const names = new Set(ok.map(p => normName(p.name)));
       ok = ok.filter(p => {
         if (!p.parent || idx.get(p.parent) || names.has(normName(p.parent))) return true;
+        bag.key = p.name;
         bag.row(p.row.rowNo, `ไม่พบหมวดหมู่หลัก ${p.parent}`);
         rejected++; changed = true;
         return false;
@@ -1177,6 +1198,7 @@ export function planCategoryImport(wb: Workbook, ctx: ImportContext): CategoryIm
   }
   ok = ok.filter(p => {
     if (idx.get(p.name) || placed.has(normName(p.name))) return true;
+    bag.key = p.name;
     bag.row(p.row.rowNo, 'หมวดหมู่หลักวนซ้ำกัน');
     rejected++;
     return false;
@@ -1191,8 +1213,10 @@ export function planCategoryImport(wb: Workbook, ctx: ImportContext): CategoryIm
     if (p.status) data.status = p.status;
     if (parentExisting) data.parentId = parentExisting.id;
     else if (p.parent) data.parentName = p.parent;
-    if (!data.parentName && isUnchanged(existing, data)) plan.unchanged++;
-    else plan.updates.push({ id: existing.id, data });
+    if (!data.parentName && isUnchanged(existing, data)) {
+      plan.unchanged++;
+      plan.unchangedItems.push({ id: existing.id, key: existing.name });
+    } else plan.updates.push({ id: existing.id, data });
   });
   const okNames = new Set(ok.map(p => normName(p.name)));
   ordered.filter(p => okNames.has(normName(p.name))).forEach(p => {
@@ -1219,6 +1243,7 @@ export function planBrandImport(wb: Workbook, ctx: ImportContext): BrandImportPl
   table.rows.forEach(r => {
     const before = bag.size;
     const name = r.get('name');
+    bag.key = name || undefined;
     if (!name) bag.row(r.rowNo, 'กรุณากรอกชื่อแบรนด์');
     const status = readStatus(r, bag);
     if (name) {
@@ -1230,8 +1255,10 @@ export function planBrandImport(wb: Workbook, ctx: ImportContext): BrandImportPl
     const existing = idx.get(name);
     if (existing) {
       const data: Partial<Omit<Brand, 'id'>> = status ? { status } : {};
-      if (isUnchanged(existing, data)) plan.unchanged++;
-      else plan.updates.push({ id: existing.id, data });
+      if (isUnchanged(existing, data)) {
+        plan.unchanged++;
+        plan.unchangedItems.push({ id: existing.id, key: existing.name });
+      } else plan.updates.push({ id: existing.id, data });
     } else {
       plan.creates.push({ name, status: status ?? 'active' });
     }
@@ -1255,6 +1282,7 @@ export function planSupplierImport(wb: Workbook, ctx: ImportContext): SupplierIm
   table.rows.forEach(r => {
     const before = bag.size;
     const name = r.get('name');
+    bag.key = name || undefined;
     if (!name) bag.row(r.rowNo, 'กรุณากรอกชื่อผู้จำหน่าย');
     const taxId = r.get('taxId').replace(/[\s-]/g, '');
     if (taxId && !/^\d{13}$/.test(taxId)) bag.row(r.rowNo, 'เลขผู้เสียภาษีต้องเป็นตัวเลข 13 หลัก');
@@ -1279,8 +1307,10 @@ export function planSupplierImport(wb: Workbook, ctx: ImportContext): SupplierIm
       if (taxId) data.taxId = taxId;
       if (phone) data.phone = phone;
       if (contactName) data.contactName = contactName;
-      if (isUnchanged(existing, data)) plan.unchanged++;
-      else plan.updates.push({ id: existing.id, data });
+      if (isUnchanged(existing, data)) {
+        plan.unchanged++;
+        plan.unchangedItems.push({ id: existing.id, key: existing.name });
+      } else plan.updates.push({ id: existing.id, data });
     } else {
       const draft: SupplierDraft = { name };
       if (taxId) draft.taxId = taxId;
@@ -1360,4 +1390,482 @@ export function applyImport(plan: ImportPlan, ports: MasterPorts): ImportResult 
   parts.push(`ข้าม ${result.skipped}`);
   ports.logAction(moduleName, 'นำเข้าข้อมูล', `นำเข้า${moduleName}: ${parts.join(' ')} รายการ`, { ...result });
   return result;
+}
+
+// ─── Migration review (ไมเกรต) ───────────────────────────────────────────────
+// แผนรายรายการสำหรับหน้า "ตรวจสอบข้อมูล" ก่อนยืนยันนำเข้า — pure, ไม่แก้ store
+// ห่อ ImportPlan เดิมไว้ใน source เพื่อให้สิ่งที่ถูกบันทึก = สิ่งที่ผู้ใช้ตรวจสอบ
+
+export type MigrationAction = 'create' | 'update' | 'unchanged' | 'error';
+export type ChangeKind = 'added' | 'removed' | 'changed' | 'same';
+export type MigrationFilter = MigrationAction | 'all';
+
+export interface FieldChange { field: string; label: string; before: string; after: string }
+
+export interface UomView {
+  unit: string; ratio: number; costPrice: number; salePrice: number;
+  /** บาร์โค้ดคั่นด้วย | */
+  barcodes: string; isBase: boolean; isDefault: boolean;
+}
+export interface UomChange {
+  unit: string; kind: ChangeKind; before?: UomView; after?: UomView;
+  /** key ของ UomView ที่เปลี่ยน */
+  changedFields: (keyof UomView)[];
+}
+export interface VariantView { optionValues: string; sku: string; barcode: string; price?: number; stockQty: number }
+export interface VariantChange {
+  /** ค่าตัวเลือก เช่น "สี=แดง; ไซส์=M" */
+  key: string; kind: ChangeKind; before?: VariantView; after?: VariantView;
+  changedFields: (keyof VariantView)[];
+}
+
+export interface MigrationRecord {
+  /** key สำหรับ React (คงที่ภายในแผน) */
+  id: string;
+  action: MigrationAction;
+  /** รหัสสินค้า / ชื่อ / "แถว N" เมื่อไม่ทราบ */
+  key: string;
+  name?: string;
+  /** เลขแถวในไฟล์ */
+  rows: number[];
+  /** ข้อมูลหลักสำหรับแสดงในรายการ (ค่าหลังนำเข้า) */
+  fields: { label: string; value: string }[];
+  /** เฉพาะ update: ฟิลด์ที่เปลี่ยน ค่าเดิม → ค่าใหม่ */
+  changedFields: FieldChange[];
+  /** เฉพาะสินค้า */
+  uomChanges: UomChange[];
+  variantChanges: VariantChange[];
+  /** เฉพาะ error: ข้อความภาษาไทย (แถวนี้จะถูกข้าม) */
+  errors: RowError[];
+}
+
+export interface MigrationSummary {
+  total: number; create: number; update: number; unchanged: number; error: number; mastersToCreate: number;
+}
+
+export interface MigrationPlan {
+  entity: MasterEntity;
+  /** แผนเดิมที่ applyMigration ใช้บันทึก */
+  source: ImportPlan;
+  records: MigrationRecord[];
+  mastersToCreate: { categories: string[]; brands: string[]; suppliers: string[] };
+  summary: MigrationSummary;
+  fileErrors: string[];
+}
+
+export interface MigrationResult extends ImportResult {
+  mastersCreatedNames: MigrationPlan['mastersToCreate'];
+  errorRecords: MigrationRecord[];
+}
+
+export const MIGRATION_PAGE_SIZE = 50;
+
+export const MIGRATION_ACTION_LABELS: Record<MigrationAction, string> = {
+  create: 'เพิ่มใหม่',
+  update: 'อัปเดต',
+  unchanged: 'ไม่เปลี่ยน',
+  error: 'ข้อผิดพลาด',
+};
+
+export const MIGRATION_FILTERS: { key: MigrationFilter; label: string }[] = [
+  { key: 'all', label: 'ทั้งหมด' },
+  { key: 'create', label: 'เพิ่มใหม่' },
+  { key: 'update', label: 'อัปเดต' },
+  { key: 'unchanged', label: 'ไม่เปลี่ยนแปลง' },
+  { key: 'error', label: 'ข้อผิดพลาด' },
+];
+
+export const CHANGE_KIND_LABELS: Record<ChangeKind, string> = {
+  added: 'เพิ่ม',
+  removed: 'ลบ',
+  changed: 'แก้ไข',
+  same: 'เหมือนเดิม',
+};
+
+export const UOM_FIELD_LABELS: Record<keyof UomView, string> = {
+  unit: 'หน่วย', ratio: 'อัตราส่วน', costPrice: 'ราคาทุน', salePrice: 'ราคาขาย',
+  barcodes: 'บาร์โค้ด', isBase: 'หน่วยหลัก', isDefault: 'หน่วยเริ่มต้น POS',
+};
+
+export const VARIANT_FIELD_LABELS: Record<keyof VariantView, string> = {
+  optionValues: 'ตัวเลือก', sku: 'SKU', barcode: 'บาร์โค้ด', price: 'ราคา', stockQty: 'สต๊อก',
+};
+
+/** ค่า → ข้อความสำหรับแสดง/เทียบ (ว่าง = '') */
+export function formatMigrationValue(v: unknown): string {
+  if (v === undefined || v === null) return '';
+  if (typeof v === 'boolean') return v ? 'Y' : 'N';
+  if (typeof v === 'number') return Number.isInteger(v) ? String(v) : String(Number(v.toFixed(4)));
+  return String(v);
+}
+const fv = formatMigrationValue;
+
+export interface DiffFieldSpec<T> {
+  key: keyof T & string;
+  label: string;
+  fmt?: (v: unknown) => string;
+}
+
+/** เทียบเฉพาะฟิลด์ที่กำหนด — คืนเฉพาะที่ค่า (หลัง format) ต่างกัน */
+export function diffFields<T>(before: T, after: T, fields: DiffFieldSpec<T>[]): FieldChange[] {
+  const out: FieldChange[] = [];
+  fields.forEach(f => {
+    const fmt = f.fmt ?? fv;
+    const b = fmt(before[f.key]);
+    const a = fmt(after[f.key]);
+    if (b !== a) out.push({ field: f.key, label: f.label, before: b, after: a });
+  });
+  return out;
+}
+
+const PRODUCT_DIFF_FIELDS: DiffFieldSpec<ProductMaster>[] = [
+  { key: 'name', label: 'ชื่อ' },
+  { key: 'productType', label: 'ประเภท', fmt: v => productTypeLabel(v as ProductMaster['productType'] | undefined) },
+  { key: 'categoryName', label: 'หมวดหมู่' },
+  { key: 'brandName', label: 'แบรนด์' },
+  { key: 'supplierName', label: 'ผู้จำหน่าย' },
+  { key: 'unit', label: 'หน่วยหลัก' },
+  { key: 'costPrice', label: 'ราคาทุน' },
+  { key: 'salePrice', label: 'ราคาขาย' },
+  { key: 'barcode', label: 'บาร์โค้ดหลัก' },
+  { key: 'vatIncluded', label: 'VAT รวมในราคา' },
+  { key: 'vatRate', label: 'อัตรา VAT' },
+  { key: 'stockQty', label: 'สต๊อก' },
+  { key: 'minStock', label: 'สต๊อกขั้นต่ำ' },
+  { key: 'status', label: 'สถานะ', fmt: v => (v ? statusLabel(v as 'active' | 'inactive') : '') },
+  { key: 'color', label: 'สี' },
+  { key: 'size', label: 'ไซส์' },
+  { key: 'lotNumber', label: 'Lot' },
+  { key: 'modelYear', label: 'ปีรุ่น' },
+  { key: 'image', label: 'รูปภาพ' },
+  { key: 'options', label: 'ตัวเลือกสินค้า', fmt: v => formatOptions(v as ProductOption[] | undefined) },
+];
+
+function uomViews(p: ProductMaster): UomView[] {
+  const { base, others } = orderedUoms(p);
+  return [base, ...others].map(u => ({
+    unit: u.unit, ratio: u.ratio, costPrice: u.costPrice, salePrice: u.salePrice,
+    barcodes: u.barcodes.join(BARCODE_SEPARATOR), isBase: u === base, isDefault: u.isDefault,
+  }));
+}
+
+const UOM_COMPARE: (keyof UomView)[] = ['ratio', 'costPrice', 'salePrice', 'barcodes', 'isBase', 'isDefault'];
+const VARIANT_COMPARE: (keyof VariantView)[] = ['sku', 'barcode', 'price', 'stockQty'];
+
+function diffUoms(before: ProductMaster | undefined, after: ProductMaster): UomChange[] {
+  const bViews = before ? uomViews(before) : [];
+  const aViews = uomViews(after);
+  const used = new Set<UomView>();
+  const out: UomChange[] = aViews.map(a => {
+    const b = bViews.find(x => !used.has(x) && normName(x.unit) === normName(a.unit));
+    if (!b) return { unit: a.unit, kind: 'added', after: a, changedFields: [] };
+    used.add(b);
+    const changed = UOM_COMPARE.filter(k => fv(b[k]) !== fv(a[k]));
+    return { unit: a.unit, kind: changed.length > 0 ? 'changed' : 'same', before: b, after: a, changedFields: changed };
+  });
+  bViews.filter(b => !used.has(b)).forEach(b => out.push({ unit: b.unit, kind: 'removed', before: b, changedFields: [] }));
+  return out;
+}
+
+function variantView(v: ProductVariant, options?: ProductOption[]): VariantView {
+  return { optionValues: formatOptionValues(v.optionValues, options), sku: v.sku ?? '', barcode: v.barcode ?? '', price: v.price, stockQty: v.stockQty };
+}
+
+function diffVariants(before: ProductMaster | undefined, after: ProductMaster): VariantChange[] {
+  // ไม่มีแถวในชีต ตัวเลือกสินค้า → variants เดิมไม่ถูกแก้
+  if (!after.variants || (before && after.variants === before.variants)) return [];
+  const bList = before?.variants ?? [];
+  const used = new Set<ProductVariant>();
+  const out: VariantChange[] = after.variants.map(v => {
+    const a = variantView(v, after.options);
+    const prev = bList.find(x => !used.has(x) && comboKey(x.optionValues) === comboKey(v.optionValues));
+    if (!prev) return { key: a.optionValues, kind: 'added', after: a, changedFields: [] };
+    used.add(prev);
+    const b = variantView(prev, before?.options);
+    const changed = VARIANT_COMPARE.filter(k => fv(b[k]) !== fv(a[k]));
+    return { key: a.optionValues, kind: changed.length > 0 ? 'changed' : 'same', before: b, after: a, changedFields: changed };
+  });
+  bList.filter(v => !used.has(v)).forEach(v => {
+    const b = variantView(v, before?.options);
+    out.push({ key: b.optionValues, kind: 'removed', before: b, changedFields: [] });
+  });
+  return out;
+}
+
+const countKinds = (list: { kind: ChangeKind }[]): string => {
+  const n = (k: ChangeKind) => list.filter(x => x.kind === k).length;
+  return [['added', 'เพิ่ม'], ['changed', 'แก้ไข'], ['removed', 'ลบ']]
+    .map(([k, l]) => (n(k as ChangeKind) > 0 ? `${l} ${n(k as ChangeKind)}` : ''))
+    .filter(Boolean).join(' · ');
+};
+
+const allUomBarcodes = (p: ProductMaster): string =>
+  uomViews(p).map(u => u.barcodes).filter(Boolean).join(BARCODE_SEPARATOR);
+
+/** เทียบสินค้าเดิม → ใหม่: ฟิลด์ที่เปลี่ยน + หน่วยนับ + ตัวเลือกสินค้า */
+export function diffProduct(before: ProductMaster | undefined, after: ProductMaster): Pick<MigrationRecord, 'changedFields' | 'uomChanges' | 'variantChanges'> {
+  const uomChanges = diffUoms(before, after);
+  const variantChanges = diffVariants(before, after);
+  if (!before) return { changedFields: [], uomChanges, variantChanges };
+  const changedFields = diffFields(before, after, PRODUCT_DIFF_FIELDS);
+  const bBar = allUomBarcodes(before);
+  const aBar = allUomBarcodes(after);
+  if (bBar !== aBar) changedFields.push({ field: 'barcodes', label: 'บาร์โค้ด', before: bBar, after: aBar });
+  if (uomChanges.some(u => u.kind !== 'same')) {
+    const units = (list: UomChange[]) => list.map(u => u.unit).join(', ');
+    changedFields.push({
+      field: 'uoms', label: 'หน่วยนับ',
+      before: units(uomChanges.filter(u => u.kind !== 'added')),
+      after: `${units(uomChanges.filter(u => u.kind !== 'removed'))} (${countKinds(uomChanges)})`,
+    });
+  }
+  if (variantChanges.some(v => v.kind !== 'same')) {
+    changedFields.push({
+      field: 'variants', label: 'ตัวเลือกสินค้า (variants)',
+      before: `${(before.variants ?? []).length} รายการ`,
+      after: `${(after.variants ?? []).length} รายการ (${countKinds(variantChanges)})`,
+    });
+  }
+  return { changedFields, uomChanges, variantChanges };
+}
+
+function productFields(p: ProductMaster): { label: string; value: string }[] {
+  const barcodes = [p.barcode, ...uomViews(p).flatMap(u => splitBarcodes(u.barcodes))]
+    .filter((b, i, arr) => !!b && arr.indexOf(b) === i);
+  return [
+    { label: 'รหัส', value: p.code },
+    { label: 'ชื่อ', value: p.name },
+    { label: 'ประเภท', value: productTypeLabel(p.productType) },
+    { label: 'หมวดหมู่', value: p.categoryName ?? '' },
+    { label: 'แบรนด์', value: p.brandName ?? '' },
+    { label: 'ผู้จำหน่าย', value: p.supplierName ?? '' },
+    { label: 'หน่วยหลัก', value: p.unit },
+    { label: 'ราคาทุน', value: fv(p.costPrice) },
+    { label: 'ราคาขาย', value: fv(p.salePrice) },
+    { label: 'บาร์โค้ด', value: barcodes.join(BARCODE_SEPARATOR) },
+    { label: 'VAT', value: `${p.vatIncluded ? 'รวมในราคา' : 'ไม่รวม'} ${fv(p.vatRate)}%` },
+    { label: 'สต๊อก', value: fv(p.stockQty) },
+    { label: 'สถานะ', value: p.status ? statusLabel(p.status) : '' },
+  ];
+}
+
+type SimpleView = Record<string, string>;
+const viewFields = (v: SimpleView, specs: DiffFieldSpec<SimpleView>[]) =>
+  specs.map(s => ({ label: s.label, value: v[s.key] ?? '' }));
+
+const CATEGORY_VIEW: DiffFieldSpec<SimpleView>[] = [
+  { key: 'name', label: 'ชื่อ' }, { key: 'parent', label: 'หมวดหมู่หลัก' }, { key: 'status', label: 'สถานะ' },
+];
+const BRAND_VIEW: DiffFieldSpec<SimpleView>[] = [{ key: 'name', label: 'ชื่อ' }, { key: 'status', label: 'สถานะ' }];
+const SUPPLIER_VIEW: DiffFieldSpec<SimpleView>[] = [
+  { key: 'name', label: 'ชื่อ' }, { key: 'taxId', label: 'เลขผู้เสียภาษี' },
+  { key: 'phone', label: 'โทร' }, { key: 'contactName', label: 'ผู้ติดต่อ' },
+];
+
+/** เลขแถวในไฟล์ของแต่ละรายการ (จับคู่ด้วยรหัสสินค้า / ชื่อ) */
+function fileRowIndex(entity: MasterEntity, wb: Workbook): Map<string, number[]> {
+  const out = new Map<string, number[]>();
+  const keyCol = entity === 'product' ? 'code' : 'name';
+  readTable(mainSheet(entity, wb), ENTITY_COLUMNS[entity]).rows.forEach(r => {
+    const k = normName(r.get(keyCol));
+    if (!k) return;
+    out.set(k, [...(out.get(k) ?? []), r.rowNo]);
+  });
+  return out;
+}
+
+const blankRecord = (id: string, action: MigrationAction, key: string, rows: number[]): MigrationRecord => ({
+  id, action, key, rows, fields: [], changedFields: [], uomChanges: [], variantChanges: [], errors: [],
+});
+
+/**
+ * สร้างแผนไมเกรตจากไฟล์ + ข้อมูลปัจจุบัน (ไม่แก้ข้อมูลใด ๆ)
+ * ใช้ planImport เดิมทั้งหมด (กฎตรวจสอบ, รวมหน่วยเดิม, สร้างมาสเตอร์อัตโนมัติ, variants)
+ */
+export function buildMigrationPlan(entity: MasterEntity, wb: Workbook, ctx: ImportContext): MigrationPlan {
+  const source = planImport(entity, wb, ctx);
+  const records: MigrationRecord[] = [];
+  const mastersToCreate = {
+    categories: [...source.newMasters.categories],
+    brands: [...source.newMasters.brands],
+    suppliers: [...source.newMasters.suppliers],
+  };
+  if (source.fileErrors.length > 0) {
+    return {
+      entity, source, records, mastersToCreate, fileErrors: [...source.fileErrors],
+      summary: { total: 0, create: 0, update: 0, unchanged: 0, error: 0, mastersToCreate: 0 },
+    };
+  }
+  const rowIdx = fileRowIndex(entity, wb);
+  const rowsOf = (key: string) => rowIdx.get(normName(key)) ?? [];
+  let seq = 0;
+  const nextId = (a: MigrationAction) => `${a}-${++seq}`;
+
+  if (source.entity === 'product') {
+    const byId = new Map(ctx.products.map(p => [p.id, p]));
+    source.creates.forEach(p => {
+      records.push({ ...blankRecord(nextId('create'), 'create', p.code, rowsOf(p.code)), name: p.name, fields: productFields(p), ...diffProduct(undefined, p) });
+    });
+    source.updates.forEach(u => {
+      const before = byId.get(u.id);
+      if (!before) return;
+      const after = { ...before, ...u.data } as ProductMaster;
+      const diff = diffProduct(before, after);
+      if (diff.changedFields.length === 0) {
+        diff.changedFields.push({ field: 'other', label: 'ข้อมูลอื่น', before: '', after: 'ปรับข้อมูลอ้างอิงภายใน' });
+      }
+      records.push({ ...blankRecord(nextId('update'), 'update', u.code, rowsOf(u.code)), name: after.name, fields: productFields(after), ...diff });
+    });
+    source.unchangedItems.forEach(it => {
+      const p = byId.get(it.id);
+      if (!p) return;
+      records.push({ ...blankRecord(nextId('unchanged'), 'unchanged', p.code, rowsOf(p.code)), name: p.name, fields: productFields(p), uomChanges: diffUoms(p, p) });
+    });
+  } else if (source.entity === 'category') {
+    const byId = new Map(ctx.categories.map(c => [c.id, c]));
+    const parentName = (id?: string) => (id ? byId.get(id)?.name ?? '' : '');
+    const view = (c: { name: string; status: 'active' | 'inactive'; parentId?: string; parentName?: string }): SimpleView => ({
+      name: c.name, parent: c.parentName ?? parentName(c.parentId), status: statusLabel(c.status),
+    });
+    source.creates.forEach(d => {
+      records.push({ ...blankRecord(nextId('create'), 'create', d.name, rowsOf(d.name)), fields: viewFields(view(d), CATEGORY_VIEW) });
+    });
+    source.updates.forEach(u => {
+      const before = byId.get(u.id);
+      if (!before) return;
+      const { parentName: pn, ...rest } = u.data;
+      const after = { ...before, ...rest, ...(pn ? { parentName: pn } : {}) };
+      const bv = view(before);
+      const av = view(after);
+      records.push({ ...blankRecord(nextId('update'), 'update', before.name, rowsOf(before.name)), fields: viewFields(av, CATEGORY_VIEW), changedFields: diffFields(bv, av, CATEGORY_VIEW) });
+    });
+    source.unchangedItems.forEach(it => {
+      const c = byId.get(it.id);
+      if (c) records.push({ ...blankRecord(nextId('unchanged'), 'unchanged', c.name, rowsOf(c.name)), fields: viewFields(view(c), CATEGORY_VIEW) });
+    });
+  } else if (source.entity === 'brand') {
+    const byId = new Map(ctx.brands.map(b => [b.id, b]));
+    const view = (b: { name: string; status: 'active' | 'inactive' }): SimpleView => ({ name: b.name, status: statusLabel(b.status) });
+    source.creates.forEach(d => {
+      records.push({ ...blankRecord(nextId('create'), 'create', d.name, rowsOf(d.name)), fields: viewFields(view(d), BRAND_VIEW) });
+    });
+    source.updates.forEach(u => {
+      const before = byId.get(u.id);
+      if (!before) return;
+      const av = view({ ...before, ...u.data });
+      records.push({ ...blankRecord(nextId('update'), 'update', before.name, rowsOf(before.name)), fields: viewFields(av, BRAND_VIEW), changedFields: diffFields(view(before), av, BRAND_VIEW) });
+    });
+    source.unchangedItems.forEach(it => {
+      const b = byId.get(it.id);
+      if (b) records.push({ ...blankRecord(nextId('unchanged'), 'unchanged', b.name, rowsOf(b.name)), fields: viewFields(view(b), BRAND_VIEW) });
+    });
+  } else {
+    const byId = new Map(ctx.suppliers.map(s => [s.id, s]));
+    const view = (s: Omit<Supplier, 'id'>): SimpleView => ({ name: s.name, taxId: s.taxId ?? '', phone: s.phone ?? '', contactName: s.contactName ?? '' });
+    source.creates.forEach(d => {
+      records.push({ ...blankRecord(nextId('create'), 'create', d.name, rowsOf(d.name)), fields: viewFields(view(d), SUPPLIER_VIEW) });
+    });
+    source.updates.forEach(u => {
+      const before = byId.get(u.id);
+      if (!before) return;
+      const av = view({ ...before, ...u.data });
+      records.push({ ...blankRecord(nextId('update'), 'update', av.name, rowsOf(av.name)), fields: viewFields(av, SUPPLIER_VIEW), changedFields: diffFields(view(before), av, SUPPLIER_VIEW) });
+    });
+    source.unchangedItems.forEach(it => {
+      const s = byId.get(it.id);
+      if (s) records.push({ ...blankRecord(nextId('unchanged'), 'unchanged', s.name, rowsOf(s.name)), fields: viewFields(view(s), SUPPLIER_VIEW) });
+    });
+  }
+
+  // ข้อผิดพลาด: จัดกลุ่มตามรหัส/ชื่อ (ไม่ทราบ = แยกตามแถว)
+  const errGroups = new Map<string, RowError[]>();
+  source.errors.forEach(e => {
+    const k = e.key ? `k:${normName(e.key)}` : `r:${e.sheet ?? ''}:${e.row}`;
+    errGroups.set(k, [...(errGroups.get(k) ?? []), e]);
+  });
+  errGroups.forEach(list => {
+    const rows = [...new Set(list.map(e => e.row))].sort((a, b) => a - b);
+    const key = list[0].key ?? `แถว ${list[0].row}`;
+    const existing = source.entity === 'product' && list[0].key
+      ? ctx.products.find(p => normName(p.code) === normName(list[0].key))
+      : undefined;
+    records.push({ ...blankRecord(nextId('error'), 'error', key, rows), name: existing?.name, errors: list });
+  });
+
+  // เรียงตามลำดับแถวในไฟล์ (รายการที่ไม่มีแถวในตารางหลักอยู่ท้าย)
+  const firstRow = (r: MigrationRecord) => (r.rows.length > 0 ? r.rows[0] : Number.MAX_SAFE_INTEGER);
+  records.sort((a, b) => firstRow(a) - firstRow(b));
+
+  const count = (a: MigrationAction) => records.filter(r => r.action === a).length;
+  return {
+    entity, source, records, mastersToCreate, fileErrors: [],
+    summary: {
+      total: records.length,
+      create: count('create'),
+      update: count('update'),
+      unchanged: count('unchanged'),
+      error: count('error'),
+      mastersToCreate: mastersToCreate.categories.length + mastersToCreate.brands.length + mastersToCreate.suppliers.length,
+    },
+  };
+}
+
+export function filterRecords(records: MigrationRecord[], filter: MigrationFilter): MigrationRecord[] {
+  return filter === 'all' ? records : records.filter(r => r.action === filter);
+}
+
+/** แบ่งหน้า (หน้าเริ่มที่ 1, ค่าเกินช่วงถูกปรับให้อยู่ในช่วง) */
+export function pageRecords(records: MigrationRecord[], page: number, pageSize: number = MIGRATION_PAGE_SIZE): { items: MigrationRecord[]; page: number; pageCount: number } {
+  const pageCount = Math.max(1, Math.ceil(records.length / pageSize));
+  const p = Math.min(Math.max(1, Math.floor(page) || 1), pageCount);
+  return { items: records.slice((p - 1) * pageSize, p * pageSize), page: p, pageCount };
+}
+
+/** มีรายการที่จะบันทึก (เพิ่มใหม่/อัปเดต) และไฟล์ไม่มีข้อผิดพลาดระดับไฟล์ */
+export function canProceed(mp: MigrationPlan): boolean {
+  return mp.fileErrors.length === 0 && mp.summary.create + mp.summary.update > 0;
+}
+
+/** ข้อความสรุปในหน้ายืนยัน */
+export function confirmSummaryText(mp: MigrationPlan): string {
+  const parts = [`เพิ่มใหม่ ${mp.summary.create}`, `อัปเดต ${mp.summary.update}`, `ข้าม ${mp.summary.error}`];
+  if (mp.entity === 'product') parts.push(`สร้างหมวดหมู่/แบรนด์/ผู้จำหน่ายใหม่ ${mp.summary.mastersToCreate}`);
+  return parts.join(', ');
+}
+
+/** ลายเซ็นของแผน — ใช้ตรวจว่าข้อมูลในระบบเปลี่ยนระหว่างตรวจสอบหรือไม่ */
+export function migrationSignature(mp: MigrationPlan): string {
+  return JSON.stringify([
+    mp.summary,
+    mp.mastersToCreate,
+    mp.records.map(r => [
+      r.action, r.key, r.changedFields,
+      r.uomChanges.map(u => [u.unit, u.kind, u.changedFields]),
+      r.variantChanges.map(v => [v.key, v.kind, v.changedFields]),
+    ]),
+  ]);
+}
+
+/** บันทึกตามแผนที่ตรวจสอบแล้ว (เฉพาะเพิ่มใหม่/อัปเดต + มาสเตอร์ใหม่) + audit log 1 รายการ */
+export function applyMigration(mp: MigrationPlan, ports: MasterPorts): MigrationResult {
+  const res = applyImport(mp.source, ports);
+  const errorRecords = mp.records.filter(r => r.action === 'error');
+  return {
+    ...res,
+    skipped: errorRecords.length,
+    mastersCreatedNames: mp.mastersToCreate,
+    errorRecords,
+  };
+}
+
+export const ERROR_SHEET_NAME = 'ข้อผิดพลาด';
+
+/** ไฟล์รายการข้อผิดพลาด: ชีต, แถว, รหัส/ชื่อ, ข้อความ */
+export function buildErrorWorkbook(mp: MigrationPlan): Workbook {
+  const rows: Grid = [['ชีต', 'แถว', 'รหัส/ชื่อ', 'ข้อความ']];
+  mp.fileErrors.forEach(m => rows.push(['', '', '', m]));
+  mp.records.filter(r => r.action === 'error').forEach(r => r.errors.forEach(e => {
+    rows.push([e.sheet ?? ENTITY_SHEET[mp.entity], String(e.row), e.key ?? '', e.message]);
+  }));
+  return { sheets: [{ name: ERROR_SHEET_NAME, rows, numericCols: [1] }] };
 }

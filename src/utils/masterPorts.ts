@@ -8,8 +8,8 @@ import * as brandStore from '../store/brandStore';
 import * as supplierStore from '../store/supplierStore';
 import { logAction } from '../store/auditLogStore';
 import {
-  ImportContext, MasterEntity, MasterPorts, Workbook,
-  exportProducts, exportCategories, exportBrands, exportSuppliers, buildTemplate,
+  ImportContext, MasterEntity, MasterPorts, MigrationPlan, Workbook,
+  exportProducts, exportCategories, exportBrands, exportSuppliers, buildTemplate, buildErrorWorkbook,
 } from './masterImportExport';
 import { FileFormat, downloadBlob, exportFileName, workbookToBlob } from './spreadsheetIO';
 
@@ -60,6 +60,17 @@ export function buildExportWorkbook(entity: MasterEntity): Workbook {
     case 'supplier':
       return exportSuppliers(supplierStore.getSuppliers());
   }
+}
+
+/** ดาวน์โหลดข้อมูลปัจจุบันทั้งหมดของมาสเตอร์เป็น .xlsx (สำรองก่อนนำเข้า) */
+export async function downloadBackup(entity: MasterEntity): Promise<void> {
+  const wb = buildExportWorkbook(entity);
+  downloadBlob(exportFileName(entity, 'backup', 'xlsx'), await workbookToBlob(entity, wb, 'xlsx'));
+}
+
+/** ดาวน์โหลดรายการข้อผิดพลาดจากการนำเข้าเป็น .xlsx */
+export async function downloadErrorFile(mp: MigrationPlan): Promise<void> {
+  downloadBlob(exportFileName(mp.entity, 'errors', 'xlsx'), await workbookToBlob(mp.entity, buildErrorWorkbook(mp), 'xlsx'));
 }
 
 /** ดาวน์โหลดไฟล์ export ทั้งหมด หรือ template ของมาสเตอร์ (เว็บ) */

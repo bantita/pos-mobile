@@ -105,4 +105,10 @@ describe('readFileToWorkbook', () => {
     expect(exportFileName('product', 'export', 'xlsx', new Date(2025, 0, 5))).toBe('products_export_20250105.xlsx');
     expect(exportFileName('supplier', 'template', 'csv')).toBe('suppliers_import_template.csv');
   });
+
+  test('ชื่อไฟล์สำรองข้อมูล / รายการข้อผิดพลาด (มีเวลา HHmm)', () => {
+    const d = new Date(2025, 0, 5, 9, 7);
+    expect(exportFileName('brand', 'backup', 'xlsx', d)).toBe('brands_backup_20250105_0907.xlsx');
+    expect(exportFileName('category', 'errors', 'xlsx', d)).toBe('categories_import_errors_20250105_0907.xlsx');
+  });
 });
