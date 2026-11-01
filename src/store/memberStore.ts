@@ -1,11 +1,17 @@
 /**
  * Member Store — Zustand
  * M06 CRM & Loyalty
+ *
+ * Store topology (cycle-safe): memberStore <-> memberTypeStore import กันและกัน
+ * ฟังก์ชันของ memberTypeStore ถูกเรียกเฉพาะภายใน action (ไม่มีโค้ด top-level เรียกใช้)
  */
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Member, PointTransaction, PointConfig, MemberLevel, MemberLevelConfig } from '../types/member';
 import { MOCK_MEMBERS, MOCK_POINT_TRANSACTIONS, MOCK_POINT_CONFIG, MOCK_LEVEL_CONFIGS } from '../data/mockMembers';
+import { DEFAULT_MEMBER_TYPE_ID, DEFAULT_MEMBER_TYPE_NAME } from '../data/mockMemberTypes';
+import { getDefaultMemberType, getMemberType, resolveMemberType } from './memberTypeStore';
+import { calcEarnedPoints } from '../utils/memberTypeBenefits';
 import { logAction } from './auditLogStore';
 import { isFreshStore } from './freshStore';
 import { persistStorage } from './persistStorage';
@@ -22,6 +28,26 @@ const LEVEL_ORDER: MemberLevel[] = ['member', 'silver', 'gold', 'platinum', 'vip
 // ─── Helper ───────────────────────────────────────────────────────────────────
 const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
 const genMemberNo = () => 'MEM-' + Math.floor(100000 + Math.random() * 900000).toString();
+
+/** กำหนดประเภทเริ่มต้น (ลูกค้าทั่วไป) ให้สมาชิกที่ยังไม่มีประเภท */
+function withDefaultType(m: Member): Member {
+  return m.memberTypeId
+    ? m
+    : { ...m, memberTypeId: DEFAULT_MEMBER_TYPE_ID, memberTypeName: DEFAULT_MEMBER_TYPE_NAME };
+}
+
+/**
+ * Migration v0 -> v1: สมาชิกที่บันทึกไว้ก่อนมีประเภทสมาชิก จะได้ประเภท "ลูกค้าทั่วไป"
+ * สมาชิกที่มีประเภทอยู่แล้วไม่ถูกแตะต้อง
+ */
+export function migrateMembersToV1<T extends { members?: Member[]; selectedMember?: Member | null }>(state: T): T {
+  if (!state || typeof state !== 'object') return state;
+  return {
+    ...state,
+    ...(Array.isArray(state.members) ? { members: state.members.map(withDefaultType) } : {}),
+    ...(state.selectedMember ? { selectedMember: withDefaultType(state.selectedMember) } : {}),
+  };
+}
 
 // ─── Store ────────────────────────────────────────────────────────────────────
 interface MemberStore {
@@ -43,7 +69,8 @@ interface MemberStore {
   addMember: (data: Omit<Member, 'id' | 'memberNo' | 'pointBalance' | 'totalSpent' | 'joinDate'>) => Member;
   updateMember: (id: string, data: Partial<Member>) => void;
   selectMember: (member: Member | null) => void;
-  earnPoints: (memberId: string, saleAmount: number, saleNo: string, createdBy: string) => PointTransaction;
+  /** สะสมคะแนนตามกฎของประเภทสมาชิก — คืน null เมื่อประเภทไม่ได้รับคะแนน (ยอดซื้อสะสมยังเพิ่มตามปกติ) */
+  earnPoints: (memberId: string, saleAmount: number, saleNo: string, createdBy: string) => PointTransaction | null;
   redeemPoints: (memberId: string, points: number, saleNo: string, createdBy: string) => PointTransaction;
   getPointHistory: (memberId: string) => PointTransaction[];
   getMemberById: (id: string) => Member | undefined;
@@ -83,13 +110,17 @@ export const useMemberStore = create<MemberStore>()(
     return get().members.filter(m =>
       m.name.toLowerCase().includes(k) ||
       m.phone.includes(k) ||
-      m.memberNo.toLowerCase().includes(k)
+      m.memberNo.toLowerCase().includes(k) ||
+      (m.memberTypeName ?? '').toLowerCase().includes(k)
     );
   },
 
   addMember: (data) => {
+    const type = getMemberType(data.memberTypeId) ?? getDefaultMemberType();
     const newMember: Member = {
       ...data,
+      memberTypeId: type.id,
+      memberTypeName: type.name,
       id: genId(),
       memberNo: genMemberNo(),
       pointBalance: 0,
@@ -104,8 +135,19 @@ export const useMemberStore = create<MemberStore>()(
     return newMember;
   },
 
-  updateMember: (id, data) => {
+  updateMember: (id, input) => {
     const member = get().members.find(m => m.id === id);
+    let data = input;
+    // เปลี่ยนประเภทสมาชิก -> อัปเดตชื่อประเภท (snapshot) ให้ตรงกัน
+    if (input.memberTypeId && input.memberTypeId !== member?.memberTypeId) {
+      const type = getMemberType(input.memberTypeId);
+      if (type) {
+        data = { ...input, memberTypeName: type.name };
+        logAction('CRM', 'เปลี่ยนประเภทสมาชิก', `เปลี่ยนประเภท ${member?.name || id} เป็น ${type.name}`, {
+          memberId: id, from: member?.memberTypeId, to: type.id,
+        });
+      }
+    }
     set(s => ({
       members: s.members.map(m => m.id === id ? { ...m, ...data } : m),
       selectedMember: s.selectedMember?.id === id
@@ -128,9 +170,21 @@ export const useMemberStore = create<MemberStore>()(
 
   earnPoints: (memberId, saleAmount, saleNo, createdBy) => {
     const { pointConfig } = get();
-    const points = Math.floor(saleAmount / pointConfig.earnRate);
     const member = get().members.find(m => m.id === memberId);
+    // กฎคะแนนตามประเภทสมาชิก (ประเภทค่าเริ่มต้น earn=true ×1 => เท่าเดิม floor(amount/earnRate))
+    const memberType = member ? resolveMemberType(member) : null;
+    const points = calcEarnedPoints(saleAmount, pointConfig.earnRate, memberType);
     const newBalance = (member?.pointBalance ?? 0) + points;
+
+    if (memberType && memberType.earnPoints === false) {
+      // ประเภทที่ไม่ได้รับคะแนน: เพิ่มยอดซื้อสะสม (ใช้เลื่อนระดับ) แต่ไม่สร้างรายการคะแนน
+      set(s => ({
+        members: s.members.map(m =>
+          m.id === memberId ? { ...m, totalSpent: m.totalSpent + saleAmount } : m
+        ),
+      }));
+      return null;
+    }
 
     // Update member balance & totalSpent
     set(s => ({
@@ -211,6 +265,15 @@ export const useMemberStore = create<MemberStore>()(
     });
   },
     }),
-    { name: 'pos-members', storage: createJSONStorage(() => persistStorage) }
+    {
+      name: 'pos-members',
+      version: 1,
+      storage: createJSONStorage(() => persistStorage),
+      // v1: เพิ่มประเภทสมาชิก — สมาชิกเดิมที่ไม่มีประเภทได้ "ลูกค้าทั่วไป"
+      migrate: (persisted, fromVersion) => {
+        if (fromVersion < 1) return migrateMembersToV1(persisted as Partial<MemberStore>) as MemberStore;
+        return persisted as MemberStore;
+      },
+    }
   )
 );

@@ -100,6 +100,8 @@ export const StorePromoCreateScreen: React.FC<Props> = ({ onBack, onSave, promoG
   const [pointExchangeRate, setPointExchangeRate] = useState('');
   const [pointExchangeMin, setPointExchangeMin] = useState('');
   const [selectedCouponCampaigns, setSelectedCouponCampaigns] = useState<string[]>([]);
+  // ประเภทสมาชิก (เงื่อนไขแท็บสมาชิก) — หมายเหตุ: handleSave ของหน้านี้ยังเป็น mock (ไม่บันทึกลง store)
+  const [selectedMemberTypeIds, setSelectedMemberTypeIds] = useState<string[]>(editPromo?.applicableMemberTypeIds ?? []);
 
   // ─── Reward State ───────────────────────────────────────────────────────────
   const [discountProducts, setDiscountProducts] = useState<DiscountProduct[]>([]);
@@ -359,6 +361,8 @@ export const StorePromoCreateScreen: React.FC<Props> = ({ onBack, onSave, promoG
           onPointExchangeMinChange={setPointExchangeMin}
           selectedCouponCampaigns={selectedCouponCampaigns}
           onCouponCampaignsChange={setSelectedCouponCampaigns}
+          selectedMemberTypeIds={selectedMemberTypeIds}
+          onMemberTypeIdsChange={setSelectedMemberTypeIds}
         />
 
         <View style={styles.divider} />

@@ -28,6 +28,7 @@ export function calculate(request: CalculationRequest): CalculationResult {
     cart: request.cartItems,
     memberId: request.memberId,
     memberLevel: request.memberLevel,
+    memberTypeId: request.memberTypeId,
     storeCode: request.storeCode,
     businessDateTime: request.businessDateTime,
     subtotal: request.subtotal,

@@ -17,6 +17,8 @@ export interface EvaluationContext {
   memberId?: string;
   /** Member's loyalty tier */
   memberLevel?: string;
+  /** Member type id (general customer / staff ...) */
+  memberTypeId?: string;
   /** Store code for store-specific logic */
   storeCode: string;
   /** Business date-time for temporal conditions */

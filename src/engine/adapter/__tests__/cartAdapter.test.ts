@@ -7,6 +7,7 @@ import { describe, test, expect } from 'vitest';
 import { runCartPromotions, BuildCalculationArgs } from '../cartAdapter';
 import { CartItem as SaleCartItem, Product } from '../../../types/sale';
 import { Promotion, PromoType } from '../../../types/promotion';
+import { MemberTypeBenefit } from '../../../types/memberType';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 function makeProduct(over: Partial<Product> & { id: string; code: string }): Product {
@@ -285,5 +286,74 @@ describe('cartAdapter — coupon only when entered', () => {
     expect(res.appliedBenefits).toHaveLength(1);
     expect(res.totalDiscount).toBeCloseTo(100, 2);
     expect(res.finalPayable).toBeCloseTo(400, 2);
+  });
+});
+
+// ─── member type (ประเภทสมาชิก) ───────────────────────────────────────────────
+describe('cartAdapter — member type discount', () => {
+  const STAFF_10: MemberTypeBenefit = { id: 'mt-staff', name: 'พนักงาน', discountPercent: 10, earnPoints: false, pointMultiplier: 1 };
+  const GENERAL: MemberTypeBenefit = { id: 'mt-general', name: 'ลูกค้าทั่วไป', discountPercent: 0, earnPoints: true, pointMultiplier: 1 };
+  const staffMember = { id: 'MEM-S', level: 'member' as const, memberTypeId: 'mt-staff' };
+  const cart = () => [makeCartItem({ id: 'p1', code: 'P001' }, 2, 500)];
+
+  test('พนักงาน 10% -> มีรายการ "ส่วนลดพนักงาน 10%" ใน appliedBenefits', () => {
+    const res = runCartPromotions({ ...BASE, cartItems: cart(), subtotal: 1000, promotions: [], member: staffMember, memberType: STAFF_10 });
+    expect(res.appliedBenefits).toHaveLength(1);
+    expect(res.appliedBenefits[0].promotionName).toBe('ส่วนลดพนักงาน 10%');
+    expect(res.appliedBenefits[0].value).toBeCloseTo(100, 2);
+    expect(res.totalDiscount).toBeCloseTo(100, 2);
+    expect(res.finalPayable).toBeCloseTo(900, 2);
+  });
+
+  test('ประเภท 0% / ไม่มีสมาชิก / ไม่ส่ง memberType -> ไม่มีส่วนลดเพิ่ม (เหมือนเดิม)', () => {
+    const promo = makePromo({ id: 'promo-pct', type: 'percent', discountPercent: 5 });
+    const baseline = runCartPromotions({ ...BASE, cartItems: cart(), subtotal: 1000, promotions: [promo] });
+    const general = runCartPromotions({ ...BASE, cartItems: cart(), subtotal: 1000, promotions: [promo], member: { id: 'MEM-G', level: 'member' }, memberType: GENERAL });
+    const noType = runCartPromotions({ ...BASE, cartItems: cart(), subtotal: 1000, promotions: [promo], member: staffMember });
+    const noMember = runCartPromotions({ ...BASE, cartItems: cart(), subtotal: 1000, promotions: [promo], memberType: STAFF_10 });
+    for (const r of [general, noType, noMember]) {
+      expect(r.appliedBenefits.map(b => b.promotionId)).toEqual(['promo-pct']);
+      expect(r.finalPayable).toBeCloseTo(baseline.finalPayable, 2);
+    }
+  });
+
+  test('โปร NO_STACK ถูกใช้แล้ว -> ส่วนลดประเภทถูกปฏิเสธ, โปรเดิมยังอยู่', () => {
+    const promo = makePromo({ id: 'promo-nostack', type: 'percent', discountPercent: 5, stackable: false, priority: 1 });
+    const res = runCartPromotions({ ...BASE, cartItems: cart(), subtotal: 1000, promotions: [promo], member: staffMember, memberType: STAFF_10 });
+    expect(res.appliedBenefits.map(b => b.promotionId)).toEqual(['promo-nostack']);
+    expect(res.totalDiscount).toBeCloseTo(50, 2);
+  });
+
+  test('โปร STACK_ALLOWED -> ใช้ทั้งคู่', () => {
+    const promo = makePromo({ id: 'promo-stack', type: 'percent', discountPercent: 5, stackable: true, priority: 1 });
+    const res = runCartPromotions({ ...BASE, cartItems: cart(), subtotal: 1000, promotions: [promo], member: staffMember, memberType: STAFF_10 });
+    expect(res.appliedBenefits.map(b => b.promotionName)).toEqual(['promo-stack', 'ส่วนลดพนักงาน 10%']);
+    expect(res.totalDiscount).toBeCloseTo(150, 2);
+  });
+});
+
+describe('cartAdapter — applicableMemberTypeIds targeting', () => {
+  const STAFF: MemberTypeBenefit = { id: 'mt-staff', name: 'พนักงาน', discountPercent: 0, earnPoints: true, pointMultiplier: 1 };
+  const GENERAL: MemberTypeBenefit = { id: 'mt-general', name: 'ลูกค้าทั่วไป', discountPercent: 0, earnPoints: true, pointMultiplier: 1 };
+  const cart = () => [makeCartItem({ id: 'p1', code: 'P001' }, 1, 1000)];
+
+  test('percent promo จำกัดประเภทพนักงาน — ใช้ได้เฉพาะพนักงาน', () => {
+    const promo = makePromo({ id: 'promo-staff', type: 'percent', discountPercent: 20, applicableMemberTypeIds: ['mt-staff'] });
+    const staff = runCartPromotions({ ...BASE, cartItems: cart(), subtotal: 1000, promotions: [promo], member: { id: 'S', level: 'member', memberTypeId: 'mt-staff' }, memberType: STAFF });
+    const general = runCartPromotions({ ...BASE, cartItems: cart(), subtotal: 1000, promotions: [promo], member: { id: 'G', level: 'member', memberTypeId: 'mt-general' }, memberType: GENERAL });
+    const walkIn = runCartPromotions({ ...BASE, cartItems: cart(), subtotal: 1000, promotions: [promo] });
+    expect(staff.totalDiscount).toBeCloseTo(200, 2);
+    expect(general.appliedBenefits).toHaveLength(0);
+    expect(walkIn.appliedBenefits).toHaveLength(0);
+  });
+
+  test('member_price levels + types (AND)', () => {
+    const promo = makePromo({ id: 'promo-mp', type: 'member_price', discountPercent: 5, applicableLevels: ['gold'], applicableMemberTypeIds: ['mt-staff'] });
+    const ok = runCartPromotions({ ...BASE, cartItems: cart(), subtotal: 1000, promotions: [promo], member: { id: 'S', level: 'gold' }, memberType: STAFF });
+    const wrongType = runCartPromotions({ ...BASE, cartItems: cart(), subtotal: 1000, promotions: [promo], member: { id: 'G', level: 'gold' }, memberType: GENERAL });
+    const wrongLevel = runCartPromotions({ ...BASE, cartItems: cart(), subtotal: 1000, promotions: [promo], member: { id: 'S', level: 'silver' }, memberType: STAFF });
+    expect(ok.totalDiscount).toBeCloseTo(50, 2);
+    expect(wrongType.appliedBenefits).toHaveLength(0);
+    expect(wrongLevel.appliedBenefits).toHaveLength(0);
   });
 });

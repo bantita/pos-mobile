@@ -14,7 +14,9 @@ import { MemberLevel } from '../../types/member';
 import { Colors } from '../../constants/colors';
 import { MemberLevelColors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
-import { Spacing, BorderRadius } from '../../constants/spacing';
+import { Spacing, BorderRadius, ComponentSize } from '../../constants/spacing';
+import { getMemberTypeColors } from '../../constants/memberTypeColors';
+import { useMemberTypeStore, getDefaultMemberType } from '../../store/memberTypeStore';
 
 interface Props {
   onBack: () => void;
@@ -35,6 +37,8 @@ export const AddMemberScreen: React.FC<Props> = ({ onBack }) => {
   const [name, setName] = useState('');
   const [birthday, setBirthday] = useState('');
   const [level, setLevel] = useState<MemberLevel>('member');
+  const activeTypes = useMemberTypeStore(s => s.types).filter(t => t.status === 'active');
+  const [memberTypeId, setMemberTypeId] = useState<string>(() => getDefaultMemberType().id);
   const [errors, setErrors] = useState<{ phone?: string; name?: string }>({});
 
   const validate = (): boolean => {
@@ -57,6 +61,7 @@ export const AddMemberScreen: React.FC<Props> = ({ onBack }) => {
       name: name.trim(),
       birthday: birthday.trim() || undefined,
       level,
+      memberTypeId,
       isActive: true,
       shopId: 'shop-01',
       branchId: 'b1',
@@ -165,6 +170,35 @@ export const AddMemberScreen: React.FC<Props> = ({ onBack }) => {
             </View>
           </View>
 
+          {/* Member Type Picker (แยกจากระดับสมาชิก) */}
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>ประเภทสมาชิก</Text>
+            <View style={styles.typeRow}>
+              {activeTypes.map((t) => {
+                const c = getMemberTypeColors(t.color, 'mobile');
+                const selected = memberTypeId === t.id;
+                return (
+                  <TouchableOpacity
+                    key={t.id}
+                    style={[
+                      styles.typeOption,
+                      { borderColor: c.fg },
+                      selected && { backgroundColor: c.bg, borderWidth: 2 },
+                    ]}
+                    onPress={() => setMemberTypeId(t.id)}
+                    activeOpacity={0.7}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected }}
+                    accessibilityLabel={`ประเภทสมาชิก ${t.name}`}
+                  >
+                    {selected && <Ionicons name="checkmark-circle" size={16} color={c.fg} />}
+                    <Text style={[styles.levelOptionText, { color: c.fg }]}>{t.name}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
           {/* Submit */}
           <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit} activeOpacity={0.85}>
             <Ionicons name="checkmark-circle" size={20} color={Colors.white} />
@@ -220,6 +254,19 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
   },
   levelOptionText: { ...Typography.label, fontWeight: '700' },
+  typeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  typeOption: {
+    flexGrow: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    minHeight: ComponentSize.button.md,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    backgroundColor: Colors.surface,
+  },
   submitBtn: {
     flexDirection: 'row',
     alignItems: 'center',

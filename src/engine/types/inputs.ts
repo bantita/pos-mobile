@@ -25,6 +25,8 @@ export interface CalculationRequest {
   memberId?: string;
   /** Member's loyalty tier/level for tiered promotions */
   memberLevel?: string;
+  /** Member type id (e.g. general customer / staff) — orthogonal to memberLevel */
+  memberTypeId?: string;
   /** Current business date-time for time-based condition evaluation */
   businessDateTime: string;
   /** Items currently in the cart */

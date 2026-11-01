@@ -21,6 +21,9 @@ import { useBranchGuard } from '../../hooks/useBranchGuard';
 import { resolveCartPrice } from '../../utils/priceResolver';
 import { toCartProduct, masterDisplayStock } from '../../utils/cartProduct';
 import { useMemberStore } from '../../store/memberStore';
+import { useMemberTypeStore, resolveMemberType, getDefaultMemberType } from '../../store/memberTypeStore';
+import { getMemberTypeColors } from '../../constants/memberTypeColors';
+import { calcEarnedPoints, computeMemberTypeDiscount, memberTypeDiscountLabel } from '../../utils/memberTypeBenefits';
 import { usePromoStore } from '../../store/promoStore';
 import { useWalletStore } from '../../store/walletStore';
 import { useSaleHistoryStore } from '../../store/saleHistoryStore';
@@ -1441,6 +1444,24 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
   const [pointsToUse, setPointsToUse]        = useState('');
   const [pointDiscount, setPointDiscount]     = useState(0);
 
+  // ── ประเภทสมาชิก: ส่วนลดอัตโนมัติ (บรรทัดส่วนลดท้ายบิล) + กฎสะสมคะแนน ──
+  const memberTypes = useMemberTypeStore(s => s.types);
+  const memberType = useMemo(
+    () => (selectedMember ? resolveMemberType(selectedMember) : null),
+    [selectedMember, memberTypes]
+  );
+  /** ประเภทที่สมาชิกสังกัด (สำหรับแสดงป้าย) */
+  const typeForBadge = (mem: Member) => memberTypes.find(t => t.id === mem.memberTypeId) ?? getDefaultMemberType();
+  const renderTypeBadge = (mem: Member) => {
+    const t = typeForBadge(mem);
+    const c = getMemberTypeColors(t.color, 'web');
+    return (
+      <View style={[s.levelBadge, { backgroundColor: c.bg }]}>
+        <Text style={[s.levelBadgeText, { color: c.fg, textTransform: 'none' }]} numberOfLines={1}>{mem.memberTypeName || t.name}</Text>
+      </View>
+    );
+  };
+
   const memberSearchResults = useMemo(() => {
     if (!memberSearch.trim()) return members.filter(m => m.isActive);
     return searchMembers(memberSearch).filter(m => m.isActive);
@@ -1448,7 +1469,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
 
   const handleValidateCoupon = () => {
     if (!couponCode.trim()) return;
-    const result = validateCoupon(couponCode, afterDisc, selectedMember?.level);
+    const result = validateCoupon(couponCode, afterDisc, selectedMember?.level, memberType?.id);
     if (result.valid && result.promotion) {
       const promo = result.promotion;
       let disc = 0;
@@ -1528,7 +1549,10 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
   const billDiscAmt = billDiscType === 'percent' ? subtotal * (billDiscount / 100) : billDiscount;
   const afterDisc   = Math.max(0, subtotal - billDiscAmt);
   const vat         = afterDisc * 0.07;
-  const grandTotal  = Math.max(0, afterDisc - couponDiscount - pointDiscount);
+  // ส่วนลดตามประเภทสมาชิก — คิดจากยอดหลังส่วนลดบิล (ก่อนคูปอง/แลกคะแนน); 0 สำหรับประเภทที่ไม่มีส่วนลด
+  const memberTypeDiscount = computeMemberTypeDiscount(afterDisc, memberType);
+  const grandTotal  = Math.max(0, afterDisc - memberTypeDiscount - couponDiscount - pointDiscount);
+  const pointsToEarn = selectedMember ? calcEarnedPoints(grandTotal, pointConfig.earnRate, memberType) : 0;
   const received    = parseFloat(receivedAmt) || 0;
   const change      = received >= grandTotal ? received - grandTotal : 0;
 
@@ -2308,6 +2332,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
               <View style={[s.levelBadge, { backgroundColor: selectedMember.level === 'platinum' ? '#7C3AED' : selectedMember.level === 'gold' ? '#F59E0B' : '#6B7280' }]}>
                 <Text style={s.levelBadgeText}>{selectedMember.level}</Text>
               </View>
+              {renderTypeBadge(selectedMember)}
               <Text style={s.memberPoints}>{selectedMember.pointBalance} pts</Text>
               <Text style={{ fontSize: 13, color: Colors.textSecondary }}>฿{selectedMember.totalSpent.toLocaleString()}</Text>
               <Text style={{ fontSize: 11, color: '#16A34A', fontWeight: '600' }}>💰{getWalletBalance(selectedMember.id).toLocaleString()}</Text>
@@ -2363,6 +2388,15 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
             </TouchableOpacity>
             <Text style={[s.sumVal, { color: WebColors.danger }]}>-฿{fmt(billDiscAmt)}</Text>
           </View>
+          {memberTypeDiscount > 0 && memberType && (
+            <View style={s.sumRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Ionicons name="people" size={12} color={WebColors.info} />
+                <Text style={[s.sumLabel, { color: WebColors.info }]}>{memberTypeDiscountLabel(memberType)}</Text>
+              </View>
+              <Text style={[s.sumVal, { color: WebColors.info }]}>-฿{fmt(memberTypeDiscount)}</Text>
+            </View>
+          )}
           {couponDiscount > 0 && (
             <View style={s.sumRow}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -2693,9 +2727,9 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                     memberInfo: selectedMember ? {
                       name: selectedMember.name,
                       memberNo: selectedMember.memberNo,
-                      pointBalance: selectedMember.pointBalance + Math.floor(grandTotal / pointConfig.earnRate),
+                      pointBalance: selectedMember.pointBalance + pointsToEarn,
                       walletBalance: getWalletBalance(selectedMember.id) - (payMethod === 'wallet' ? grandTotal : 0),
-                      pointsEarned: Math.floor(grandTotal / pointConfig.earnRate),
+                      pointsEarned: pointsToEarn,
                     } : undefined,
                   };
 
@@ -2741,12 +2775,14 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                     items: items,
                     payments: splitPayments.map(sp => ({ method: sp.method, amount: sp.amount })) as Payment[],
                     discount: billDiscount > 0 ? { type: billDiscType, value: billDiscount } : null,
-                    subtotal, discountTotal: billDiscAmt + couponDiscount + pointDiscount,
+                    subtotal, discountTotal: billDiscAmt + memberTypeDiscount + couponDiscount + pointDiscount,
                     serviceCharge: 0, vatAmount: vat, grandTotal,
                     receivedAmount: splitPayments.reduce((s, p) => s + p.amount, 0),
                     changeAmount: Math.max(0, splitPayments.reduce((s, p) => s + p.amount, 0) - grandTotal),
                     cashierName, posName: 'POS 1',
-                    memberName: selectedMember?.name, pointsEarned: selectedMember ? Math.floor(grandTotal / pointConfig.earnRate) : 0,
+                    memberId: selectedMember?.id, memberName: selectedMember?.name,
+                    memberTypeId: memberType?.id, memberTypeName: memberType?.name,
+                    pointsEarned: pointsToEarn,
                     status: 'completed', createdAt: new Date(),
                   });
 
@@ -2874,6 +2910,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                     p.status === 'active' &&
                     (p.type === 'coupon' || p.couponCode) &&
                     (!p.applicableLevels || p.applicableLevels.length === 0 || p.applicableLevels.includes(mem.level)) &&
+                    (!p.applicableMemberTypeIds || p.applicableMemberTypeIds.length === 0 || p.applicableMemberTypeIds.includes(resolveMemberType(mem)?.id ?? '')) &&
                     (!p.couponLimit || (p.couponUsed ?? 0) < p.couponLimit)
                   );
                   return (
@@ -2891,6 +2928,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                           <View style={[s.levelBadge, { backgroundColor: mem.level === 'platinum' ? '#7C3AED' : mem.level === 'gold' ? '#F59E0B' : mem.level === 'silver' ? '#6B7280' : Colors.textMuted }]}>
                             <Text style={s.levelBadgeText}>{mem.level}</Text>
                           </View>
+                          {renderTypeBadge(mem)}
                         </View>
                         <Text style={s.memberListSub}>{mem.phone} · {mem.memberNo}</Text>
                         {/* ข้อมูลเพิ่มเติม */}

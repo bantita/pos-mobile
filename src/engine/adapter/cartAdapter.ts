@@ -9,7 +9,13 @@
  * ค่า param keys ของ benefit/condition อ้างอิงจาก src/engine/__tests__/engine.test.ts
  * (bill_discount{amount}, percent_discount{percent,maxDiscount},
  *  free_gift{productCode,productName,quantity,value}, purchaseAmount{operator,threshold},
- *  product{itemCodes/groupCodes,operator,threshold}, member{levels}, time{startTime,endTime})
+ *  product{itemCodes/groupCodes,operator,threshold}, member{levels,memberTypeIds}, time{startTime,endTime})
+ *
+ * ประเภทสมาชิก (Member Type):
+ * - โปรที่กำหนด applicableMemberTypeIds จะได้ member{memberTypeIds} เพิ่ม (AND กับ levels)
+ * - ถ้าประเภทของสมาชิกมี discountPercent > 0 จะสร้างโปรสังเคราะห์ "ส่วนลด<ชื่อประเภท> x%"
+ *   (percent_discount, STACK_ALLOWED, priority 9999 = ประเมินท้ายสุด) — ไม่บล็อกโปรอื่น,
+ *   ถูกปฏิเสธเมื่อมีโปร NO_STACK ถูกใช้ไปแล้ว, ซ้อนกับโปร STACK_ALLOWED ได้
  */
 import { calculate } from '../index';
 import {
@@ -29,9 +35,16 @@ import { AppliedBenefit, FreeGift, ExplainEntry } from '../types/outputs';
 import { CartItem as SaleCartItem } from '../../types/sale';
 import { Promotion } from '../../types/promotion';
 import { Member } from '../../types/member';
+import { MemberTypeBenefit } from '../../types/memberType';
+import { memberTypeDiscountLabel } from '../../utils/memberTypeBenefits';
 
 /** สมาชิกแบบย่อ (รับได้ทั้ง Member เต็มหรือ null สำหรับลูกค้าทั่วไป) */
-export type AdapterMember = Pick<Member, 'id' | 'level'> | null | undefined;
+export type AdapterMember = (Pick<Member, 'id' | 'level'> & { memberTypeId?: string }) | null | undefined;
+
+/** prefix ของ promotionId ของส่วนลดตามประเภทสมาชิก (โปรสังเคราะห์) */
+export const MEMBER_TYPE_PROMO_PREFIX = 'member-type:';
+/** priority ของส่วนลดประเภทสมาชิก — ค่ามาก = ประเมินท้ายสุด (resolver เรียง ascending) */
+export const MEMBER_TYPE_PROMO_PRIORITY = 9999;
 
 /** อาร์กิวเมนต์สำหรับสร้าง CalculationRequest */
 export interface BuildCalculationArgs {
@@ -43,6 +56,8 @@ export interface BuildCalculationArgs {
   storeCode: string;
   /** รหัสคูปองที่ลูกค้ากรอก — โปรประเภท coupon จะถูกรวมเป็น candidate เฉพาะเมื่อ match */
   couponCode?: string;
+  /** ประเภทสมาชิกที่ resolve แล้ว (caller ส่งมา เพื่อให้ adapter ยัง pure) */
+  memberType?: MemberTypeBenefit | null;
 }
 
 /** ผลลัพธ์แบบย่อที่หน้าจอ cart/payment นำไปใช้ได้ทันที */
@@ -225,7 +240,39 @@ function mapPromotion(promo: Promotion): PromotionConfig | null {
       return null;
   }
 
+  // จำกัดประเภทสมาชิก (ถ้ากำหนด) — รวมเข้ากับ member condition เดิม หรือเพิ่มใหม่
+  const typeIds = promo.applicableMemberTypeIds ?? [];
+  if (typeIds.length > 0) {
+    const memberCond = conditions.find((c) => c.type === 'member');
+    if (memberCond) {
+      memberCond.params = { ...memberCond.params, memberTypeIds: typeIds };
+    } else {
+      conditions.push({ type: 'member', params: { memberTypeIds: typeIds } });
+    }
+  }
+
   return { ...base, conditions, benefits };
+}
+
+/** โปรสังเคราะห์: ส่วนลดอัตโนมัติตามประเภทสมาชิก (null เมื่อไม่มีส่วนลด) */
+const MEMBER_TYPE_PROMO_START = '2000-01-01T00:00:00';
+const MEMBER_TYPE_PROMO_END = '2999-12-31T23:59:59';
+
+function buildMemberTypePromotion(memberType: MemberTypeBenefit | null | undefined): PromotionConfig | null {
+  if (!memberType || !(memberType.discountPercent > 0)) return null;
+  return {
+    promotionId: `${MEMBER_TYPE_PROMO_PREFIX}${memberType.id}`,
+    name: memberTypeDiscountLabel(memberType),
+    type: PromotionType.PROMOTION,
+    status: PromotionStatus.ACTIVE,
+    priority: MEMBER_TYPE_PROMO_PRIORITY,
+    // สิทธิ์ถาวรของประเภทสมาชิก — ช่วงวันกว้าง (ไม่ผูกกับวันขาย / timezone)
+    startDate: MEMBER_TYPE_PROMO_START,
+    endDate: MEMBER_TYPE_PROMO_END,
+    stackMode: StackMode.STACK_ALLOWED,
+    conditions: [{ type: 'member', params: { memberTypeIds: [memberType.id] } }],
+    benefits: [{ type: 'percent_discount', params: { percent: Math.min(100, memberType.discountPercent) } }],
+  };
 }
 
 /** โปรประเภท coupon ตรงกับรหัสที่กรอกหรือไม่ */
@@ -244,7 +291,7 @@ function couponMatches(promo: Promotion, couponCode?: string): boolean {
  * - โปรทั่วไปเข้าทุกใบ ยกเว้นโปรประเภท coupon ที่เข้าเฉพาะเมื่อรหัสตรงกับ couponCode
  */
 export function buildCalculationRequest(args: BuildCalculationArgs): CalculationRequest {
-  const { cartItems, subtotal, member, promotions, businessDateTime, storeCode, couponCode } = args;
+  const { cartItems, subtotal, member, promotions, businessDateTime, storeCode, couponCode, memberType } = args;
 
   const candidates: PromotionConfig[] = [];
   for (const promo of promotions) {
@@ -253,10 +300,18 @@ export function buildCalculationRequest(args: BuildCalculationArgs): Calculation
     if (config) candidates.push(config);
   }
 
+  // ประเภทสมาชิกที่ใช้คำนวณ: จาก memberType ที่ resolve แล้ว (fallback = memberTypeId ของสมาชิก)
+  const memberTypeId = member ? (memberType?.id ?? member.memberTypeId) : undefined;
+  if (member) {
+    const typePromo = buildMemberTypePromotion(memberType);
+    if (typePromo) candidates.push(typePromo);
+  }
+
   return {
     storeCode,
     memberId: member?.id,
     memberLevel: member?.level,
+    memberTypeId,
     businessDateTime,
     cartItems: mapCartItems(cartItems),
     subtotal,

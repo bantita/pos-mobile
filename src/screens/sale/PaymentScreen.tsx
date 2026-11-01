@@ -24,6 +24,9 @@ import { usePaymentConfigStore } from '../../store/paymentConfigStore';
 import { Payment, PaymentMethod } from '../../types/sale';
 import { Member } from '../../types/member';
 import { runCartPromotions } from '../../engine/adapter/cartAdapter';
+import { useMemberTypeStore, resolveMemberType, getDefaultMemberType } from '../../store/memberTypeStore';
+import { getMemberTypeColors } from '../../constants/memberTypeColors';
+import { calcEarnedPoints } from '../../utils/memberTypeBenefits';
 import { paymentApi } from '../../services/api/paymentApi';
 import { FEATURE_FLAGS } from '../../config/featureFlags';
 import { ENV } from '../../config/env';
@@ -53,6 +56,16 @@ const PAYMENT_METHODS: {
 ];
 
 const QUICK_CASH = [20, 50, 100, 500, 1000];
+
+/** ป้ายประเภทสมาชิก (สีจาก token ตาม key ของประเภท) */
+const MemberTypePill: React.FC<{ name: string; color: string }> = ({ name, color }) => {
+  const c = getMemberTypeColors(color, 'mobile');
+  return (
+    <View style={[styles.memberTypePill, { backgroundColor: c.bg }]}>
+      <Text style={[styles.memberTypePillText, { color: c.fg }]} numberOfLines={1}>{name}</Text>
+    </View>
+  );
+};
 
 export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) => {
   const { getGrandTotal, getSubtotal, getDiscountTotal, getVatAmount, items, discount, orderType, orderDetails } = useCartStore();
@@ -97,17 +110,28 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
   // ── Promotion Engine: รันโปรทั้งหมด (7 ประเภท) ตอนเข้าหน้าชำระเงิน ──
   // คูปองจะถูกส่งเข้า engine เฉพาะเมื่อผ่านการ validate แล้ว (appliedCouponCode)
   const [appliedCouponCode, setAppliedCouponCode] = useState('');
+  // ประเภทสมาชิก: ใช้คำนวณส่วนลดอัตโนมัติ (ผ่าน engine) + กฎสะสมคะแนน
+  const memberTypes = useMemberTypeStore((s) => s.types);
+  const memberType = useMemo(
+    () => (selectedMember ? resolveMemberType(selectedMember) : null),
+    [selectedMember, memberTypes]
+  );
+  /** ประเภทที่สมาชิกสังกัด (สำหรับแสดงป้าย) */
+  const typeForBadge = (m: Member) => memberTypes.find((t) => t.id === m.memberTypeId) ?? getDefaultMemberType();
   const engineResult = useMemo(() => {
     return runCartPromotions({
       cartItems: items,
       subtotal: getSubtotal(),
-      member: selectedMember ? { id: selectedMember.id, level: selectedMember.level } : undefined,
+      member: selectedMember
+        ? { id: selectedMember.id, level: selectedMember.level, memberTypeId: memberType?.id }
+        : undefined,
+      memberType,
       promotions: getActivePromotions(),
       businessDateTime: new Date().toISOString(),
       storeCode: 'STORE-001',
       couponCode: appliedCouponCode || undefined,
     });
-  }, [items, selectedMember, appliedCouponCode, getActivePromotions, getSubtotal]);
+  }, [items, selectedMember, memberType, appliedCouponCode, getActivePromotions, getSubtotal]);
 
   // ส่วนลดรวมจากโปรทั้งหมด (รายการ + บิล) แทนที่การคิดคูปองใบเดียวแบบเดิม
   const promotionDiscount = engineResult.totalDiscount;
@@ -118,7 +142,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
 
   const handleValidateCoupon = () => {
     if (!couponCode.trim()) return;
-    const result = validateCoupon(couponCode, getSubtotal(), selectedMember?.level);
+    const result = validateCoupon(couponCode, getSubtotal(), selectedMember?.level, memberType?.id);
     if (result.valid && result.promotion) {
       // ส่งคูปองเข้า engine เพื่อให้คำนวณร่วมกับโปรอื่น
       setAppliedCouponCode(couponCode);
@@ -203,7 +227,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
     if (finalPaid < grandTotal) return;
     const saleNo = `INV${Date.now().toString().slice(-8)}`;
     const pointsEarned = selectedMember
-      ? Math.floor(grandTotal / (pointConfig.earnRate || 1))
+      ? calcEarnedPoints(grandTotal, pointConfig.earnRate, memberType)
       : 0;
 
     // ── CRM: Earn points + apply coupon ──
@@ -271,6 +295,8 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
       changeAmount: Math.max(0, finalPaid - grandTotal),
       memberId: selectedMember?.id,
       memberName: selectedMember?.name,
+      memberTypeId: memberType?.id,
+      memberTypeName: memberType?.name,
       pointsEarned,
       cashierName: 'แคชเชียร์',
       posName: 'POS 1',
@@ -435,6 +461,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
                 }]}>
                   <Text style={styles.levelBadgeTextMobile}>{selectedMember.level}</Text>
                 </View>
+                <MemberTypePill name={selectedMember.memberTypeName || typeForBadge(selectedMember).name} color={typeForBadge(selectedMember).color} />
                 <TouchableOpacity onPress={() => { selectMember(null); setPointDiscount(0); setPointsToUse(''); }}>
                   <Ionicons name="close-circle" size={20} color={Colors.gray400} />
                 </TouchableOpacity>
@@ -785,6 +812,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
                     }]}>
                       <Text style={styles.levelBadgeTextMobile}>{mem.level}</Text>
                     </View>
+                    <MemberTypePill name={mem.memberTypeName || typeForBadge(mem).name} color={typeForBadge(mem).color} />
                   </TouchableOpacity>
                 )}
               />
@@ -1026,6 +1054,8 @@ const styles = StyleSheet.create({
   memberName: { ...Typography.label, color: Colors.text },
   memberSub: { ...Typography.caption, color: Colors.textSecondary },
   levelBadgeMobile: { borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 },
+  memberTypePill: { borderRadius: BorderRadius.sm, paddingHorizontal: Spacing.sm, paddingVertical: 2, maxWidth: 120 },
+  memberTypePillText: { ...Typography.caption, fontWeight: '700' },
   levelBadgeTextMobile: { fontSize: 10, fontWeight: '800', color: '#fff', textTransform: 'uppercase' },
   memberSelectButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm,

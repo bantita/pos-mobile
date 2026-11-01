@@ -39,6 +39,10 @@ export interface Member {
   taxId?: string;
   /** ระดับสมาชิก */
   level: MemberLevel;
+  /** รหัสประเภทสมาชิก (ลูกค้าทั่วไป / พนักงาน ฯลฯ) — แยกจากระดับ */
+  memberTypeId?: string;
+  /** ชื่อประเภทสมาชิก (snapshot สำหรับแสดงผล) */
+  memberTypeName?: string;
   /** ยอดคะแนนคงเหลือ */
   pointBalance: number;
   /** ยอดซื้อสะสมทั้งหมด (บาท) */

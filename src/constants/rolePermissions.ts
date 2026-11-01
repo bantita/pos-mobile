@@ -32,6 +32,7 @@ export const ALL_SCREENS: ScreenPermission[] = [
   { key: 'crm_history',   label: 'ประวัติการซื้อ',     group: 'CRM' },
   { key: 'crm_points',    label: 'จัดการคะแนน',       group: 'CRM' },
   { key: 'crm_levels',    label: 'ระดับสมาชิก',       group: 'CRM' },
+  { key: 'crm_member_types', label: 'ประเภทสมาชิก',   group: 'CRM' },
   { key: 'crm_coupons',   label: 'คูปอง/Voucher',     group: 'CRM' },
   { key: 'crm_campaign',  label: 'Campaign',          group: 'CRM' },
   { key: 'crm_communication', label: 'ส่งข้อความ',    group: 'CRM' },
@@ -59,7 +60,7 @@ export const DEFAULT_SCREEN_PERMISSIONS: Record<UserRole, string[]> = {
   manager: [
     'pos', 'salehistory', 'payment', 'void_bill', 'return_bill',
     'products', 'product_add', 'product_edit', 'pricing', 'inventory',
-    'crm_members', 'crm_add', 'crm_history', 'crm_points', 'crm_levels', 'crm_coupons', 'crm_campaign', 'crm_communication',
+    'crm_members', 'crm_add', 'crm_history', 'crm_points', 'crm_levels', 'crm_member_types', 'crm_coupons', 'crm_campaign', 'crm_communication',
     'reports', 'report_profit', 'report_product', 'report_inventory',
     'promotions', 'dashboard', 'auditlog',
   ],

@@ -8,8 +8,9 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView } from 
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../constants/colors';
 import { Typography } from '../../../constants/typography';
-import { Spacing, BorderRadius } from '../../../constants/spacing';
+import { Spacing, BorderRadius, ComponentSize } from '../../../constants/spacing';
 import * as couponStore from '../../../store/couponStore';
+import { useMemberTypeStore } from '../../../store/memberTypeStore';
 import { LookupCheckbox } from '../../../components/ui/LookupCheckbox';
 import { PromoGenericTable, TableColumn, TableRow } from './PromoGenericTable';
 
@@ -67,6 +68,9 @@ interface Props {
   // Coupon campaigns
   selectedCouponCampaigns?: string[];
   onCouponCampaignsChange?: (ids: string[]) => void;
+  // Member types (ประเภทสมาชิก — ว่าง = ทุกประเภท)
+  selectedMemberTypeIds?: string[];
+  onMemberTypeIdsChange?: (ids: string[]) => void;
 }
 
 const DAYS_OF_WEEK = ['จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส', 'อา'];
@@ -82,6 +86,7 @@ export const PromoConditionTabs: React.FC<Props> = (props) => {
 
   const [activeTab, setActiveTab] = useState('สมาชิก');
   const [memberTier, setMemberTier] = useState('ทุกระดับ');
+  const memberTypes = useMemberTypeStore(st => st.types).filter(t => t.status === 'active');
 
   // Product table columns
   const productCols: TableColumn[] = [
@@ -150,6 +155,30 @@ export const PromoConditionTabs: React.FC<Props> = (props) => {
                 </TouchableOpacity>
               ))}
             </View>
+
+            {props.onMemberTypeIdsChange && (
+              <>
+                <Text style={s.fieldLabel}>ประเภทสมาชิก</Text>
+                <View style={s.tierRow}>
+                  {memberTypes.map(t => {
+                    const selectedIds = props.selectedMemberTypeIds ?? [];
+                    const on = selectedIds.includes(t.id);
+                    return (
+                      <TouchableOpacity
+                        key={t.id}
+                        style={[s.tierChip, s.chipTouch, on && s.tierChipActive]}
+                        onPress={() => props.onMemberTypeIdsChange?.(on ? selectedIds.filter(id => id !== t.id) : [...selectedIds, t.id])}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: on }}
+                      >
+                        <Text style={[s.tierChipText, on && s.tierChipTextActive]}>{t.name}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                {(props.selectedMemberTypeIds ?? []).length === 0 && <Text style={s.noteText}>* ไม่เลือก = ทุกประเภท</Text>}
+              </>
+            )}
           </View>
         )}
 
@@ -332,6 +361,7 @@ const s = StyleSheet.create({
   tierRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginTop: Spacing.sm },
   tierChip: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full, borderWidth: 1, borderColor: Colors.border },
   tierChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  chipTouch: { minHeight: ComponentSize.button.md, justifyContent: 'center' },
   tierChipText: { ...Typography.body2, color: Colors.text },
   tierChipTextActive: { color: Colors.white },
   rowEnd: { flexDirection: 'row', gap: 12, alignItems: 'flex-end' },

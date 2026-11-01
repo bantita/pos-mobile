@@ -6,7 +6,7 @@ export class MemberConditionEvaluator implements ConditionEvaluator {
   readonly type = 'member';
 
   evaluate(condition: ConditionConfig, context: EvaluationContext): ConditionResult {
-    const { levels, segments, memberIds } = condition.params;
+    const { levels, memberIds, memberTypeIds } = condition.params;
 
     if (!context.memberId) {
       return { passed: false, reason: 'No member selected' };
@@ -21,6 +21,13 @@ export class MemberConditionEvaluator implements ConditionEvaluator {
     if (levels && levels.length > 0) {
       if (!context.memberLevel || !levels.includes(context.memberLevel)) {
         return { passed: false, reason: `Member level ${context.memberLevel} not in ${levels.join(',')}` };
+      }
+    }
+
+    // ประเภทสมาชิก (AND กับ levels เมื่อกำหนดทั้งคู่)
+    if (memberTypeIds && memberTypeIds.length > 0) {
+      if (!context.memberTypeId || !memberTypeIds.includes(context.memberTypeId)) {
+        return { passed: false, reason: `Member type ${context.memberTypeId} not in ${memberTypeIds.join(',')}` };
       }
     }
 

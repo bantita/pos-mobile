@@ -23,7 +23,7 @@ interface PromoStore {
   createPromotion: (data: Omit<Promotion, 'id' | 'usageCount' | 'totalDiscountGiven' | 'createdAt'>) => Promotion;
   updatePromotion: (id: string, data: Partial<Promotion>) => void;
   disablePromotion: (id: string) => void;
-  validateCoupon: (code: string, cartTotal: number, memberLevel?: string) => { valid: boolean; promotion?: Promotion; error?: string };
+  validateCoupon: (code: string, cartTotal: number, memberLevel?: string, memberTypeId?: string) => { valid: boolean; promotion?: Promotion; error?: string };
   applyCoupon: (code: string, saleNo: string, discountAmount: number, memberId?: string) => CouponUsage;
 }
 
@@ -67,7 +67,7 @@ export const usePromoStore = create<PromoStore>()(
     }));
   },
 
-  validateCoupon: (code, cartTotal, memberLevel?) => {
+  validateCoupon: (code, cartTotal, memberLevel?, memberTypeId?) => {
     const today = new Date().toISOString().slice(0, 10);
     const promo = get().promotions.find(
       p => (p.couponCode?.toLowerCase() === code.toLowerCase() || p.promoCode?.toLowerCase() === code.toLowerCase())
@@ -100,6 +100,12 @@ export const usePromoStore = create<PromoStore>()(
     if (promo.applicableLevels && promo.applicableLevels.length > 0) {
       if (!memberLevel || !promo.applicableLevels.includes(memberLevel)) {
         return { valid: false, error: 'คูปองนี้สำหรับสมาชิกระดับที่กำหนดเท่านั้น' };
+      }
+    }
+
+    if (promo.applicableMemberTypeIds && promo.applicableMemberTypeIds.length > 0) {
+      if (!memberTypeId || !promo.applicableMemberTypeIds.includes(memberTypeId)) {
+        return { valid: false, error: 'คูปองนี้ใช้ได้เฉพาะประเภทสมาชิกที่กำหนด' };
       }
     }
 

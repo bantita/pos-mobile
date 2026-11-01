@@ -54,6 +54,8 @@ export interface Promotion {
   applicableCategories?: string[];
   /** ระดับสมาชิกที่ใช้ได้ */
   applicableLevels?: string[];
+  /** ประเภทสมาชิกที่ใช้ได้ (id ของ MemberType — ว่าง = ทุกประเภท) */
+  applicableMemberTypeIds?: string[];
 
   // --- ส่วนลด ---
 

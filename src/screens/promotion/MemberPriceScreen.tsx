@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { usePromoStore } from '../../store/promoStore';
+import { useMemberTypeStore } from '../../store/memberTypeStore';
 import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
 import { Spacing, BorderRadius } from '../../constants/spacing';
@@ -31,6 +32,8 @@ export const MemberPriceScreen: React.FC<Props> = ({ onBack }) => {
   const [promoCode, setPromoCode] = useState('');
   const [discountPercent, setDiscountPercent] = useState('');
   const [selectedLevels, setSelectedLevels] = useState<string[]>([]);
+  const memberTypes = useMemberTypeStore((s) => s.types).filter((t) => t.status === 'active');
+  const [selectedTypeIds, setSelectedTypeIds] = useState<string[]>([]);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
@@ -40,18 +43,29 @@ export const MemberPriceScreen: React.FC<Props> = ({ onBack }) => {
     );
   };
 
+  const toggleType = (id: string) => {
+    setSelectedTypeIds((prev) =>
+      prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id]
+    );
+  };
+
   const handleSubmit = () => {
     if (!name.trim() || !promoCode.trim() || !discountPercent.trim()
-      || !startDate.trim() || !endDate.trim() || selectedLevels.length === 0) {
+      || !startDate.trim() || !endDate.trim()
+      || (selectedLevels.length === 0 && selectedTypeIds.length === 0)) {
       Alert.alert('ข้อมูลไม่ครบ',
-        'กรุณากรอกข้อมูลที่จำเป็นและเลือกระดับสมาชิกอย่างน้อย 1 ระดับ');
+        'กรุณากรอกข้อมูลที่จำเป็นและเลือกระดับสมาชิกหรือประเภทสมาชิกอย่างน้อย 1 รายการ');
       return;
     }
+
+    const typeNames = memberTypes.filter(t => selectedTypeIds.includes(t.id)).map(t => t.name);
+    const targets = [...selectedLevels, ...typeNames].join(', ');
 
     createPromotion({
       name: name.trim(),
       promoCode: promoCode.trim().toUpperCase(),
-      description: `ราคาสมาชิก ลด ${discountPercent}% สำหรับ ${selectedLevels.join(', ')}`,
+      description: `ราคาสมาชิก ลด ${discountPercent}% สำหรับ ${targets}`,
+      applicableMemberTypeIds: selectedTypeIds.length > 0 ? selectedTypeIds : undefined,
       type: 'member_price',
       status: 'active',
       startDate: startDate.trim(),
@@ -104,7 +118,7 @@ export const MemberPriceScreen: React.FC<Props> = ({ onBack }) => {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>ระดับสมาชิกที่ใช้ได้ *</Text>
+          <Text style={styles.label}>ระดับสมาชิกที่ใช้ได้ (เลือกระดับหรือประเภทอย่างน้อย 1)</Text>
           <View style={styles.checkboxGroup}>
             {LEVELS.map((lv) => {
               const selected = selectedLevels.includes(lv.key);
@@ -123,6 +137,36 @@ export const MemberPriceScreen: React.FC<Props> = ({ onBack }) => {
                   <Text style={[styles.checkboxLabel,
                     selected && { color: Colors.primary, fontWeight: '600' }]}>
                     {lv.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>ประเภทสมาชิกที่ใช้ได้</Text>
+          <Text style={styles.hint}>ไม่เลือก = ทุกประเภท · เลือกทั้งระดับและประเภท = ต้องตรงทั้งสองเงื่อนไข</Text>
+          <View style={styles.checkboxGroup}>
+            {memberTypes.map((t) => {
+              const selected = selectedTypeIds.includes(t.id);
+              return (
+                <TouchableOpacity
+                  key={t.id}
+                  style={[styles.checkboxItem, selected && styles.checkboxSelected]}
+                  onPress={() => toggleType(t.id)}
+                  activeOpacity={0.8}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: selected }}
+                >
+                  <Ionicons
+                    name={selected ? 'checkbox' : 'square-outline'}
+                    size={22}
+                    color={selected ? Colors.primary : Colors.gray400}
+                  />
+                  <Text style={[styles.checkboxLabel,
+                    selected && { color: Colors.primary, fontWeight: '600' }]}>
+                    {t.name}
                   </Text>
                 </TouchableOpacity>
               );
@@ -166,6 +210,7 @@ const styles = StyleSheet.create({
   form: { padding: Spacing.md, gap: Spacing.md },
   field: { gap: Spacing.xs },
   label: { ...Typography.label, color: Colors.text },
+  hint: { ...Typography.caption, color: Colors.textSecondary },
   input: { backgroundColor: Colors.white, borderRadius: BorderRadius.md, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: Spacing.md, height: 48, ...Typography.body2, color: Colors.text },
   row: { flexDirection: 'row', gap: Spacing.sm },
   checkboxGroup: { gap: Spacing.xs },

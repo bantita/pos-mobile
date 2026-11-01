@@ -5,7 +5,7 @@
 import React, { useState, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  FlatList, TextInput,
+  FlatList, TextInput, ScrollView, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,7 +14,9 @@ import { Member, MemberLevel } from '../../types/member';
 import { Colors } from '../../constants/colors';
 import { MemberLevelColors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
-import { Spacing, BorderRadius } from '../../constants/spacing';
+import { Spacing, BorderRadius, ComponentSize } from '../../constants/spacing';
+import { getMemberTypeColors } from '../../constants/memberTypeColors';
+import { useMemberTypeStore, getDefaultMemberType } from '../../store/memberTypeStore';
 
 interface Props {
   onAddMember: () => void;
@@ -31,19 +33,30 @@ const LEVEL_CONFIG: Record<MemberLevel, { label: string; color: string; bgColor:
 
 export const MemberListScreen: React.FC<Props> = ({ onAddMember, onSelectMember }) => {
   const { members } = useMemberStore();
+  const types = useMemberTypeStore(s => s.types);
   const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+
+  /** ประเภทของสมาชิก (ไม่มี/ไม่พบ -> ประเภทเริ่มต้น) */
+  const typeOf = (m: Member) => types.find(t => t.id === m.memberTypeId) ?? getDefaultMemberType();
 
   const filtered = useMemo(() => {
     const k = search.toLowerCase().trim();
-    if (!k) return members.filter(m => m.isActive);
     return members.filter(m =>
-      m.isActive && (
+      m.isActive &&
+      (!typeFilter || typeOf(m).id === typeFilter) &&
+      (!k ||
         m.name.toLowerCase().includes(k) ||
         m.phone.includes(k) ||
-        m.memberNo.toLowerCase().includes(k)
-      )
+        m.memberNo.toLowerCase().includes(k) ||
+        (m.memberTypeName ?? '').toLowerCase().includes(k))
     );
-  }, [members, search]);
+  }, [members, search, typeFilter, types]);
+
+  const callMember = (phone: string) => {
+    const tel = phone.replace(/[^0-9+]/g, '');
+    if (tel) Linking.openURL(`tel:${tel}`);
+  };
 
   const getInitial = (name: string) => {
     return name.charAt(0).toUpperCase();
@@ -51,6 +64,8 @@ export const MemberListScreen: React.FC<Props> = ({ onAddMember, onSelectMember 
 
   const renderMember = ({ item }: { item: Member }) => {
     const levelCfg = LEVEL_CONFIG[item.level];
+    const mType = typeOf(item);
+    const typeColors = getMemberTypeColors(mType.color, 'mobile');
     return (
       <TouchableOpacity
         style={styles.memberCard}
@@ -73,10 +88,25 @@ export const MemberListScreen: React.FC<Props> = ({ onAddMember, onSelectMember 
           </View>
         </View>
 
+        {/* Quick call */}
+        <TouchableOpacity
+          style={styles.callBtn}
+          onPress={() => callMember(item.phone)}
+          accessibilityRole="button"
+          accessibilityLabel={`โทรหาลูกค้า ${item.name}`}
+        >
+          <Ionicons name="call" size={18} color={Colors.success} />
+        </TouchableOpacity>
+
         {/* Right side */}
         <View style={styles.memberRight}>
-          <View style={[styles.levelBadge, { backgroundColor: levelCfg.bgColor }]}>
-            <Text style={[styles.levelText, { color: levelCfg.color }]}>{levelCfg.label}</Text>
+          <View style={styles.badgeRow}>
+            <View style={[styles.levelBadge, { backgroundColor: typeColors.bg }]}>
+              <Text style={[styles.levelText, { color: typeColors.fg }]}>{item.memberTypeName || mType.name}</Text>
+            </View>
+            <View style={[styles.levelBadge, { backgroundColor: levelCfg.bgColor }]}>
+              <Text style={[styles.levelText, { color: levelCfg.color }]}>{levelCfg.label}</Text>
+            </View>
           </View>
           <View style={styles.pointRow}>
             <Ionicons name="star" size={12} color={Colors.warning} />
@@ -106,7 +136,7 @@ export const MemberListScreen: React.FC<Props> = ({ onAddMember, onSelectMember 
           <Ionicons name="search-outline" size={16} color={Colors.gray400} />
           <TextInput
             style={styles.searchInput}
-            placeholder="ค้นหาชื่อ / เบอร์โทร / เลขสมาชิก"
+            placeholder="ค้นหาชื่อ / เบอร์โทร / เลขสมาชิก / ประเภท"
             placeholderTextColor={Colors.gray400}
             value={search}
             onChangeText={setSearch}
@@ -119,6 +149,24 @@ export const MemberListScreen: React.FC<Props> = ({ onAddMember, onSelectMember 
         </View>
       </View>
 
+      {/* Type filter */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow} style={styles.filterScroll}>
+        {[{ id: '', name: 'ทุกประเภท' }, ...types.map(t => ({ id: t.id, name: t.name }))].map(opt => {
+          const selected = typeFilter === opt.id;
+          return (
+            <TouchableOpacity
+              key={opt.id || 'all'}
+              style={[styles.filterChip, selected && styles.filterChipActive]}
+              onPress={() => setTypeFilter(opt.id)}
+              accessibilityRole="radio"
+              accessibilityState={{ selected }}
+            >
+              <Text style={[styles.filterChipText, selected && styles.filterChipTextActive]}>{opt.name}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
       {/* List */}
       <FlatList
         data={filtered}
@@ -129,8 +177,10 @@ export const MemberListScreen: React.FC<Props> = ({ onAddMember, onSelectMember 
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Ionicons name="people-outline" size={56} color={Colors.gray300} />
-            <Text style={styles.emptyTitle}>ไม่พบสมาชิก</Text>
-            <Text style={styles.emptyDesc}>ลองค้นหาด้วยคำอื่น หรือเพิ่มสมาชิกใหม่</Text>
+            <Text style={styles.emptyTitle}>{typeFilter ? 'ไม่มีข้อมูล' : 'ไม่พบสมาชิก'}</Text>
+            <Text style={styles.emptyDesc}>
+              {typeFilter ? 'ไม่มีลูกค้าในประเภทที่เลือก' : 'ลองค้นหาด้วยคำอื่น หรือเพิ่มสมาชิกใหม่'}
+            </Text>
           </View>
         }
       />
@@ -209,6 +259,29 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   levelText: { fontSize: 10, fontWeight: '700' },
+  badgeRow: { flexDirection: 'row', gap: Spacing.xs },
+  callBtn: {
+    width: ComponentSize.button.md,
+    height: ComponentSize.button.md,
+    borderRadius: BorderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.successLight,
+  },
+  filterScroll: { flexGrow: 0 },
+  filterRow: { paddingHorizontal: Spacing.md, paddingBottom: Spacing.sm, gap: Spacing.sm },
+  filterChip: {
+    minHeight: ComponentSize.button.md,
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  filterChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  filterChipText: { ...Typography.label, color: Colors.text },
+  filterChipTextActive: { color: Colors.white },
   pointRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   pointText: { ...Typography.caption, color: Colors.text, fontWeight: '600' },
   emptyState: { alignItems: 'center', paddingVertical: 80, gap: Spacing.sm },

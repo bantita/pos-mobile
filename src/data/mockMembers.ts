@@ -3,10 +3,17 @@ import {
   MemberLevelConfig, CustomerSegment, Campaign,
   MemberPurchaseHistory, MemberWallet, WalletTransaction,
 } from '../types/member';
+import {
+  DEFAULT_MEMBER_TYPE_ID, DEFAULT_MEMBER_TYPE_NAME,
+  STAFF_MEMBER_TYPE_ID, STAFF_MEMBER_TYPE_NAME,
+} from './mockMemberTypes';
 
 // ==================== Mock Members ====================
 
-export const MOCK_MEMBERS: Member[] = [
+/** สมาชิกตัวอย่างที่เป็นพนักงาน (ที่เหลือเป็นลูกค้าทั่วไป) */
+const STAFF_MOCK_MEMBER_IDS = ['mem-003', 'mem-008'];
+
+const RAW_MOCK_MEMBERS: Member[] = [
   {
     id: 'mem-001', memberNo: 'MEM-000101', phone: '081-234-5678',
     name: 'สมชาย วงศ์สุข', birthday: '1990-03-15', level: 'gold',
@@ -99,6 +106,12 @@ export const MOCK_MEMBERS: Member[] = [
     status: 'active', totalBills: 1, lastPurchaseDate: '2026-02-15', gender: 'female',
   },
 ];
+
+export const MOCK_MEMBERS: Member[] = RAW_MOCK_MEMBERS.map(m => (
+  STAFF_MOCK_MEMBER_IDS.includes(m.id)
+    ? { ...m, memberTypeId: STAFF_MEMBER_TYPE_ID, memberTypeName: STAFF_MEMBER_TYPE_NAME }
+    : { ...m, memberTypeId: DEFAULT_MEMBER_TYPE_ID, memberTypeName: DEFAULT_MEMBER_TYPE_NAME }
+));
 
 // ==================== Mock Point Transactions ====================
 

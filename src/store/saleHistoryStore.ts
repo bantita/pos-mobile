@@ -24,6 +24,9 @@ export interface SaleRecord {
   changeAmount: number;
   memberId?: string;
   memberName?: string;
+  /** ประเภทสมาชิก ณ เวลาขาย (snapshot สำหรับรายงาน) */
+  memberTypeId?: string;
+  memberTypeName?: string;
   pointsEarned?: number;
   cashierName: string;
   posName: string;

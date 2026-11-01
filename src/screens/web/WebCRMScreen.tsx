@@ -4,7 +4,7 @@
  *           Segment, ประวัติ, Wallet, รายงาน, ตั้งค่า
  */
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Switch, Modal, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Switch, Modal, Platform, Linking, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { WebColors } from '../../constants/webColors';
 import { Colors, Space, Radius, Shadow, Font } from '../../design-system/tokens';
@@ -12,15 +12,22 @@ import { useMemberStore } from '../../store/memberStore';
 import { usePromoStore } from '../../store/promoStore';
 import { useCommunicationStore } from '../../store/communicationStore';
 import { useSaleHistoryStore } from '../../store/saleHistoryStore';
+import { useAuthStore } from '../../store/authStore';
+import { useMemberTypeStore, getDefaultMemberType } from '../../store/memberTypeStore';
+import { canAccess } from '../../constants/rolePermissions';
 import { MOCK_LEVEL_CONFIGS } from '../../data/mockMembers';
+import { Member } from '../../types/member';
+import { MemberType } from '../../types/memberType';
+import { WebMemberTypeScreen, MemberTypeBadge } from './WebMemberTypeScreen';
 
-type MenuKey = 'members' | 'add-member' | 'levels' | 'points' | 'point-adjust' | 'coupons'
+type MenuKey = 'members' | 'add-member' | 'levels' | 'member-types' | 'points' | 'point-adjust' | 'coupons'
   | 'campaigns' | 'communication' | 'gamification' | 'segments' | 'history' | 'wallet' | 'reports' | 'settings';
 
-const MENUS: { key: MenuKey; label: string; icon: string }[] = [
+const MENUS: { key: MenuKey; label: string; icon: string; permission?: string }[] = [
   { key: 'members', label: 'ข้อมูลสมาชิก', icon: 'people-outline' },
   { key: 'add-member', label: 'เพิ่มสมาชิก', icon: 'person-add-outline' },
   { key: 'levels', label: 'ระดับสมาชิก', icon: 'ribbon-outline' },
+  { key: 'member-types', label: 'ประเภทสมาชิก', icon: 'pricetags-outline', permission: 'crm_member_types' },
   { key: 'points', label: 'ตั้งค่าคะแนน', icon: 'star-outline' },
   { key: 'point-adjust', label: 'ปรับปรุงคะแนน', icon: 'swap-horizontal-outline' },
   { key: 'coupons', label: 'คูปอง / Voucher', icon: 'pricetag-outline' },
@@ -48,6 +55,48 @@ const Field: React.FC<{ label: string; value: string; onChange?: (v: string) => 
   </View>
 );
 
+/** ประเภทของสมาชิก (ไม่มี/ไม่พบ -> ประเภทเริ่มต้น) */
+const memberTypeOf = (m: Pick<Member, 'memberTypeId'>, types: MemberType[]): MemberType =>
+  types.find(t => t.id === m.memberTypeId) ?? getDefaultMemberType();
+
+/** ป้ายประเภทของสมาชิก (ชื่อ snapshot ของสมาชิก + สีของประเภท) */
+const MemberTypeTag: React.FC<{ member: Member; types: MemberType[] }> = ({ member, types }) => {
+  const t = memberTypeOf(member, types);
+  return <MemberTypeBadge name={member.memberTypeName || t.name} color={t.color} inactive={t.status !== 'active'} />;
+};
+
+/** ตัวเลือกประเภทสมาชิกแบบ chip (allLabel = มีตัวเลือก "ทั้งหมด" ค่า '') */
+const TypeChips: React.FC<{ types: MemberType[]; value: string; onChange: (id: string) => void; allLabel?: string }> = ({ types, value, onChange, allLabel }) => (
+  <View style={[cs.chipRow, { flexWrap: 'wrap' }]}>
+    {allLabel !== undefined && (
+      <TouchableOpacity style={[cs.chip, cs.chipTouch, value === '' && cs.chipAct]} onPress={() => onChange('')} accessibilityRole="radio" accessibilityState={{ selected: value === '' }}>
+        <Text style={[cs.chipTxt, value === '' && cs.chipTxtAct]}>{allLabel}</Text>
+      </TouchableOpacity>
+    )}
+    {types.map(t => (
+      <TouchableOpacity key={t.id} style={[cs.chip, cs.chipTouch, value === t.id && cs.chipAct]} onPress={() => onChange(t.id)} accessibilityRole="radio" accessibilityState={{ selected: value === t.id }}>
+        <Text style={[cs.chipTxt, value === t.id && cs.chipTxtAct]}>{t.name}{t.status !== 'active' ? ' (ปิดใช้งาน)' : ''}</Text>
+      </TouchableOpacity>
+    ))}
+  </View>
+);
+
+/** ปุ่มโทร / ส่งข้อความหาลูกค้า */
+const ContactIcons: React.FC<{ phone: string }> = ({ phone }) => {
+  const tel = phone.replace(/[^0-9+]/g, '');
+  if (!tel) return null;
+  return (
+    <View style={{ flexDirection: 'row', gap: 4 }}>
+      <TouchableOpacity style={cs.contactBtn} onPress={() => Linking.openURL(`tel:${tel}`)} accessibilityLabel={`โทรหาลูกค้า ${phone}`}>
+        <Ionicons name="call" size={16} color={WebColors.success} />
+      </TouchableOpacity>
+      <TouchableOpacity style={cs.contactBtn} onPress={() => Linking.openURL(`sms:${tel}`)} accessibilityLabel={`ส่งข้อความหาลูกค้า ${phone}`}>
+        <Ionicons name="chatbubble" size={16} color={WebColors.info} />
+      </TouchableOpacity>
+    </View>
+  );
+};
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN EXPORT
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -55,6 +104,9 @@ export const WebCRMScreen: React.FC = () => {
   const [menu, setMenu] = useState<MenuKey>('members');
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+  const user = useAuthStore(s => s.user);
+  // ซ่อนเมนูที่ role ไม่มีสิทธิ์ (ไม่มี user = แสดงทั้งหมด เหมือน WebSidebar)
+  const menus = MENUS.filter(m => !m.permission || !user || canAccess(user.role, m.permission));
 
   return (
     <View style={[cs.root, isMobile && { flexDirection: 'column' }]}>
@@ -64,7 +116,7 @@ export const WebCRMScreen: React.FC = () => {
           <Ionicons name="heart-circle" size={24} color={WebColors.primary} />
           <Text style={cs.sideTitle}>CRM</Text>
         </View>
-        {MENUS.map(m => (
+        {menus.map(m => (
           <TouchableOpacity key={m.key} style={[cs.menuItem, menu === m.key && cs.menuItemActive]} onPress={() => setMenu(m.key)}>
             <Ionicons name={m.icon as any} size={16} color={menu === m.key ? WebColors.primary : Colors.textSecondary} />
             <Text style={[cs.menuText, menu === m.key && cs.menuTextActive]}>{m.label}</Text>
@@ -76,7 +128,7 @@ export const WebCRMScreen: React.FC = () => {
       {isMobile && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 44, borderBottomWidth: 1, borderBottomColor: Colors.border, backgroundColor: WebColors.white }}>
           <View style={{ flexDirection: 'row', paddingHorizontal: 8, gap: 4, alignItems: 'center' }}>
-            {MENUS.map(m => (
+            {menus.map(m => (
               <TouchableOpacity key={m.key} onPress={() => setMenu(m.key)} style={{ paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: menu === m.key ? WebColors.primary : 'transparent' }}>
                 <Text style={{ fontSize: 12, color: menu === m.key ? WebColors.primary : Colors.textSecondary, fontWeight: menu === m.key ? '600' : '400' }}>{m.label}</Text>
               </TouchableOpacity>
@@ -90,6 +142,7 @@ export const WebCRMScreen: React.FC = () => {
         {menu === 'members' && <MembersPanel />}
         {menu === 'add-member' && <AddMemberPanel />}
         {menu === 'levels' && <LevelsPanel />}
+        {menu === 'member-types' && menus.some(m => m.key === 'member-types') && <WebMemberTypeScreen />}
         {menu === 'points' && <PointsSettingsPanel />}
         {menu === 'point-adjust' && <PointAdjustPanel />}
         {menu === 'coupons' && <CouponsPanel />}
@@ -123,7 +176,11 @@ const MembersPanel: React.FC = () => {
   const [editEmail, setEditEmail] = useState('');
   const [editBirthday, setEditBirthday] = useState('');
   const [editAddress, setEditAddress] = useState('');
-  const list = kw.trim() ? searchMembers(kw) : members;
+  const [editTypeId, setEditTypeId] = useState('');
+  const types = useMemberTypeStore(s => s.types);
+  const [typeFilter, setTypeFilter] = useState('');
+  const list = (kw.trim() ? searchMembers(kw) : members)
+    .filter(m => !typeFilter || memberTypeOf(m, types).id === typeFilter);
   const active = members.filter(m => m.isActive).length;
   const suspended = members.length - active;
   const newMonth = members.filter(m => { const d = new Date(m.joinDate), n = new Date(); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); }).length;
@@ -137,6 +194,7 @@ const MembersPanel: React.FC = () => {
     setEditEmail(selected.email || '');
     setEditBirthday(selected.birthday || '');
     setEditAddress(selected.address || '');
+    setEditTypeId(memberTypeOf(selected, types).id);
     setEditMode(true);
   };
 
@@ -148,6 +206,7 @@ const MembersPanel: React.FC = () => {
       email: editEmail || undefined,
       birthday: editBirthday || undefined,
       address: editAddress || undefined,
+      ...(editTypeId ? { memberTypeId: editTypeId } : {}),
     });
     setEditMode(false);
   };
@@ -175,6 +234,11 @@ const MembersPanel: React.FC = () => {
         </TouchableOpacity>
         <Text style={cs.pageTitle}>{selected.name}</Text>
         <Text style={cs.subtitle}>{selected.memberNo} · สมาชิกตั้งแต่ {selected.joinDate}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+          <Text style={cs.detailLbl}>ประเภทสมาชิก</Text>
+          <MemberTypeTag member={selected} types={types} />
+          <ContactIcons phone={selected.phone} />
+        </View>
 
         {/* Action buttons */}
         <View style={{ flexDirection: 'row', gap: 8, marginBottom: 4 }}>
@@ -237,6 +301,10 @@ const MembersPanel: React.FC = () => {
             <View style={cs.formRow}>
               <Field label="วันเกิด" value={editBirthday} onChange={setEditBirthday} flex={1} type="date" />
               <Field label="ที่อยู่" value={editAddress} onChange={setEditAddress} flex={2} />
+            </View>
+            <View style={cs.field}>
+              <Text style={cs.fieldLabel}>ประเภทสมาชิก</Text>
+              <TypeChips types={types.filter(t => t.status === 'active' || t.id === editTypeId)} value={editTypeId} onChange={setEditTypeId} />
             </View>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <TouchableOpacity style={cs.primaryBtn} onPress={saveEdit}>
@@ -331,7 +399,10 @@ const MembersPanel: React.FC = () => {
       </View>
       <View style={cs.searchRow}>
         <Ionicons name="search" size={15} color={WebColors.textSecondary} />
-        <TextInput style={cs.searchInput} placeholder="ค้นหาชื่อ, เบอร์โทร, หมายเลขสมาชิก..." value={kw} onChangeText={setKw} placeholderTextColor={WebColors.textSecondary} />
+        <TextInput style={cs.searchInput} placeholder="ค้นหาชื่อ, เบอร์โทร, หมายเลขสมาชิก, ประเภท..." value={kw} onChangeText={setKw} placeholderTextColor={WebColors.textSecondary} />
+      </View>
+      <View style={{ marginBottom: 12 }}>
+        <TypeChips types={types} value={typeFilter} onChange={setTypeFilter} allLabel="ทุกประเภท" />
       </View>
       {isMobile ? (
         <View style={{ gap: 10 }}>
@@ -343,9 +414,13 @@ const MembersPanel: React.FC = () => {
                   <Text style={{ fontSize: 15, fontWeight: '600', color: '#3A2E2B' }}>{m.name}</Text>
                   <Badge text={m.isActive ? 'Active' : 'ระงับ'} color={m.isActive ? WebColors.success : WebColors.danger} bg={m.isActive ? WebColors.successLight : WebColors.dangerLight} />
                 </View>
-                <Text style={{ fontSize: 13, color: '#6B5B57', marginTop: 2 }}>{m.phone}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
+                  <Text style={{ fontSize: 13, color: '#6B5B57' }}>{m.phone}</Text>
+                  <ContactIcons phone={m.phone} />
+                </View>
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                   <Badge text={levelCfg?.label || m.level} color={WebColors.white} bg={levelCfg?.color || '#999'} />
+                  <MemberTypeTag member={m} types={types} />
                   <Text style={{ fontSize: 12, color: '#6B5B57' }}>⭐ {m.pointBalance.toLocaleString()} แต้ม</Text>
                   <Text style={{ fontSize: 12, color: '#6B5B57' }}>฿{m.totalSpent.toLocaleString()}</Text>
                 </View>
@@ -362,6 +437,7 @@ const MembersPanel: React.FC = () => {
           <Text style={[cs.th, { width: 100 }]}>เบอร์โทร</Text>
           <Text style={[cs.th, { flex: 1.5 }]}>Email</Text>
           <Text style={[cs.th, { width: 70 }]}>ระดับ</Text>
+          <Text style={[cs.th, { width: 100 }]}>ประเภท</Text>
           <Text style={[cs.th, { width: 60, textAlign: 'right' }]}>คะแนน</Text>
           <Text style={[cs.th, { width: 80, textAlign: 'right' }]}>ยอดซื้อ</Text>
           <Text style={[cs.th, { width: 70, textAlign: 'center', marginLeft: 12 }]}>สถานะ</Text>
@@ -374,6 +450,7 @@ const MembersPanel: React.FC = () => {
             <Text style={[cs.td, { width: 100 }]} numberOfLines={1}>{m.phone}</Text>
             <Text style={[cs.td, { flex: 1.5 }]} numberOfLines={1}>{m.email || '-'}</Text>
             <View style={[cs.td, { width: 70 }]}><Badge text={MOCK_LEVEL_CONFIGS.find(c => c.level === m.level)?.label || m.level} color={WebColors.white} bg={MOCK_LEVEL_CONFIGS.find(c => c.level === m.level)?.color || '#999'} /></View>
+            <View style={[cs.td, { width: 100 }]}><MemberTypeTag member={m} types={types} /></View>
             <Text style={[cs.td, { width: 60, textAlign: 'right' }]}>{m.pointBalance.toLocaleString()}</Text>
             <Text style={[cs.td, { width: 80, textAlign: 'right' }]}>{m.totalSpent.toLocaleString()}</Text>
             <View style={[cs.td, { width: 70, alignItems: 'center', marginLeft: 12 }]}><Badge text={m.isActive ? 'Active' : 'ระงับ'} color={m.isActive ? WebColors.success : WebColors.danger} bg={m.isActive ? WebColors.successLight : WebColors.dangerLight} /></View>
@@ -395,11 +472,16 @@ const AddMemberPanel: React.FC = () => {
   const [name, setName] = useState(''); const [phone, setPhone] = useState(''); const [email, setEmail] = useState('');
   const [dob, setDob] = useState(''); const [gender, setGender] = useState(''); const [lineId, setLineId] = useState('');
   const [address, setAddress] = useState(''); const [remark, setRemark] = useState(''); const [saved, setSaved] = useState(false);
+  const activeTypes = useMemberTypeStore(s => s.types).filter(t => t.status === 'active');
+  const [typeId, setTypeId] = useState(() => getDefaultMemberType().id);
 
   const handleSave = () => {
     if (!name.trim() || !phone.trim()) { alert('กรุณากรอกชื่อและเบอร์โทร'); return; }
-    addMember({ name, phone, email: email || undefined, level: 'member', isActive: true, status: 'active' } as any);
-    setSaved(true); setTimeout(() => { setSaved(false); setName(''); setPhone(''); setEmail(''); setDob(''); setGender(''); setLineId(''); setAddress(''); setRemark(''); }, 2000);
+    addMember({
+      name, phone, email: email || undefined, level: 'member', isActive: true, status: 'active',
+      memberTypeId: typeId || undefined, shopId: 'shop-01', branchId: 'b1',
+    });
+    setSaved(true); setTimeout(() => { setSaved(false); setName(''); setPhone(''); setEmail(''); setDob(''); setGender(''); setLineId(''); setAddress(''); setRemark(''); setTypeId(getDefaultMemberType().id); }, 2000);
   };
 
   return (
@@ -411,6 +493,7 @@ const AddMemberPanel: React.FC = () => {
           <View style={[cs.field, { flex: 1 }]}><Text style={cs.fieldLabel}>เพศ</Text><View style={cs.chipRow}>{['ชาย','หญิง','อื่นๆ'].map(g => <TouchableOpacity key={g} style={[cs.chip, gender === g && cs.chipAct]} onPress={() => setGender(g)}><Text style={[cs.chipTxt, gender === g && cs.chipTxtAct]}>{g}</Text></TouchableOpacity>)}</View></View>
         </View>
         <View style={cs.formRow}><Field label="ที่อยู่" value={address} onChange={setAddress} flex={2} /><Field label="หมายเหตุ" value={remark} onChange={setRemark} flex={1} /></View>
+        <View style={cs.field}><Text style={cs.fieldLabel}>ประเภทสมาชิก</Text><TypeChips types={activeTypes} value={typeId} onChange={setTypeId} /></View>
         <View style={cs.formFooter}>{saved && <Text style={cs.saved}>✓ บันทึกเรียบร้อย</Text>}<TouchableOpacity style={cs.primaryBtn} onPress={handleSave}><Ionicons name="checkmark-circle" size={16} color={WebColors.white} /><Text style={cs.primaryBtnTxt}>บันทึกสมาชิก</Text></TouchableOpacity></View>
       </View>
     </View>
@@ -626,6 +709,8 @@ const CouponsPanel: React.FC = () => {
   const [cpType, setCpType] = useState<'%' | 'Fixed'>('%'); const [cpValue, setCpValue] = useState('');
   const [cpLimit, setCpLimit] = useState(''); const [cpMinSpend, setCpMinSpend] = useState('');
   const [cpExpiry, setCpExpiry] = useState(''); const [cpLevel, setCpLevel] = useState('');
+  const [cpTypeId, setCpTypeId] = useState('');
+  const memberTypes = useMemberTypeStore(s => s.types);
 
   // ดึงคูปองจาก Promotion Store
   const { promotions, createPromotion } = usePromoStore();
@@ -654,13 +739,14 @@ const CouponsPanel: React.FC = () => {
       discountPercent: cpType === '%' ? parseFloat(cpValue) : undefined,
       discountAmount: cpType === 'Fixed' ? parseFloat(cpValue) : undefined,
       applicableLevels: cpLevel ? [cpLevel.toLowerCase()] : undefined,
+      applicableMemberTypeIds: cpTypeId ? [cpTypeId] : undefined,
       stackable: false,
       priority: 5,
       createdBy: 'admin',
       shopId: 'shop-01',
     });
     alert('สร้างคูปอง "' + cpCode + '" สำเร็จ! (บันทึกใน Promotion Store)');
-    setShowForm(false); setCpCode(''); setCpDesc(''); setCpValue(''); setCpLimit('');
+    setShowForm(false); setCpCode(''); setCpDesc(''); setCpValue(''); setCpLimit(''); setCpTypeId('');
   };
 
   const handleSendCoupon = () => {
@@ -706,6 +792,10 @@ const CouponsPanel: React.FC = () => {
             <Field label="ยอดขั้นต่ำ (฿)" value={cpMinSpend} onChange={setCpMinSpend} placeholder="0 = ไม่มีขั้นต่ำ" flex={1} />
             <Field label="วันหมดอายุ" value={cpExpiry} onChange={setCpExpiry} placeholder="YYYY-MM-DD" flex={1} />
             <Field label="ระดับสมาชิก (ว่าง=ทุกคน)" value={cpLevel} onChange={setCpLevel} placeholder="เช่น Gold" flex={1} />
+          </View>
+          <View style={cs.field}>
+            <Text style={cs.fieldLabel}>ประเภทสมาชิกที่ใช้ได้</Text>
+            <TypeChips types={memberTypes.filter(t => t.status === 'active')} value={cpTypeId} onChange={setCpTypeId} allLabel="ทุกประเภท" />
           </View>
           <View style={cs.formFooter}>
             <TouchableOpacity style={{ paddingHorizontal: 16, paddingVertical: 8 }} onPress={() => setShowForm(false)}><Text style={{ color: Colors.textSecondary }}>ยกเลิก</Text></TouchableOpacity>
@@ -1356,6 +1446,44 @@ const WalletPanel: React.FC = () => {
     </View>
   );
 };
+/** ยอดขายตามประเภทสมาชิก (จาก snapshot memberTypeName ในบิล) */
+const SalesByMemberTypeCard: React.FC = () => {
+  const sales = useSaleHistoryStore(s => s.sales);
+  const rows = useMemo(() => {
+    const map = new Map<string, { bills: number; total: number }>();
+    sales.filter(s => s.status === 'completed').forEach(s => {
+      const key = !s.memberId && !s.memberName ? 'ไม่ใช่สมาชิก' : (s.memberTypeName || 'ไม่ระบุ');
+      const cur = map.get(key) ?? { bills: 0, total: 0 };
+      map.set(key, { bills: cur.bills + 1, total: cur.total + (s.grandTotal || 0) });
+    });
+    return [...map.entries()].map(([name, v]) => ({ name, ...v })).sort((a, b) => b.total - a.total);
+  }, [sales]);
+
+  return (
+    <View style={cs.card}>
+      <Text style={cs.cardTitle}>ยอดขายตามประเภทสมาชิก</Text>
+      {rows.length === 0 ? (
+        <View style={{ alignItems: 'center', padding: 16, gap: 6 }}>
+          <Ionicons name="bar-chart-outline" size={32} color={Colors.textMuted} />
+          <Text style={cs.empty}>ไม่มีข้อมูล</Text>
+        </View>
+      ) : (
+        <View style={cs.table}>
+          <View style={cs.thead}>{['ประเภทสมาชิก', 'จำนวนบิล', 'ยอดขาย'].map((h, i) => <Text key={i} style={cs.th}>{h}</Text>)}</View>
+          {rows.map((r, i) => (
+            <View key={r.name} style={[cs.tr, i % 2 === 1 && cs.trAlt]}>
+              <Text style={[cs.td, { fontWeight: '600' }]}>{r.name}</Text>
+              <Text style={cs.td}>{r.bills.toLocaleString()}</Text>
+              <Text style={[cs.td, { fontWeight: '700', color: WebColors.success }]}>฿{r.total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+      <Text style={{ fontSize: 12, color: Colors.textMuted, marginTop: 6 }}>* บิลสมาชิกที่บันทึกก่อนมีประเภทสมาชิกจะแสดงเป็น "ไม่ระบุ"</Text>
+    </View>
+  );
+};
+
 const ReportsPanel: React.FC = () => (
   <View>
     <Text style={cs.pageTitle}>รายงาน CRM</Text>
@@ -1413,6 +1541,9 @@ const ReportsPanel: React.FC = () => (
         ))}
       </View>
     </View>
+
+    {/* ยอดขายตามประเภทสมาชิก (ข้อมูลจริงจากประวัติการขาย) */}
+    <SalesByMemberTypeCard />
 
     {/* คูปอง */}
     <View style={cs.card}>
@@ -1589,6 +1720,8 @@ const cs = StyleSheet.create({
   chipAct: { backgroundColor: WebColors.primary, borderColor: WebColors.primary },
   chipTxt: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
   chipTxtAct: { color: WebColors.white },
+  chipTouch: { minHeight: 44, justifyContent: 'center' },
+  contactBtn: { width: 44, height: 44, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center', backgroundColor: WebColors.gray100 },
   formFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 12, marginTop: 8 },
   saved: { fontSize: 13, color: WebColors.success, fontWeight: '600' },
   // Buttons
