@@ -2362,7 +2362,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
           </View>
         ) : (
           <FlatList
-            data={items} style={{ flex: 1 }} keyExtractor={i => i.product.id}
+            data={items} style={{ flex: 1, minHeight: 0 }} keyExtractor={i => i.product.id}
             showsVerticalScrollIndicator={false}
             renderItem={({ item }) => (
               <CartItemRow
@@ -3639,7 +3639,8 @@ const s = StyleSheet.create({
 
   root: { flexDirection: 'row', flexWrap: 'wrap', flex: 1, backgroundColor: WebColors.contentBg },
   left: { flex: 1, minWidth: 300, flexDirection: 'column', padding: 12, gap: 8, overflow: 'hidden' as any },
-  cart: { width: '35%' as any, minWidth: 280, maxWidth: 450, backgroundColor: '#fff', borderLeftWidth: 1, borderLeftColor: WebColors.border, flexDirection: 'column' },
+  // ตะกร้าสูงไม่เกินหน้าจอ: รายการสินค้า scroll ภายใน ส่วนยอดรวม/ปุ่มชำระเงินอยู่ล่างเสมอ
+  cart: { width: '35%' as any, minWidth: 280, maxWidth: 450, height: '100%' as any, maxHeight: '100%' as any, overflow: 'hidden' as any, backgroundColor: '#fff', borderLeftWidth: 1, borderLeftColor: WebColors.border, flexDirection: 'column' },
   searchRow: { flexDirection: 'row', gap: 8 },
   searchBar: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: WebColors.border, paddingHorizontal: 12, height: 42 },
   searchInput: { flex: 1, fontSize: 12, color: WebColors.text },
@@ -3717,7 +3718,7 @@ const s = StyleSheet.create({
   displayCloseBtn: { padding: 4 },
   displayContent: { flex: 1 },
   // Summary
-  summary: { padding: 14, borderTopWidth: 1, borderTopColor: WebColors.border, gap: 6 },
+  summary: { padding: 14, borderTopWidth: 1, borderTopColor: WebColors.border, gap: 6, flexShrink: 0 },
   sumRow: { flexDirection: 'row', justifyContent: 'space-between' },
   sumLabel: { fontSize: 12, color: WebColors.textSecondary },
   sumVal: { fontSize: 12, color: WebColors.text },
@@ -3725,7 +3726,7 @@ const s = StyleSheet.create({
   sumTotalLabel: { fontSize: 12, fontWeight: '700', color: WebColors.text },
   sumTotalVal: { fontSize: 16, fontWeight: '800', color: WebColors.primary },
   // Pay
-  payArea: { padding: 12, gap: 8, borderTopWidth: 1, borderTopColor: WebColors.border },
+  payArea: { padding: 12, gap: 8, borderTopWidth: 1, borderTopColor: WebColors.border, flexShrink: 0 },
   payRow: { flexDirection: 'row', gap: 8 },
   payBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, borderRadius: 8, paddingVertical: 10 },
   payBtnText: { fontSize: 12, fontWeight: '700', color: '#fff' },
