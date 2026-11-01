@@ -277,6 +277,75 @@ describe('สินค้า — ตรวจสอบข้อมูล', () =>
   });
 });
 
+// ─── Partial update (merge) ─────────────────────────────────────────────────
+describe('สินค้า — อัปเดตจากไฟล์ที่มีบางคอลัมน์/บางหน่วย', () => {
+  test('ไฟล์คอลัมน์ขั้นต่ำ → แก้ราคาขายหน่วยฐาน, หน่วยอื่น/บาร์โค้ด/ราคาทุนเดิมคงอยู่', () => {
+    const ctx = sampleCtx();
+    const wb = csvToWorkbook('product', 'รหัสสินค้า,ชื่อสินค้า,หน่วย,ราคาขาย\nP100,น้ำดื่มทดสอบ 600ml,ขวด,12\n');
+    const plan = planProductImport(wb, ctx);
+    expect(plan.errors).toEqual([]);
+    expect(plan.updates.map(u => u.code)).toEqual(['P100']);
+
+    const { ports } = fakePorts(ctx);
+    applyImport(plan, ports);
+    const p = ctx.products.find(x => x.code === 'P100')!;
+    const before = SAMPLE[0];
+    expect(p).toMatchObject({ unit: 'ขวด', barcode: '8851000000011', costPrice: 5, salePrice: 12 });
+    expect(p.uoms.map(u => u.id)).toEqual(['u100a', 'u100b', 'u100c']);
+    expect(p.uoms[0]).toEqual({ ...before.uoms[0], salePrice: 12 });
+    expect(p.uoms.slice(1)).toEqual(before.uoms.slice(1));
+  });
+
+  test('ไฟล์มีแค่แถวหน่วยรอง → หน่วยหลักเดิมยังเป็นหน่วยหลัก ไม่ error', () => {
+    const ctx = sampleCtx();
+    const wb = csvToWorkbook('product', 'รหัสสินค้า,ชื่อสินค้า,หน่วย,ราคาขาย\nP100,น้ำดื่มทดสอบ 600ml,แพ็ค,60\n');
+    const plan = planProductImport(wb, ctx);
+    expect(plan.errors).toEqual([]);
+    const uoms = plan.updates[0].data.uoms!;
+    expect(uoms.map(u => [u.unit, u.ratio, u.salePrice])).toEqual([['ขวด', 1, 10], ['แพ็ค', 6, 60], ['ลัง', 24, 200]]);
+    expect(uoms.find(u => u.unit === 'แพ็ค')!.barcodes).toEqual(['8851000000013']);
+    expect(plan.updates[0].data.unit).toBe('ขวด');
+  });
+
+  test('ช่องบาร์โค้ด/ราคาทุนว่างในไฟล์ export → คงค่าเดิม (ไม่มีการเปลี่ยนแปลง)', () => {
+    const ctx = sampleCtx();
+    const wb = exportProducts(ctx.products);
+    const prod = wb.sheets[0];
+    const bcCol = prod.rows[0].indexOf('บาร์โค้ด');
+    const costCol = prod.rows[0].indexOf('ราคาทุน');
+    prod.rows.forEach((r, i) => { if (i > 0 && r[0] === 'P100') { r[bcCol] = ''; r[costCol] = ''; } });
+    const plan = planProductImport(viaCsv('product', wb), ctx);
+    expect(plan.errors).toEqual([]);
+    expect(plan.updates).toHaveLength(0);
+    expect(plan.unchanged).toBe(3);
+  });
+});
+
+describe('สินค้า — บาร์โค้ดของสินค้าที่ถูกข้าม', () => {
+  const header = 'รหัสสินค้า,ชื่อสินค้า,หน่วย,อัตราส่วน,หน่วยหลัก,บาร์โค้ด,ราคาขาย';
+
+  test('สินค้าในไฟล์ที่ผิด (ถูกข้าม) คงบาร์โค้ดเดิม → สินค้าอื่นในไฟล์ใช้บาร์โค้ดนั้นไม่ได้', () => {
+    const ctx = sampleCtx();
+    const csv = `${header}\nP100,น้ำดื่มทดสอบ 600ml,แพ็ค,6,N,8851000000099,abc\nP500,สินค้าใหม่,ชิ้น,1,Y,8851000000013,20\n`;
+    const plan = planProductImport(csvToWorkbook('product', csv), ctx);
+    const msgs = plan.errors.map(e => e.message);
+    expect(msgs).toContain('แถว 2: ราคาขายต้องเป็นตัวเลข');
+    expect(msgs).toContain('แถว 3: บาร์โค้ด 8851000000013 ซ้ำกับสินค้า P100');
+    expect(plan.creates).toHaveLength(0);
+    expect(plan.updates).toHaveLength(0);
+    expect(plan.skippedRecords).toBe(2);
+  });
+
+  test('สินค้าเดิมย้ายบาร์โค้ดออกในไฟล์เดียวกัน → สินค้าอื่นรับบาร์โค้ดนั้นได้', () => {
+    const ctx = sampleCtx();
+    const csv = `${header}\nP100,น้ำดื่มทดสอบ 600ml,แพ็ค,6,N,8851000000099,55\nP500,สินค้าใหม่,ชิ้น,1,Y,8851000000013,20\n`;
+    const plan = planProductImport(csvToWorkbook('product', csv), ctx);
+    expect(plan.errors).toEqual([]);
+    expect(plan.creates.map(p => p.code)).toEqual(['P500']);
+    expect(plan.updates[0].data.uoms!.find(u => u.unit === 'แพ็ค')!.barcodes).toEqual(['8851000000099']);
+  });
+});
+
 // ─── Auto-create masters ────────────────────────────────────────────────────
 describe('สินค้า — สร้างหมวดหมู่/แบรนด์/ผู้จำหน่ายอัตโนมัติ', () => {
   test('ชื่อที่ต่างแค่ตัวพิมพ์/ช่องว่าง = ของเดิม, ชื่อใหม่ถูกสร้างครั้งเดียว', () => {

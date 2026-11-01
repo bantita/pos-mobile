@@ -17,9 +17,10 @@ import {
 } from '../../utils/masterImportExport';
 import { FileFormat, ImportFileError, pickFile, readFileToWorkbook } from '../../utils/spreadsheetIO';
 import { downloadMasterFile, getImportContext, storePorts } from '../../utils/masterPorts';
+import { Button, Card } from '../../components/ui';
 import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
-import { Spacing, BorderRadius } from '../../constants/spacing';
+import { Spacing, BorderRadius, ComponentSize } from '../../constants/spacing';
 
 interface ImportExportScreenProps {
   onBack: () => void;
@@ -42,6 +43,10 @@ export const ImportExportScreen: React.FC<ImportExportScreenProps> = ({ onBack, 
   const [result, setResult] = useState<ImportResult | null>(null);
   const [fileFormat, setFileFormat] = useState<FileFormat>('xlsx');
   const [reading, setReading] = useState(false);
+  /** ยืนยันนำเข้าแบบ inline (Alert.alert ที่มีปุ่มไม่ทำงานบน react-native-web) */
+  const [confirmSkip, setConfirmSkip] = useState(false);
+  const [downloadError, setDownloadError] = useState('');
+  const [downloading, setDownloading] = useState<'export' | 'template' | null>(null);
 
   const productCount = totalProducts ?? products.length;
   const writes = plan ? plannedWrites(plan) : 0;
@@ -77,29 +82,17 @@ export const ImportExportScreen: React.FC<ImportExportScreenProps> = ({ onBack, 
 
   const runImport = () => {
     if (!plan) return;
+    setConfirmSkip(false);
     setImportStep('importing');
     setResult(applyImport(plan, storePorts));
     setImportStep('done');
   };
 
   const handleConfirmImport = () => {
-    if (!plan) return;
-    if (writes === 0) {
-      Alert.alert('ไม่มีรายการที่ต้องบันทึก', hasErrors ? 'ทุกรายการมีข้อผิดพลาด กรุณาแก้ไขไฟล์แล้วนำเข้าใหม่' : 'ข้อมูลในไฟล์ตรงกับในระบบแล้ว');
-      return;
-    }
-    if (hasErrors) {
-      Alert.alert(
-        'มีข้อผิดพลาด',
-        `พบ ${plan.skippedRecords} รายการที่มีข้อผิดพลาด ต้องการนำเข้าเฉพาะรายการที่ถูกต้อง (${writes} รายการ)?`,
-        [
-          { text: 'ยกเลิก', style: 'cancel' },
-          { text: `นำเข้า ${writes} รายการ`, onPress: runImport },
-        ]
-      );
-    } else {
-      runImport();
-    }
+    if (!plan || writes === 0) return;
+    // มีแถวผิด → ถามยืนยันแบบ inline ก่อน (ใช้ได้ทั้งเว็บและ native)
+    if (hasErrors && !confirmSkip) { setConfirmSkip(true); return; }
+    runImport();
   };
 
   const resetImport = () => {
@@ -108,18 +101,36 @@ export const ImportExportScreen: React.FC<ImportExportScreenProps> = ({ onBack, 
     setFileName('');
     setParseError('');
     setResult(null);
+    setConfirmSkip(false);
   };
 
   // ─── Export / Template ─────────────────────────────────────────────────────
   const download = async (kind: 'export' | 'template') => {
-    if (!IS_WEB) { Alert.alert('ไม่รองรับ', WEB_ONLY_MSG); return; }
-    if (kind === 'export' && products.length === 0) { Alert.alert('ไม่มีข้อมูล', 'ยังไม่มีสินค้าในระบบให้ส่งออก'); return; }
+    setDownloadError('');
+    if (!IS_WEB) { setDownloadError(WEB_ONLY_MSG); return; }
+    if (kind === 'export' && products.length === 0) { setDownloadError('ไม่มีข้อมูล — ยังไม่มีสินค้าในระบบให้ส่งออก'); return; }
+    setDownloading(kind);
     try {
       await downloadMasterFile('product', kind, fileFormat);
     } catch {
-      Alert.alert('เกิดข้อผิดพลาด', kind === 'export' ? 'ส่งออกไฟล์ไม่สำเร็จ' : 'ดาวน์โหลด Template ไม่สำเร็จ');
+      setDownloadError(kind === 'export' ? 'ส่งออกไฟล์ไม่สำเร็จ' : 'ดาวน์โหลด Template ไม่สำเร็จ');
+    } finally {
+      setDownloading(null);
     }
   };
+
+  const errorBanner = (message: string, onDismiss: () => void) => (
+    <View style={styles.errorBanner} accessibilityRole="alert">
+      <Ionicons name="alert-circle" size={ComponentSize.icon.md} color={Colors.danger} />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.errorBannerTitle}>เกิดข้อผิดพลาด</Text>
+        <Text style={styles.errorBannerText}>{message}</Text>
+      </View>
+      <TouchableOpacity onPress={onDismiss} style={styles.iconBtn} accessibilityRole="button" accessibilityLabel="ปิดข้อความ">
+        <Ionicons name="close" size={ComponentSize.icon.md} color={Colors.danger} />
+      </TouchableOpacity>
+    </View>
+  );
 
   const formatToggle = (
     <View style={styles.formatRow} accessibilityRole="radiogroup" accessibilityLabel="รูปแบบไฟล์">
@@ -167,7 +178,7 @@ export const ImportExportScreen: React.FC<ImportExportScreenProps> = ({ onBack, 
         )}
 
         {/* ── IMPORT SECTION ── */}
-        <View style={styles.sectionCard}>
+        <Card style={styles.sectionCard}>
           <View style={styles.sectionTitleRow}>
             <View style={[styles.sectionIcon, { backgroundColor: Colors.primaryLight }]}>
               <Ionicons name="cloud-upload-outline" size={20} color={Colors.primary} />
@@ -175,12 +186,7 @@ export const ImportExportScreen: React.FC<ImportExportScreenProps> = ({ onBack, 
             <Text style={styles.sectionTitle}>Import จากไฟล์ Excel / CSV</Text>
           </View>
 
-          {parseError !== '' && importStep === 'idle' && (
-            <View style={styles.errorBanner} accessibilityRole="alert">
-              <Ionicons name="alert-circle" size={18} color={Colors.danger} />
-              <Text style={styles.errorBannerText}>{parseError}</Text>
-            </View>
-          )}
+          {parseError !== '' && importStep === 'idle' && errorBanner(parseError, () => setParseError(''))}
 
           {importStep === 'idle' && (
             <>
@@ -241,16 +247,32 @@ export const ImportExportScreen: React.FC<ImportExportScreenProps> = ({ onBack, 
                     </View>
                   )}
 
-                  <TouchableOpacity
-                    style={[styles.confirmImportBtn, hasErrors && styles.confirmImportBtnWarn]}
-                    onPress={handleConfirmImport}
-                    activeOpacity={0.85}
-                  >
-                    <Ionicons name="cloud-upload-outline" size={20} color={Colors.white} />
-                    <Text style={styles.confirmImportText}>
-                      {hasErrors ? `นำเข้า ${writes} รายการ (ข้ามที่ผิด)` : `ยืนยันนำเข้า (${writes} รายการ)`}
+                  {writes === 0 && (
+                    <Text style={styles.exportInfo} accessibilityRole="alert">
+                      {hasErrors ? 'ทุกรายการมีข้อผิดพลาด กรุณาแก้ไขไฟล์แล้วนำเข้าใหม่' : 'ข้อมูลในไฟล์ตรงกับในระบบแล้ว'}
                     </Text>
-                  </TouchableOpacity>
+                  )}
+
+                  {confirmSkip ? (
+                    <View style={styles.confirmBox} accessibilityRole="alert">
+                      <Text style={styles.confirmBoxText}>
+                        พบ {plan.skippedRecords} รายการที่มีข้อผิดพลาด ต้องการนำเข้าเฉพาะรายการที่ถูกต้อง ({writes} รายการ)?
+                      </Text>
+                      <View style={styles.confirmBoxRow}>
+                        <Button title="ยกเลิก" variant="secondary" onPress={() => setConfirmSkip(false)} style={styles.flex1} />
+                        <Button title={`นำเข้า ${writes} รายการ`} onPress={runImport} style={styles.flex1} />
+                      </View>
+                    </View>
+                  ) : (
+                    <Button
+                      title={writes === 0
+                        ? 'ไม่มีรายการที่ต้องบันทึก'
+                        : hasErrors ? `นำเข้า ${writes} รายการ (ข้ามที่ผิด)` : `ยืนยันนำเข้า (${writes} รายการ)`}
+                      onPress={handleConfirmImport}
+                      disabled={writes === 0}
+                      fullWidth
+                    />
+                  )}
                 </>
               )}
             </>
@@ -271,15 +293,13 @@ export const ImportExportScreen: React.FC<ImportExportScreenProps> = ({ onBack, 
                 เพิ่ม {result.created} · อัปเดต {result.updated} · สร้างมาสเตอร์ใหม่ {result.mastersCreated}
                 {result.skipped > 0 ? ` · ข้าม ${result.skipped}` : ''} รายการ
               </Text>
-              <TouchableOpacity style={styles.resetImportBtn} onPress={resetImport}>
-                <Text style={styles.resetImportText}>นำเข้าไฟล์ใหม่</Text>
-              </TouchableOpacity>
+              <Button title="นำเข้าไฟล์ใหม่" variant="outline" onPress={resetImport} />
             </View>
           )}
-        </View>
+        </Card>
 
         {/* ── EXPORT SECTION ── */}
-        <View style={styles.sectionCard}>
+        <Card style={styles.sectionCard}>
           <View style={styles.sectionTitleRow}>
             <View style={[styles.sectionIcon, { backgroundColor: Colors.successLight }]}>
               <Ionicons name="cloud-download-outline" size={20} color={Colors.success} />
@@ -289,22 +309,28 @@ export const ImportExportScreen: React.FC<ImportExportScreenProps> = ({ onBack, 
           <Text style={styles.exportInfo}>มีสินค้าทั้งหมด {productCount} รายการในระบบ</Text>
           {formatToggle}
 
-          <TouchableOpacity style={styles.exportBtn} onPress={() => download('export')} activeOpacity={0.85} disabled={!IS_WEB}>
-            <Ionicons name="download-outline" size={20} color={Colors.white} />
-            <View>
-              <Text style={styles.exportBtnText}>Export สินค้าทั้งหมด</Text>
-              <Text style={styles.exportBtnSub}>{productCount} รายการ · .{fileFormat}</Text>
-            </View>
-          </TouchableOpacity>
+          {downloadError !== '' && errorBanner(downloadError, () => setDownloadError(''))}
+
+          <Button
+            title={`Export สินค้าทั้งหมด (${productCount} รายการ · .${fileFormat})`}
+            onPress={() => download('export')}
+            loading={downloading === 'export'}
+            disabled={!IS_WEB || downloading !== null}
+            fullWidth
+          />
 
           <Text style={styles.templateInfo}>
             Template มีหัวคอลัมน์และตัวอย่างสินค้าหลายหน่วย/หลายบาร์โค้ด และตัวเลือกสินค้า
           </Text>
-          <TouchableOpacity style={styles.templateDownloadBtn} onPress={() => download('template')} activeOpacity={0.85} disabled={!IS_WEB}>
-            <Ionicons name="download-outline" size={20} color={Colors.warning} />
-            <Text style={styles.templateDownloadText}>ดาวน์โหลด Template (.{fileFormat})</Text>
-          </TouchableOpacity>
-        </View>
+          <Button
+            title={`ดาวน์โหลด Template (.${fileFormat})`}
+            variant="outline"
+            onPress={() => download('template')}
+            loading={downloading === 'template'}
+            disabled={!IS_WEB || downloading !== null}
+            fullWidth
+          />
+        </Card>
 
         <View style={{ height: Spacing.xl }} />
       </ScrollView>
@@ -330,11 +356,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm,
     backgroundColor: Colors.dangerLight, borderRadius: BorderRadius.md, padding: Spacing.md,
   },
-  errorBannerText: { ...Typography.body2, color: Colors.danger, flex: 1 },
-  sectionCard: {
-    backgroundColor: Colors.surface, borderRadius: BorderRadius.lg, padding: Spacing.md, gap: Spacing.md,
-    shadowColor: Colors.black, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 6, elevation: 2,
+  errorBannerTitle: { ...Typography.label, color: Colors.danger },
+  errorBannerText: { ...Typography.body2, color: Colors.danger },
+  sectionCard: { gap: Spacing.md },
+  flex1: { flex: 1 },
+  confirmBox: {
+    gap: Spacing.md, padding: Spacing.md, borderRadius: BorderRadius.md,
+    backgroundColor: Colors.warningLight, borderWidth: 1, borderColor: Colors.warning,
   },
+  confirmBoxText: { ...Typography.body2, color: Colors.text },
+  confirmBoxRow: { flexDirection: 'row', gap: Spacing.sm },
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   sectionIcon: { width: 36, height: 36, borderRadius: BorderRadius.sm, alignItems: 'center', justifyContent: 'center' },
   sectionTitle: { ...Typography.label, color: Colors.text, fontWeight: '700' },
@@ -365,23 +396,11 @@ const styles = StyleSheet.create({
   errorDetailBox: { backgroundColor: Colors.dangerLight, borderRadius: BorderRadius.md, padding: Spacing.md, gap: Spacing.xs },
   errorDetailTitle: { ...Typography.label, color: Colors.danger, marginBottom: Spacing.xs },
   errorDetailMsg: { ...Typography.caption, color: Colors.danger },
-  confirmImportBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: Spacing.sm, backgroundColor: Colors.success, minHeight: 44,
-    borderRadius: BorderRadius.md, paddingVertical: Spacing.md,
-  },
-  confirmImportBtnWarn: { backgroundColor: Colors.warning },
-  confirmImportText: { ...Typography.button, color: Colors.white },
   progressBox: { alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.lg },
   progressTitle: { ...Typography.h4, color: Colors.text },
   doneBox: { alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.lg },
   doneTitle: { ...Typography.h3, color: Colors.success },
   doneSub: { ...Typography.body2, color: Colors.textSecondary, textAlign: 'center' },
-  resetImportBtn: {
-    paddingHorizontal: Spacing.xl, paddingVertical: Spacing.sm, minHeight: 44, justifyContent: 'center',
-    borderRadius: BorderRadius.md, borderWidth: 1.5, borderColor: Colors.primary,
-  },
-  resetImportText: { ...Typography.label, color: Colors.primary },
   formatRow: { flexDirection: 'row', gap: Spacing.sm },
   formatBtn: {
     flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center',
@@ -391,17 +410,5 @@ const styles = StyleSheet.create({
   formatText: { ...Typography.body2, color: Colors.textSecondary },
   formatTextActive: { color: Colors.primary, fontWeight: '700' },
   exportInfo: { ...Typography.body2, color: Colors.textSecondary },
-  exportBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: Spacing.md, minHeight: 44,
-    backgroundColor: Colors.success, borderRadius: BorderRadius.md, padding: Spacing.md,
-  },
-  exportBtnText: { ...Typography.label, color: Colors.white },
-  exportBtnSub: { ...Typography.caption, color: Colors.white },
   templateInfo: { ...Typography.body2, color: Colors.textSecondary },
-  templateDownloadBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, minHeight: 44,
-    backgroundColor: Colors.warningLight, borderRadius: BorderRadius.md, padding: Spacing.md,
-    borderWidth: 1.5, borderColor: Colors.warning,
-  },
-  templateDownloadText: { ...Typography.label, color: Colors.warning },
 });

@@ -36,7 +36,8 @@ const PRODUCT_HELP = [
   'บาร์โค้ดหลายค่าในหน่วยเดียวคั่นด้วย |  เช่น 8850001|8850002 (ห้ามซ้ำทั้งระบบ)',
   'หมวดหมู่/กลุ่ม แบรนด์ ผู้จำหน่าย ใส่เป็นชื่อ — ถ้ายังไม่มีจะสร้างใหม่ให้อัตโนมัติ',
   'ตัวเลือกสินค้า (variants) อยู่ในชีต "ตัวเลือกสินค้า" (ไฟล์ .csv อยู่ใต้แถว [ตัวเลือกสินค้า])',
-  'รหัสสินค้าที่มีอยู่แล้วจะถูกอัปเดต ช่องที่ไม่บังคับซึ่งเว้นว่างจะคงค่าเดิม — ดูคำอธิบายคอลัมน์ในชีต "คำอธิบาย" ของ Template .xlsx',
+  'รหัสสินค้าที่มีอยู่แล้วจะถูกอัปเดต ช่องที่ไม่บังคับซึ่งเว้นว่างจะคงค่าเดิม (รวมถึงอัตราส่วน/ราคาทุน/บาร์โค้ดของหน่วยเดิม) — ดูคำอธิบายคอลัมน์ในชีต "คำอธิบาย" ของ Template .xlsx',
+  'หน่วยเดิมที่ไม่มีแถวในไฟล์จะคงไว้ ไม่ถูกลบ — การลบหน่วยหรือบาร์โค้ดให้ทำที่หน้าแก้ไขสินค้า',
 ];
 
 const FormatToggle: React.FC<{ value: FileFormat; onChange: (f: FileFormat) => void; label: string }> = ({ value, onChange, label }) => (
@@ -136,7 +137,7 @@ export const MasterImportExportPanel: React.FC<MasterImportExportPanelProps> = (
         <View style={st.bannerError} accessibilityRole="alert">
           <Ionicons name="alert-circle" size={16} color={WebColors.danger} />
           <Text style={st.bannerErrorText}>{error}</Text>
-          <TouchableOpacity onPress={() => setError('')} accessibilityLabel="ปิดข้อความ">
+          <TouchableOpacity style={st.iconBtn} onPress={() => setError('')} accessibilityRole="button" accessibilityLabel="ปิดข้อความ">
             <Ionicons name="close" size={16} color={WebColors.danger} />
           </TouchableOpacity>
         </View>
@@ -145,7 +146,7 @@ export const MasterImportExportPanel: React.FC<MasterImportExportPanelProps> = (
         <View style={st.bannerSuccess} accessibilityRole="alert">
           <Ionicons name="checkmark-circle" size={16} color={WebColors.success} />
           <Text style={st.bannerSuccessText}>{resultText(result)}</Text>
-          <TouchableOpacity onPress={() => setResult(null)} accessibilityLabel="ปิดข้อความ">
+          <TouchableOpacity style={st.iconBtn} onPress={() => setResult(null)} accessibilityRole="button" accessibilityLabel="ปิดข้อความ">
             <Ionicons name="close" size={16} color={WebColors.success} />
           </TouchableOpacity>
         </View>
@@ -174,7 +175,7 @@ export const MasterImportExportPanel: React.FC<MasterImportExportPanelProps> = (
               <Text style={st.modalTitle}>ตรวจสอบข้อมูลก่อนนำเข้า{label}</Text>
               <Text style={st.modalSub} numberOfLines={1}>{fileName}</Text>
             </View>
-            <TouchableOpacity onPress={() => setPlan(null)} accessibilityLabel="ปิด">
+            <TouchableOpacity style={st.iconBtn} onPress={() => setPlan(null)} accessibilityRole="button" accessibilityLabel="ปิด">
               <Ionicons name="close" size={20} color={WebColors.textSecondary} />
             </TouchableOpacity>
           </View>
@@ -323,7 +324,7 @@ const st = StyleSheet.create({
   cardTitle: { fontSize: 12, fontWeight: '700', color: WebColors.text },
   cardSub: { fontSize: 12, color: WebColors.textSecondary, textAlign: 'center' },
   cardBtn: {
-    backgroundColor: WebColors.primary, borderRadius: 8, minHeight: 40, minWidth: 120,
+    backgroundColor: WebColors.primary, borderRadius: 8, minHeight: 44, minWidth: 120,
     paddingHorizontal: 20, alignItems: 'center', justifyContent: 'center',
   },
   cardBtnText: { color: WebColors.white, fontSize: 12, fontWeight: '700' },
@@ -331,17 +332,18 @@ const st = StyleSheet.create({
   helpBox: { backgroundColor: WebColors.cardBg, borderRadius: 12, padding: 16, gap: 6, borderWidth: 1, borderColor: WebColors.border },
   helpTitle: { fontSize: 12, fontWeight: '700', color: WebColors.text },
   helpText: { fontSize: 12, color: WebColors.textSecondary, lineHeight: 18 },
+  iconBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   // compact
   compactWrap: { gap: 8, alignItems: 'flex-end', flexShrink: 1 },
   compactRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center', justifyContent: 'flex-end' },
   compactBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 36, paddingHorizontal: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, paddingHorizontal: 12,
     borderRadius: 8, borderWidth: 1, borderColor: WebColors.border, backgroundColor: WebColors.cardBg,
   },
   compactText: { fontSize: 12, fontWeight: '600' },
   // toggle
   toggle: { flexDirection: 'row', borderRadius: 8, borderWidth: 1, borderColor: WebColors.border, overflow: 'hidden' },
-  toggleBtn: { minHeight: 32, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: WebColors.cardBg },
+  toggleBtn: { minHeight: 44, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: WebColors.cardBg },
   toggleBtnActive: { backgroundColor: WebColors.primaryLight },
   toggleText: { fontSize: 12, color: WebColors.textSecondary, fontWeight: '600' },
   toggleTextActive: { color: WebColors.primary },
@@ -370,8 +372,8 @@ const st = StyleSheet.create({
   errorText: { fontSize: 12, color: WebColors.danger },
   empty: { alignItems: 'center', paddingVertical: 40, gap: 10 },
   emptyText: { fontSize: 13, color: WebColors.textSecondary },
-  cancelBtn: { minHeight: 40, paddingHorizontal: 16, borderRadius: 8, borderWidth: 1, borderColor: WebColors.border, alignItems: 'center', justifyContent: 'center' },
+  cancelBtn: { minHeight: 44, paddingHorizontal: 16, borderRadius: 8, borderWidth: 1, borderColor: WebColors.border, alignItems: 'center', justifyContent: 'center' },
   cancelText: { fontSize: 13, fontWeight: '600', color: WebColors.textSecondary },
-  confirmBtn: { minHeight: 40, minWidth: 160, paddingHorizontal: 16, borderRadius: 8, backgroundColor: WebColors.primary, alignItems: 'center', justifyContent: 'center' },
+  confirmBtn: { minHeight: 44, minWidth: 160, paddingHorizontal: 16, borderRadius: 8, backgroundColor: WebColors.primary, alignItems: 'center', justifyContent: 'center' },
   confirmText: { fontSize: 13, fontWeight: '700', color: WebColors.white },
 });

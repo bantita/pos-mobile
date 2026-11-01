@@ -156,11 +156,11 @@ export const PRODUCT_COLUMNS: ColumnDef[] = [
   { key: 'brand', header: 'แบรนด์', label: 'แบรนด์', aliases: ['ยี่ห้อ'], description: 'ชื่อแบรนด์ — ถ้ายังไม่มีในระบบจะสร้างใหม่ให้อัตโนมัติ' },
   { key: 'supplier', header: 'ผู้จำหน่าย', label: 'ผู้จำหน่าย', aliases: ['ผู้จัดจำหน่าย'], description: 'ชื่อผู้จำหน่าย — ถ้ายังไม่มีในระบบจะสร้างใหม่ให้อัตโนมัติ' },
   { key: 'unit', header: 'หน่วย', label: 'หน่วย', aliases: ['หน่วยนับ'], required: true, description: 'ชื่อหน่วยนับของแถวนี้ เช่น ขวด แพ็ค ลัง' },
-  { key: 'ratio', header: 'อัตราส่วน (ต่อหน่วยฐาน)', label: 'อัตราส่วน', aliases: ['อัตราส่วน'], numeric: true, description: 'จำนวนหน่วยฐานต่อ 1 หน่วยนี้ (หน่วยหลัก = 1, ว่าง = 1)' },
+  { key: 'ratio', header: 'อัตราส่วน (ต่อหน่วยฐาน)', label: 'อัตราส่วน', aliases: ['อัตราส่วน'], numeric: true, description: 'จำนวนหน่วยฐานต่อ 1 หน่วยนี้ (หน่วยหลัก = 1, ว่าง = 1 หรือค่าเดิมของหน่วยที่มีอยู่แล้ว)' },
   { key: 'isBase', header: 'หน่วยหลัก (Y/N)', label: 'หน่วยหลัก', aliases: ['หน่วยหลัก', 'หน่วยฐาน'], description: 'Y = หน่วยฐาน (ต้องมี 1 หน่วยต่อสินค้า และอัตราส่วน = 1)' },
   { key: 'isDefault', header: 'หน่วยเริ่มต้น POS (Y/N)', label: 'หน่วยเริ่มต้น POS', aliases: ['หน่วยเริ่มต้น'], description: 'Y = หน่วยที่แสดงใน POS เป็นค่าเริ่มต้น (ว่าง = หน่วยหลัก)' },
-  { key: 'barcodes', header: 'บาร์โค้ด', label: 'บาร์โค้ด', aliases: ['barcode'], description: 'บาร์โค้ดของหน่วยนี้ ใส่ได้หลายค่าคั่นด้วย | เช่น 885001|885002 (ห้ามซ้ำทั้งระบบ)' },
-  { key: 'costPrice', header: 'ราคาทุน', label: 'ราคาทุน', aliases: ['ต้นทุน', 'cost'], numeric: true, description: 'ราคาทุนต่อหน่วยนี้ (ว่าง = 0)' },
+  { key: 'barcodes', header: 'บาร์โค้ด', label: 'บาร์โค้ด', aliases: ['barcode'], description: 'บาร์โค้ดของหน่วยนี้ ใส่ได้หลายค่าคั่นด้วย | เช่น 885001|885002 (ห้ามซ้ำทั้งระบบ, ว่าง = คงบาร์โค้ดเดิมของหน่วยที่มีอยู่แล้ว)' },
+  { key: 'costPrice', header: 'ราคาทุน', label: 'ราคาทุน', aliases: ['ต้นทุน', 'cost'], numeric: true, description: 'ราคาทุนต่อหน่วยนี้ (ว่าง = 0 สำหรับหน่วยใหม่ / คงค่าเดิมสำหรับหน่วยที่มีอยู่แล้ว)' },
   { key: 'salePrice', header: 'ราคาขาย', label: 'ราคาขาย', aliases: ['ราคา', 'ราคาใหม่', 'price'], required: true, numeric: true, description: 'ราคาขายต่อหน่วยนี้' },
   { key: 'vatIncluded', header: 'VAT รวมในราคา (Y/N)', label: 'VAT รวมในราคา', aliases: ['vat รวมในราคา'], description: 'Y = ราคารวม VAT แล้ว (ว่าง = Y)' },
   { key: 'vatRate', header: 'อัตรา VAT', label: 'อัตรา VAT', aliases: ['vat'], numeric: true, description: '0 หรือ 7 (ว่าง = 7)' },
@@ -534,7 +534,8 @@ const PRODUCT_NOTES = [
   'บาร์โค้ดหลายค่าในหน่วยเดียวกันคั่นด้วย |  — บาร์โค้ดห้ามซ้ำกันทั้งระบบ',
   'หมวดหมู่/แบรนด์/ผู้จำหน่ายใส่เป็นชื่อ ถ้ายังไม่มีจะสร้างใหม่ให้อัตโนมัติ',
   'ตัวเลือกสินค้า (variants) อยู่ในชีต ตัวเลือกสินค้า (ไฟล์ .csv อยู่ใต้แถว [ตัวเลือกสินค้า]) — ถ้าไม่มีแถวของสินค้านั้น variants เดิมจะไม่ถูกแก้',
-  'สินค้าเดิม (รหัสตรงกัน) จะถูกอัปเดต ช่องที่ไม่บังคับและเว้นว่างจะคงค่าเดิมไว้',
+  'สินค้าเดิม (รหัสตรงกัน) จะถูกอัปเดต ช่องที่ไม่บังคับและเว้นว่างจะคงค่าเดิมไว้ (รวมถึง อัตราส่วน/ราคาทุน/บาร์โค้ด ของหน่วยเดิม)',
+  'หน่วยเดิมที่ไม่มีแถวในไฟล์จะคงไว้ ไม่ถูกลบ — การลบหน่วยหรือบาร์โค้ดให้ทำที่หน้าแก้ไขสินค้า',
 ];
 
 export function buildTemplate(entity: MasterEntity): Workbook {
@@ -790,6 +791,8 @@ export function planProductImport(wb: Workbook, ctx: ImportContext): ProductImpo
       options.some(o => o.name === k && o.values.includes(val))));
 
   let seq = 0;
+  /** สินค้าที่ผ่านการตรวจรายแถวแล้ว — รอตรวจบาร์โค้ดซ้ำรอบสุดท้าย (ข้อ 5) */
+  const pending: PendingProduct[] = [];
   // ── 3) ตรวจ/สร้างสินค้าแต่ละรหัส ──
   groups.forEach((g, codeKey) => {
     seq++;
@@ -838,14 +841,22 @@ export function planProductImport(wb: Workbook, ctx: ImportContext): ProductImpo
       if (!options) pBag.row(pr('options').rowNo, 'รูปแบบตัวเลือกสินค้าไม่ถูกต้อง (ตัวอย่าง สี=แดง|น้ำเงิน; ไซส์=M|L)');
     }
 
-    // หน่วยนับ
-    interface ParsedUom { row: TableRow; unit: string; ratio: number; isBase?: boolean; isDefault?: boolean; barcodes: string[]; cost: number; sale: number }
+    // หน่วยนับ — สินค้าเดิม: รวม (merge) กับหน่วยเดิม
+    //   • หน่วยเดิมที่ไม่มีแถวในไฟล์ → คงไว้ทั้งหมด
+    //   • ช่อง อัตราส่วน / ราคาทุน / บาร์โค้ด ที่ว่าง (หรือไม่มีคอลัมน์) → คงค่าเดิมของหน่วยนั้น
+    const exUoms: ProductUOM[] = existing ? (() => { const o = orderedUoms(existing); return [o.base, ...o.others]; })() : [];
+    const exBase = exUoms[0];
+    interface ParsedUom {
+      row?: TableRow; unit: string; ratio: number; isBase?: boolean; isDefault?: boolean;
+      barcodes: string[]; barcodesFromPrev: boolean; cost: number; sale: number; prev?: ProductUOM;
+    }
     const parsed: ParsedUom[] = [];
     rows.forEach(r => {
       const errCount = pBag.size;
       const unit = r.get('unit');
       if (!unit) pBag.row(r.rowNo, 'กรุณากรอกหน่วย');
-      let ratio = 1;
+      const prev = unit ? exUoms.find(x => normName(x.unit) === normName(unit)) : undefined;
+      let ratio = prev?.ratio ?? 1;
       if (r.get('ratio')) {
         ratio = parseNumber(r.get('ratio'));
         if (Number.isNaN(ratio)) pBag.row(r.rowNo, 'อัตราส่วนต้องเป็นตัวเลข');
@@ -853,45 +864,61 @@ export function planProductImport(wb: Workbook, ctx: ImportContext): ProductImpo
       }
       const isBase = readYN(r, 'isBase', label('isBase'), pBag);
       const isDefault = readYN(r, 'isDefault', label('isDefault'), pBag);
-      const barcodes = splitBarcodes(r.get('barcodes'));
-      barcodes.forEach(bc => claimBarcode(bc, r.rowNo, pBag, SHEET_NAMES.product));
-      const cost = readNonNegative(r, 'costPrice', label('costPrice'), pBag) ?? 0;
+      const barcodesFromPrev = r.get('barcodes') === '' && !!prev;
+      const barcodes = barcodesFromPrev ? [...(prev?.barcodes ?? [])] : splitBarcodes(r.get('barcodes'));
+      if (!barcodesFromPrev) barcodes.forEach(bc => claimBarcode(bc, r.rowNo, pBag, SHEET_NAMES.product));
+      const cost = readNonNegative(r, 'costPrice', label('costPrice'), pBag) ?? prev?.costPrice ?? 0;
       let sale = 0;
       if (!r.get('salePrice')) pBag.row(r.rowNo, 'กรุณากรอกราคาขาย');
       else sale = readNonNegative(r, 'salePrice', label('salePrice'), pBag) ?? 0;
-      if (pBag.size === errCount) parsed.push({ row: r, unit, ratio, isBase, isDefault, barcodes, cost, sale });
+      if (pBag.size === errCount) parsed.push({ row: r, unit, ratio, isBase, isDefault, barcodes, barcodesFromPrev, cost, sale, prev });
     });
 
     let uoms: ProductUOM[] = [];
+    let baseBarcodesFromPrev = false;
     if (parsed.length === rows.length) {
-      const explicitBase = parsed.some(u => u.isBase === true);
-      const bases = parsed.filter(u => u.isBase ?? (!explicitBase && u.ratio === 1));
-      if (bases.length === 0) pBag.raw(first.rowNo, `สินค้า ${code} ไม่มีหน่วยหลัก`);
-      else if (bases.length > 1) pBag.raw(first.rowNo, `สินค้า ${code} มีหน่วยหลักมากกว่า 1 หน่วย`);
-      else if (bases[0].ratio !== 1) pBag.raw(bases[0].row.rowNo, `สินค้า ${code}: หน่วยหลักต้องมีอัตราส่วน 1`);
       const seenUnits = new Set<string>();
       parsed.forEach(u => {
         const k = normName(u.unit);
-        if (seenUnits.has(k)) pBag.raw(u.row.rowNo, `สินค้า ${code}: หน่วย ${u.unit} ซ้ำ`);
+        if (seenUnits.has(k) && u.row) pBag.raw(u.row.rowNo, `สินค้า ${code}: หน่วย ${u.unit} ซ้ำ`);
         seenUnits.add(k);
       });
+      // หน่วยเดิมที่ไม่มีในไฟล์ → คงไว้
+      const kept: ParsedUom[] = exUoms
+        .filter(x => !seenUnits.has(normName(x.unit)))
+        .map(x => ({ unit: x.unit, ratio: x.ratio, barcodes: [...x.barcodes], barcodesFromPrev: true, cost: x.costPrice, sale: x.salePrice, prev: x }));
+      const entries = [...parsed, ...kept];
+
+      const explicitBase = entries.some(u => u.isBase === true);
+      let bases: ParsedUom[];
+      if (explicitBase) {
+        bases = entries.filter(u => u.isBase === true);
+      } else {
+        const candidates = entries.filter(u => u.isBase !== false);
+        const prevBase = exBase ? candidates.find(u => u.prev === exBase) : undefined;
+        bases = prevBase ? [prevBase] : candidates.filter(u => u.ratio === 1);
+      }
+      const baseRow = (u: ParsedUom) => u.row?.rowNo ?? first.rowNo;
+      if (bases.length === 0) pBag.raw(first.rowNo, `สินค้า ${code} ไม่มีหน่วยหลัก`);
+      else if (bases.length > 1) pBag.raw(first.rowNo, `สินค้า ${code} มีหน่วยหลักมากกว่า 1 หน่วย`);
+      else if (bases[0].ratio !== 1) pBag.raw(baseRow(bases[0]), `สินค้า ${code}: หน่วยหลักต้องมีอัตราส่วน 1`);
       const explicitDefault = parsed.filter(u => u.isDefault === true);
       if (explicitDefault.length > 1) pBag.raw(first.rowNo, `สินค้า ${code} มีหน่วยเริ่มต้น POS มากกว่า 1 หน่วย`);
       if (bases.length === 1) {
         const base = bases[0];
-        const ordered = [base, ...parsed.filter(u => u !== base)];
-        uoms = ordered.map((u, j) => {
-          const prevUom = existing?.uoms?.find(x => normName(x.unit) === normName(u.unit));
-          return {
-            id: prevUom?.id ?? `u${stamp}${seq}x${j}`,
-            unit: u.unit,
-            ratio: u.ratio,
-            costPrice: u.cost,
-            salePrice: u.sale,
-            barcodes: u.barcodes,
-            isDefault: u.isDefault ?? (explicitDefault.length > 0 ? false : u === base),
-          };
-        });
+        const ordered = [base, ...entries.filter(u => u !== base)];
+        const flags = ordered.map(u => (explicitDefault.length > 0 ? u.isDefault === true : (u.isDefault ?? u.prev?.isDefault ?? false)));
+        if (!flags.some(Boolean) && base.isDefault !== false) flags[0] = true;
+        uoms = ordered.map((u, j) => ({
+          id: u.prev?.id || `u${stamp}${seq}x${j}`,
+          unit: u.unit,
+          ratio: u.ratio,
+          costPrice: u.cost,
+          salePrice: u.sale,
+          barcodes: u.barcodes,
+          isDefault: flags[j],
+        }));
+        baseBarcodesFromPrev = base.barcodesFromPrev;
       }
     }
 
@@ -921,32 +948,35 @@ export function planProductImport(wb: Workbook, ctx: ImportContext): ProductImpo
       return;
     }
 
-    // หมวดหมู่ / แบรนด์ / ผู้จำหน่าย (by name)
+    // หมวดหมู่ / แบรนด์ / ผู้จำหน่าย (by name) — มาสเตอร์ใหม่จะถูกนับเมื่อสินค้าผ่านการตรวจทั้งหมด
+    const masters = { categories: [] as string[], brands: [] as string[], suppliers: [] as string[] };
     const masterFields: Partial<ProductMaster> = {};
     if (pv.category.value) {
       const c = catIdx.get(pv.category.value);
       masterFields.categoryId = c?.id ?? '';
       masterFields.categoryName = c?.name ?? pv.category.value;
-      if (!c) pushUnique(plan.newMasters.categories, pv.category.value);
+      if (!c) masters.categories.push(pv.category.value);
     }
     if (pv.brand.value) {
       const b = brandIdx.get(pv.brand.value);
       if (b) masterFields.brandId = b.id;
       masterFields.brandName = b?.name ?? pv.brand.value;
-      if (!b) pushUnique(plan.newMasters.brands, pv.brand.value);
+      if (!b) masters.brands.push(pv.brand.value);
     }
     if (pv.supplier.value) {
       const s = supIdx.get(pv.supplier.value);
       if (s) masterFields.supplierId = s.id;
       masterFields.supplierName = s?.name ?? pv.supplier.value;
-      if (!s) pushUnique(plan.newMasters.suppliers, pv.supplier.value);
+      if (!s) masters.suppliers.push(pv.supplier.value);
     }
 
     const base = uoms[0];
+    // บาร์โค้ดหลักเดิมคงไว้ถ้าบาร์โค้ดของหน่วยฐานไม่ได้ถูกแก้ในไฟล์
+    const keepPrimary = baseBarcodesFromPrev && !!existing?.barcode && base.barcodes.includes(existing.barcode);
     const core: Partial<ProductMaster> = {
       name,
       unit: base.unit,
-      barcode: base.barcodes[0] ?? '',
+      barcode: keepPrimary && existing ? existing.barcode : (base.barcodes[0] ?? ''),
       costPrice: base.costPrice,
       salePrice: base.salePrice,
       uoms,
@@ -967,12 +997,11 @@ export function planProductImport(wb: Workbook, ctx: ImportContext): ProductImpo
     if (options) optional.options = options;
     if (variants) optional.variants = variants;
 
+    const pendingBase = { codeKey, code, firstRow: first.rowNo, rowCount: rows.length, masters };
     if (existing) {
-      const data = { ...core, ...optional };
-      if (isUnchanged(existing, data)) plan.unchanged++;
-      else plan.updates.push({ id: existing.id, code: existing.code, data });
+      pending.push({ ...pendingBase, existing, update: { ...core, ...optional } });
     } else {
-      plan.creates.push({
+      pending.push({ ...pendingBase, create: {
         id: `p${stamp}${seq}`,
         code,
         categoryId: '',
@@ -987,7 +1016,7 @@ export function planProductImport(wb: Workbook, ctx: ImportContext): ProductImpo
         ...optional,
         createdAt: now,
         updatedAt: now,
-      } as ProductMaster);
+      } as ProductMaster });
     }
   });
 
@@ -1008,13 +1037,84 @@ export function planProductImport(wb: Workbook, ctx: ImportContext): ProductImpo
     }
     const variants = buildVariants(existing.code, vg.rows, existing.options, existing.variants ?? [], seq);
     if (!variants) { plan.skippedRecords++; return; }
-    const data: Partial<ProductMaster> = { variants };
-    if (isUnchanged(existing, data)) plan.unchanged++;
-    else plan.updates.push({ id: existing.id, code: existing.code, data });
+    pending.push({
+      codeKey, code: existing.code, firstRow: vg.rows[0].rowNo, rowCount: 0,
+      masters: { categories: [], brands: [], suppliers: [] }, existing, update: { variants },
+    });
+  });
+
+  // ── 5) ตรวจบาร์โค้ดซ้ำทั้งระบบอีกรอบ หลังรู้ว่าสินค้าใดถูกข้าม ──
+  //   สินค้าในไฟล์ที่ถูกข้ามจะคงบาร์โค้ดเดิม จึงต้องไม่ให้สินค้าอื่นในไฟล์มาใช้บาร์โค้ดนั้น
+  //   (ทำซ้ำจนไม่มีการข้ามเพิ่ม เพราะการข้ามแต่ละครั้งทำให้บาร์โค้ดเดิมกลับมามีเจ้าของ)
+  const rejected = new Set<PendingProduct>();
+  for (;;) {
+    const active = pending.filter(p => !rejected.has(p));
+    const activeKeys = new Set(active.map(p => p.codeKey));
+    const owners = new Map<string, { code: string; pending?: PendingProduct }[]>();
+    const own = (bc: string, entry: { code: string; pending?: PendingProduct }) => {
+      const list = owners.get(bc) ?? [];
+      if (!list.some(o => o.code === entry.code)) list.push(entry);
+      owners.set(bc, list);
+    };
+    ctx.products.forEach(p => { if (!activeKeys.has(normName(p.code))) productBarcodes(p).forEach(bc => own(bc, { code: p.code })); });
+    active.forEach(p => productBarcodes(p.create ?? { ...p.existing, ...p.update }).forEach(bc => own(bc, { code: p.code, pending: p })));
+    let rejectedNow = 0;
+    owners.forEach((list, bc) => {
+      if (list.length < 2) return;
+      list.forEach(o => {
+        const pp = o.pending;
+        // เฉพาะสินค้าที่ "ขอใช้บาร์โค้ดใหม่" จากไฟล์ — บาร์โค้ดที่เป็นของตัวเองอยู่แล้วไม่นับ
+        if (!pp || rejected.has(pp) || (pp.existing && productBarcodes(pp.existing).includes(bc))) return;
+        const other = list.find(x => x.code !== o.code);
+        const at = fileBarcodes.get(bc);
+        const bag = at?.sheet === SHEET_NAMES.variant ? vBag : pBag;
+        bag.row(at?.rowNo ?? pp.firstRow, `บาร์โค้ด ${bc} ซ้ำกับสินค้า ${other?.code ?? ''}`);
+        rejected.add(pp);
+        rejectedNow++;
+      });
+    });
+    if (rejectedNow === 0) break;
+  }
+
+  pending.forEach(p => {
+    if (rejected.has(p)) {
+      plan.skippedRecords++;
+      plan.skippedRows += p.rowCount;
+      return;
+    }
+    p.masters.categories.forEach(n => pushUnique(plan.newMasters.categories, n));
+    p.masters.brands.forEach(n => pushUnique(plan.newMasters.brands, n));
+    p.masters.suppliers.forEach(n => pushUnique(plan.newMasters.suppliers, n));
+    if (p.create) plan.creates.push(p.create);
+    else if (p.existing && p.update) {
+      if (isUnchanged(p.existing, p.update)) plan.unchanged++;
+      else plan.updates.push({ id: p.existing.id, code: p.existing.code, data: p.update });
+    }
   });
 
   plan.errors = [...pBag.list, ...vBag.list];
   return plan;
+}
+
+interface PendingProduct {
+  codeKey: string;
+  code: string;
+  firstRow: number;
+  /** จำนวนแถวในตารางสินค้า (0 = มีเฉพาะแถวตัวเลือกสินค้า) */
+  rowCount: number;
+  masters: { categories: string[]; brands: string[]; suppliers: string[] };
+  existing?: ProductMaster;
+  create?: ProductMaster;
+  update?: Partial<ProductMaster>;
+}
+
+/** บาร์โค้ดทั้งหมดของสินค้า (บาร์โค้ดหลัก + ทุกหน่วย + ทุกตัวเลือก) */
+function productBarcodes(p: Partial<ProductMaster>): string[] {
+  const out = new Set<string>();
+  if (p.barcode) out.add(p.barcode);
+  (p.uoms ?? []).forEach(u => u.barcodes.forEach(b => { if (b) out.add(b); }));
+  (p.variants ?? []).forEach(v => { if (v.barcode) out.add(v.barcode); });
+  return [...out];
 }
 
 // ─── Category / Brand / Supplier plans ───────────────────────────────────────
