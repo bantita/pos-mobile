@@ -16,7 +16,7 @@ Branch `feat/i18n-phase1` in worktree `d:\pos-mobile\.worktrees\i18n`, based on 
 
 `git -C d:\pos-mobile\.worktrees\i18n diff --stat main...HEAD`: **71 files changed, 4126 insertions(+), 1019 deletions(-)**.
 
-The working tree is clean for `src/`. The only untracked paths are the workflow artifacts under `.agents/tasks/` (including this doc and `i18n-phase2-inventory.md`).
+The working tree is clean for `src/`. This doc and `i18n-phase2-inventory.md` are committed separately (`docs:` commit after `4afb747`). The workflow artifacts under `.agents/tasks/i18n-phase1/` are untracked; the merge step commits them.
 
 New files:
 - `src/i18n/{types,translate,format,labels,useT,useReceiptT,index}.ts`
