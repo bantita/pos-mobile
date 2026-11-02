@@ -58,6 +58,18 @@ export const receipt = {
   totalInclVat: 'ยอดสุทธิ (รวม VAT)',
   cash: 'เงินสด',
   change: 'เงินทอน',
+  discountExVat: 'ส่วนลด (ก่อน VAT)',
+  taxBase: 'มูลค่าฐานภาษี',
+  vatFull: 'ภาษีมูลค่าเพิ่ม (VAT {rate}%)',
+  vatFromBase: 'คำนวณจากมูลค่าฐานภาษี',
+  totalInclVatRate: 'ยอดสุทธิ (รวม VAT {rate}%)',
+  topup: {
+    title: 'ใบเสร็จเติมเงิน Wallet',
+    member: 'สมาชิก',
+    memberNo: 'เลขสมาชิก',
+    amount: 'เติมเงิน',
+    balance: 'ยอดคงเหลือ',
+  },
   taxInvoice: {
     title: 'ใบกำกับภาษีเต็มรูป',
     seller: 'ผู้ขาย',

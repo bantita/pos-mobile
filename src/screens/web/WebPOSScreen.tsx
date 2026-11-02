@@ -37,7 +37,12 @@ import { ProductMaster, ProductVariant } from '../../types/product';
 import { DisplayMode } from '../../types/customerDisplay';
 import { WebCustomerDisplayScreen } from './WebCustomerDisplayScreen';
 import { useReceiptStore, DEFAULT_TEMPLATE } from '../../store/receiptStore';
-import { buildTemplateHtml, ReceiptRenderData } from '../../utils/receiptTemplate';
+import { buildTemplateHtml, receiptDateTime, receiptPayMethod, receiptBranch } from '../../utils/receiptTemplate';
+import { buildPosReceiptData, PosPrintInvoice } from '../../utils/posReceiptData';
+import { useT, useFormat, useUiLanguage, useReceiptT, payMethodLabel, PAY_ICON } from '../../i18n';
+import type { Language, UiKey } from '../../i18n';
+import { translate } from '../../i18n/translate';
+import { formatMoney } from '../../i18n/format';
 import { StaffPopup } from '../../components/sale/StaffPopup';
 import { getStoreType, useStoreConfigStore } from '../../store/storeConfigStore';
 import { getFeaturesByStoreType } from '../../utils/storeFeatures';
@@ -45,7 +50,8 @@ import { setTechnicians } from '../../store/staffStore';
 import { MOCK_TECHNICIANS } from '../../data/mockStaff';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-interface PaymentType { id: string; label: string; icon: string; color: string }
+/** label มีเฉพาะประเภทที่ผู้ใช้เพิ่มเอง (pay_*) — อ่านผ่าน payMethodLabel() เท่านั้น */
+interface PaymentType { id: string; label?: string; icon: string; color: string }
 
 interface InvoiceItem { name: string; qty: number; unitPrice: number; disc: number; total: number }
 interface Invoice {
@@ -60,14 +66,22 @@ interface Invoice {
     name: string; addr: string; taxId: string; branch: string;
   };
   receiptImages?: string[];
+  /** เวลาออกเอกสาร (epoch ms) */
+  issuedAt?: number;
+  /** วิธีชำระแบบ id (ป้ายแปลตอนแสดงผล) */
+  payMethods?: { id: string; label?: string }[];
 }
+
+/** ป้ายวิธีชำระของบิลตามภาษา UI (บิลเก่าที่ไม่มี payMethods → ใช้ payMethod เดิม) */
+const invPayLabel = (inv: Pick<Invoice, 'payMethod' | 'payMethods'>, uiLang: Language): string =>
+  inv.payMethods ? inv.payMethods.map(m => payMethodLabel(m.id, uiLang, m.label)).join(' + ') : inv.payMethod;
 
 // ─── Mock Invoice Data ────────────────────────────────────────────────────────
 const MOCK_INVOICES: Invoice[] = [
   {
     id: 'inv001', billNo: 'INV-2569-0001',
     date: '08/06/2569', time: '10:25', cashier: 'สมชาย ใจดี',
-    payMethod: 'เงินสด', status: 'paid',
+    payMethod: 'เงินสด', payMethods: [{ id: 'cash' }], status: 'paid',
     items: [
       { name: 'น้ำดื่มสิงห์ 600ml', qty: 3, unitPrice: 10, disc: 0, total: 30 },
       { name: 'ขนมปังกรอบ 7-11',    qty: 2, unitPrice: 25, disc: 5, total: 45 },
@@ -78,7 +92,7 @@ const MOCK_INVOICES: Invoice[] = [
   {
     id: 'inv002', billNo: 'INV-2569-0002',
     date: '08/06/2569', time: '11:02', cashier: 'สมชาย ใจดี',
-    payMethod: 'QR Code', status: 'paid',
+    payMethod: 'QR Code', payMethods: [{ id: 'qr' }], status: 'paid',
     items: [
       { name: 'น้ำตัดลม Pepsi 325ml', qty: 2, unitPrice: 15, disc: 0, total: 30 },
       { name: 'เลย์ รสออริจินัล',      qty: 1, unitPrice: 20, disc: 0, total: 20 },
@@ -88,7 +102,7 @@ const MOCK_INVOICES: Invoice[] = [
   {
     id: 'inv003', billNo: 'INV-2569-0003',
     date: '08/06/2569', time: '11:45', cashier: 'สมหญิง จริงใจ',
-    payMethod: 'โอน', status: 'cancelled', cancelReason: 'ลูกค้าเปลี่ยนใจ',
+    payMethod: 'โอน', payMethods: [{ id: 'transfer' }], status: 'cancelled', cancelReason: 'ลูกค้าเปลี่ยนใจ',
     items: [
       { name: 'สบู่ Dove ก้อน',          qty: 2, unitPrice: 45, disc: 0, total: 90 },
       { name: 'แชมพู Head & Shoulders', qty: 1, unitPrice: 89, disc: 10, total: 79 },
@@ -98,7 +112,7 @@ const MOCK_INVOICES: Invoice[] = [
   {
     id: 'inv004', billNo: 'INV-2569-0004',
     date: '08/06/2569', time: '13:18', cashier: 'สมชาย ใจดี',
-    payMethod: 'เงินสด', status: 'paid',
+    payMethod: 'เงินสด', payMethods: [{ id: 'cash' }], status: 'paid',
     items: [
       { name: 'น้ำดื่มสิงห์ 600ml', qty: 6, unitPrice: 10, disc: 0, total: 60 },
       { name: 'มาม่า หมูสับ',        qty: 3, unitPrice: 7,  disc: 0, total: 21 },
@@ -110,7 +124,7 @@ const MOCK_INVOICES: Invoice[] = [
   {
     id: 'inv005', billNo: 'INV-2569-0005',
     date: '08/06/2569', time: '14:55', cashier: 'สมหญิง จริงใจ',
-    payMethod: 'เงินสด', status: 'paid',
+    payMethod: 'เงินสด', payMethods: [{ id: 'cash' }], status: 'paid',
     items: [
       { name: 'น้ำตัดลม Pepsi 325ml', qty: 4, unitPrice: 15, disc: 0, total: 60 },
     ],
@@ -119,14 +133,19 @@ const MOCK_INVOICES: Invoice[] = [
 ];
 
 const DEFAULT_PAY_TYPES: PaymentType[] = [
-  { id: 'cash',     label: 'เงินสด',   icon: 'cash-outline',             color: WebColors.success },
-  { id: 'transfer', label: 'โอน',      icon: 'phone-portrait-outline',   color: WebColors.purple },
-  { id: 'qr',       label: 'QR',       icon: 'qr-code-outline',          color: WebColors.info },
-  { id: 'wallet',   label: 'Wallet',   icon: 'wallet-outline',           color: WebColors.warning },
+  { id: 'cash',     icon: 'cash-outline',             color: WebColors.success },
+  { id: 'transfer', icon: 'phone-portrait-outline',   color: WebColors.purple },
+  { id: 'qr',       icon: 'qr-code-outline',          color: WebColors.info },
+  { id: 'wallet',   icon: 'wallet-outline',           color: WebColors.warning },
 ];
 
 const CATS = ['ทั้งหมด', 'เครื่องดื่ม', 'อาหาร', 'ขนม', 'ของใช้'];
-const fmt = (n: number) => n.toLocaleString('th-TH', { minimumFractionDigits: 2 });
+
+/** ตัวเลขเงิน 2 ตำแหน่งตามภาษา (ใช้ใน component ผ่าน useMoneyFmt) */
+const useMoneyFmt = (): ((n: number) => string) => {
+  const f = useFormat();
+  return useCallback((n: number) => f.number(n, 2), [f]);
+};
 
 // toCartProduct + masterDisplayStock ย้ายไปใช้ helper กลางที่ src/utils/cartProduct.ts
 // Base products computed inside component (reactive to productStore)
@@ -150,6 +169,7 @@ const QtyNumPad: React.FC<{
   onConfirm: (n: number) => void;
   onClose: () => void;
 }> = ({ current, onConfirm, onClose }) => {
+  const t = useT();
   const [val, setVal] = React.useState(String(current));
 
   const press = (k: string) => {
@@ -190,7 +210,7 @@ const QtyNumPad: React.FC<{
             {/* Confirm */}
             <TouchableOpacity style={qnp.confirm} onPress={() => press('✓')} activeOpacity={0.85}>
               <Ionicons name="checkmark" size={20} color="#fff" />
-              <Text style={qnp.confirmText}>ยืนยัน</Text>
+              <Text style={qnp.confirmText}>{t('common.confirm')}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -238,6 +258,7 @@ const CartItemRow: React.FC<CartItemProps> = ({
   item, onQtyChange, onRemove, onDiscount, onChangePrice,
   itemDiscounts, itemDiscTypes, customPrices,
 }) => {
+  const fmt = useMoneyFmt();
   const [showNumPad, setShowNumPad] = React.useState(false);
   const discVal  = itemDiscounts[item.product.id] ?? 0;
   const discType = itemDiscTypes[item.product.id] ?? 'amount';
@@ -318,6 +339,8 @@ const PaymentSettingsModal: React.FC<{
   onSave: (types: PaymentType[]) => void;
   onClose: () => void;
 }> = ({ visible, payTypes, onSave, onClose }) => {
+  const t = useT();
+  const uiLang = useUiLanguage();
   const [types, setTypes] = useState<PaymentType[]>(payTypes);
   const [newLabel, setNewLabel] = useState('');
 
@@ -332,30 +355,30 @@ const PaymentSettingsModal: React.FC<{
       <View style={pm.overlay}>
         <View style={pm.sheet}>
           <View style={pm.header}>
-            <Text style={pm.title}>ตั้งค่าประเภทชำระเงิน</Text>
-            <TouchableOpacity onPress={onClose}><Ionicons name="close" size={20} color={WebColors.textSecondary} /></TouchableOpacity>
+            <Text style={pm.title}>{t('payment.settings.title')}</Text>
+            <TouchableOpacity onPress={onClose} accessibilityLabel={t('common.close')}><Ionicons name="close" size={20} color={WebColors.textSecondary} /></TouchableOpacity>
           </View>
-          <Text style={pm.sub}>เพิ่ม/ลบ ประเภทชำระเงินที่ต้องการแสดง</Text>
-          {types.map((t, i) => (
-            <View key={t.id} style={pm.typeRow}>
-              <Ionicons name={t.icon as any} size={18} color={t.color} />
-              <Text style={pm.typeLabel}>{t.label}</Text>
+          <Text style={pm.sub}>{t('payment.settings.subtitle')}</Text>
+          {types.map((pt, i) => (
+            <View key={pt.id} style={pm.typeRow}>
+              <Ionicons name={pt.icon as any} size={18} color={pt.color} />
+              <Text style={pm.typeLabel}>{payMethodLabel(pt.id, uiLang, pt.label)}</Text>
               {i >= 3 && (
-                <TouchableOpacity style={pm.removeBtn} onPress={() => setTypes(prev => prev.filter(x => x.id !== t.id))}>
+                <TouchableOpacity style={pm.removeBtn} onPress={() => setTypes(prev => prev.filter(x => x.id !== pt.id))}>
                   <Ionicons name="close-circle" size={16} color={WebColors.danger} />
                 </TouchableOpacity>
               )}
-              {i < 3 && <Text style={pm.defaultTag}>ค่าเริ่มต้น</Text>}
+              {i < 3 && <Text style={pm.defaultTag}>{t('payment.settings.defaultTag')}</Text>}
             </View>
           ))}
           <View style={pm.addRow}>
-            <TextInput style={pm.addInput} value={newLabel} onChangeText={setNewLabel} placeholder="ชื่อประเภทชำระใหม่ เช่น Rabbit Card" placeholderTextColor={WebColors.textDisabled} />
+            <TextInput style={pm.addInput} value={newLabel} onChangeText={setNewLabel} placeholder={t('payment.settings.newPlaceholder')} placeholderTextColor={WebColors.textDisabled} />
             <TouchableOpacity style={pm.addBtn} onPress={addType}>
-              <Ionicons name="add" size={16} color="#fff" /><Text style={pm.addBtnText}>เพิ่ม</Text>
+              <Ionicons name="add" size={16} color="#fff" /><Text style={pm.addBtnText}>{t('payment.settings.add')}</Text>
             </TouchableOpacity>
           </View>
           <TouchableOpacity style={pm.saveBtn} onPress={() => { onSave(types); onClose(); }}>
-            <Text style={pm.saveBtnText}>บันทึก</Text>
+            <Text style={pm.saveBtnText}>{t('common.save')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -381,61 +404,16 @@ const pm = StyleSheet.create({
 });
 
 // ─── Print Receipt 80mm ───────────────────────────────────────────────────────
-function printReceipt80mm(invoice: {
-  billNo: string; date: string; time: string; cashier: string; payMethod: string;
-  items: { name: string; qty: number; unitPrice: number; disc: number; total: number }[];
-  subtotal: number; discount: number; vat: number; grand: number;
-  status: string; cancelReason?: string;
-  buyerInfo?: { name: string; addr: string; taxId: string; branch: string };
-  memberInfo?: { name: string; memberNo: string; pointBalance: number; walletBalance: number; pointsEarned?: number };
-}, billType: 'receipt' | 'tax_short' | 'tax_full', paperSize: '58mm' | '80mm' | 'A4' = '80mm') {
+function printReceipt80mm(invoice: PosPrintInvoice, billType: 'receipt' | 'tax_short' | 'tax_full', paperSize: '58mm' | '80mm' | 'A4' = '80mm') {
 
-  // ── อ่าน config จาก receiptStore ──────────────────────────────────────────
+  // ── อ่าน config จาก receiptStore แล้วสร้าง ReceiptRenderData ตามภาษาใบเสร็จ ──────
   const cfg = useReceiptStore.getState().config;
-  const shopName   = cfg.shopName   || SHOP_NAME;
-  const shopAddr   = cfg.shopAddr   || SHOP_ADDR;
-  const shopTel    = cfg.shopTel    || SHOP_TEL;
-  const shopTaxId  = cfg.shopTaxId  || SHOP_TAX_ID;
-  const shopBranch = cfg.shopBranch || SHOP_BRANCH;
-  const posRegNo   = cfg.posRegNo   || POS_REG_NO;
-  const headerText = cfg.headerText || '';
-  const footerText = cfg.footerText || `ขอบคุณที่ใช้บริการ 🙏`;
-  const headerLogo = cfg.headerLogo || '';
-  const showLogo   = cfg.showLogo ?? true;
+  const data = buildPosReceiptData(invoice, billType, cfg, {
+    shopName: SHOP_NAME, shopAddr: SHOP_ADDR, shopTel: SHOP_TEL,
+    shopTaxId: SHOP_TAX_ID, shopBranch: SHOP_BRANCH, posRegNo: POS_REG_NO,
+  });
 
-  // ── คำนวณยอดเงินในชั้น caller (renderer ไม่คำนวณเอง) ─────────────────────────
-  const preVatAmount = invoice.grand / 1.07;
-  const vat          = invoice.grand - preVatAmount;
-
-  const docTitle = billType === 'receipt' ? 'ใบเสร็จรับเงิน'
-    : billType === 'tax_short' ? 'ใบกำกับภาษีอย่างย่อ' : 'ใบกำกับภาษี';
-
-  // ── สร้าง ReceiptRenderData จากบิลจริง แล้ว render ผ่าน renderer กลาง ─────────
-  const data: ReceiptRenderData = {
-    shopName, shopAddr, shopTel, shopTaxId, shopBranch, posRegNo,
-    footerText, headerText,
-    logoUri: headerLogo, showLogo,
-    docTitle,
-    billNo: invoice.billNo,
-    dateTime: `${invoice.date} ${invoice.time} น.`,
-    cashier: invoice.cashier,
-    payMethod: invoice.payMethod,
-    cancelReason: invoice.cancelReason || '',
-    buyerName:   invoice.buyerInfo?.name   || '',
-    buyerAddr:   invoice.buyerInfo?.addr   || '',
-    buyerTaxId:  invoice.buyerInfo?.taxId  || '',
-    buyerBranch: invoice.buyerInfo?.branch || '',
-    items: invoice.items.map(i => ({
-      name: i.name, qty: i.qty, unitPrice: i.unitPrice, disc: i.disc, lineTotal: i.total,
-    })),
-    subtotal: invoice.subtotal,
-    discount: invoice.discount,
-    preVatAmount,
-    vat,
-    total: invoice.grand,
-  };
-
-  const html = buildTemplateHtml(useReceiptStore.getState().config.template ?? DEFAULT_TEMPLATE, data);
+  const html = buildTemplateHtml(cfg.template ?? DEFAULT_TEMPLATE, data);
 
   const w = (window as any).open('', '_blank', 'width=460,height=680');
   if (!w) return;
@@ -469,13 +447,18 @@ const InvoiceDetailTabs: React.FC<{
   onCancelFullTaxInvoice?: (fullTaxBillNo: string) => void; // ยกเลิกใบกำกับภาษีเต็ม
   fullTaxLinked?: string; // เลขบิล full_tax ที่เชื่อมโยงกับบิลนี้ (ถ้ามี)
 }> = ({ invoice, receiptFileRef, previewImage, setPreviewImage, onAttach, onRemoveAttach, onCancel, onClose, onCreateFullTaxInvoice, onCancelFullTaxInvoice, fullTaxLinked }) => {
+  const t = useT();
+  // กระดาษจำลอง (iv.rc*) ใช้ภาษาใบเสร็จ — แยกจากภาษา UI
+  const { rt, receiptLang: rl, fmt: rfmt } = useReceiptT();
+  const fmt = (n: number) => rfmt.number(n, 2);
   const [tab,      setTab]      = useState<'receipt' | 'attach'>('receipt');
   const [billType, setBillType] = useState<BillType>('receipt');
   const [showFullForm,   setShowFullForm]   = useState(false);
   const [buyerName,      setBuyerName]      = useState('');
   const [buyerAddr,      setBuyerAddr]      = useState('');
   const [buyerTaxId,     setBuyerTaxId]     = useState('');
-  const [buyerBranch,    setBuyerBranch]    = useState('สำนักงานใหญ่');
+  // ค่าเริ่มต้นสาขาผู้ซื้อพิมพ์ลงเอกสาร → ใช้ภาษาใบเสร็จ
+  const [buyerBranch,    setBuyerBranch]    = useState(() => rt('receipt.headOffice'));
 
   // ── โหลดข้อมูลเมื่อเปิดบิลใหม่ ──────────────────────────────────────────
   React.useEffect(() => {
@@ -496,7 +479,7 @@ const InvoiceDetailTabs: React.FC<{
       setBuyerName('');
       setBuyerAddr('');
       setBuyerTaxId('');
-      setBuyerBranch('สำนักงานใหญ่');
+      setBuyerBranch(rt('receipt.headOffice'));
     }
   }, [invoice?.id]);
 
@@ -519,6 +502,13 @@ const InvoiceDetailTabs: React.FC<{
   // ถ้าเป็น full_tax ให้ใช้ refBillNo เป็นเลขเอกสารอ้างอิง (บิลอย่างย่อต้นฉบับ)
   const shortBillNo = isFullTax ? (invoice.refBillNo ?? invoice.billNo) : invoice.billNo;
 
+  // ค่าบนกระดาษตามภาษาใบเสร็จ (บิลเก่าไม่มี issuedAt/payMethods → ใช้ค่าเดิม)
+  const paperDateTime = invoice.issuedAt
+    ? receiptDateTime(invoice.issuedAt, rl)
+    : rt('receipt.dateTimeValue', { date: invoice.date, time: invoice.time });
+  const paperPay    = invoice.payMethods ? receiptPayMethod(invoice.payMethods, rl) : invoice.payMethod;
+  const paperBranch = receiptBranch(SHOP_BRANCH, rl);
+
   return (
     <>
       {/* Tab bar */}
@@ -529,7 +519,7 @@ const InvoiceDetailTabs: React.FC<{
         >
           <Ionicons name="receipt-outline" size={14}
             color={tab === 'receipt' ? WebColors.primary : WebColors.textSecondary} />
-          <Text style={[iv.detailTabText, tab === 'receipt' && iv.detailTabTextActive]}>บิลที่ออก</Text>
+          <Text style={[iv.detailTabText, tab === 'receipt' && iv.detailTabTextActive]}>{t('pos.inv.tabIssued')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[iv.detailTab, tab === 'attach' && iv.detailTabActive]}
@@ -538,7 +528,7 @@ const InvoiceDetailTabs: React.FC<{
           <Ionicons name="attach-outline" size={14}
             color={tab === 'attach' ? WebColors.primary : WebColors.textSecondary} />
           <Text style={[iv.detailTabText, tab === 'attach' && iv.detailTabTextActive]}>
-            รูปแนบ {(invoice.receiptImages?.length ?? 0) > 0 ? `(${invoice.receiptImages!.length})` : ''}
+            {t('pos.inv.tabAttach')} {(invoice.receiptImages?.length ?? 0) > 0 ? `(${invoice.receiptImages!.length})` : ''}
           </Text>
         </TouchableOpacity>
 
@@ -548,7 +538,7 @@ const InvoiceDetailTabs: React.FC<{
           onPress={() => Platform.OS === 'web' && printReceipt80mm(invoice, billType)}
         >
           <Ionicons name="print-outline" size={14} color="#fff" />
-          <Text style={[iv.detailTabText, { color: '#fff', fontWeight: '700' }]}>พิมพ์บิล</Text>
+          <Text style={[iv.detailTabText, { color: '#fff', fontWeight: '700' }]}>{t('pos.inv.printBill')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -568,7 +558,7 @@ const InvoiceDetailTabs: React.FC<{
                   >
                     <Ionicons name="document-text-outline" size={13}
                       color={billType === 'receipt' ? WebColors.primary : WebColors.textSecondary} />
-                    <Text style={[iv.billTypeTxt, billType === 'receipt' && iv.billTypeTxtActive]}>ใบเสร็จรับเงิน</Text>
+                    <Text style={[iv.billTypeTxt, billType === 'receipt' && iv.billTypeTxtActive]}>{t('common.docType.receipt')}</Text>
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
@@ -577,7 +567,7 @@ const InvoiceDetailTabs: React.FC<{
                 >
                   <Ionicons name="newspaper-outline" size={13}
                     color={billType === 'tax_short' ? WebColors.primary : WebColors.textSecondary} />
-                  <Text style={[iv.billTypeTxt, billType === 'tax_short' && iv.billTypeTxtActive]}>ใบกำกับภาษีอย่างย่อ</Text>
+                  <Text style={[iv.billTypeTxt, billType === 'tax_short' && iv.billTypeTxtActive]}>{t('common.docType.taxShort')}</Text>
                 </TouchableOpacity>
                 {/* กดได้ — สลับไปดูใบกำกับเต็ม */}
                 <TouchableOpacity
@@ -591,16 +581,16 @@ const InvoiceDetailTabs: React.FC<{
                   <Ionicons name="document-outline" size={13}
                     color={billType === 'tax_full' ? WebColors.white : WebColors.purple} />
                   <Text style={[iv.billTypeTxt, { color: billType === 'tax_full' ? WebColors.white : WebColors.purple, fontWeight: '700' }]}>
-                    ใบกำกับภาษีเต็ม ✓
+                    {t('pos.inv.taxFullShort')} ✓
                   </Text>
                 </TouchableOpacity>
               </>
             ) : canIssueTax ? (
               /* มี POS_REG_NO → เลือกได้ระหว่าง ใบกำกับอย่างย่อ และ เต็มรูปแบบ เท่านั้น */
               ([
-                { key: 'tax_short', label: 'ใบกำกับภาษีอย่างย่อ', icon: 'newspaper-outline'   },
-                { key: 'tax_full',  label: 'ใบกำกับภาษีเต็มรูปแบบ', icon: 'document-outline'  },
-              ] as { key: BillType; label: string; icon: string }[]).map(b => (
+                { key: 'tax_short', labelKey: 'common.docType.taxShort', icon: 'newspaper-outline'   },
+                { key: 'tax_full',  labelKey: 'pos.inv.taxFullForm',     icon: 'document-outline'  },
+              ] as { key: BillType; labelKey: UiKey; icon: string }[]).map(b => (
                 <TouchableOpacity
                   key={b.key}
                   style={[iv.billTypeBtn, billType === b.key && iv.billTypeBtnActive]}
@@ -608,7 +598,7 @@ const InvoiceDetailTabs: React.FC<{
                 >
                   <Ionicons name={b.icon as any} size={13}
                     color={billType === b.key ? WebColors.primary : WebColors.textSecondary} />
-                  <Text style={[iv.billTypeTxt, billType === b.key && iv.billTypeTxtActive]}>{b.label}</Text>
+                  <Text style={[iv.billTypeTxt, billType === b.key && iv.billTypeTxtActive]}>{t(b.labelKey)}</Text>
                 </TouchableOpacity>
               ))
             ) : (
@@ -616,12 +606,12 @@ const InvoiceDetailTabs: React.FC<{
               <>
                 <View style={[iv.billTypeBtn, { backgroundColor: WebColors.primary, borderColor: WebColors.primary }]}>
                   <Ionicons name="document-text-outline" size={13} color="#fff" />
-                  <Text style={[iv.billTypeTxt, { color: '#fff' }]}>ใบเสร็จรับเงิน ✓</Text>
+                  <Text style={[iv.billTypeTxt, { color: '#fff' }]}>{t('common.docType.receipt')} ✓</Text>
                 </View>
                 {/* แสดง badge แจ้งเหตุผล */}
                 <View style={iv.noTaxBadge}>
                   <Ionicons name="information-circle-outline" size={12} color="#92400E" />
-                  <Text style={iv.noTaxText}>ไม่มีหมายเลขรหัสเครื่อง — ออกได้เฉพาะใบเสร็จรับเงิน</Text>
+                  <Text style={iv.noTaxText}>{t('pos.inv.noPosRegNo')}</Text>
                 </View>
               </>
             )}
@@ -630,37 +620,37 @@ const InvoiceDetailTabs: React.FC<{
           {/* ─── ใบกำกับภาษีเต็ม — form กรอกข้อมูลผู้ซื้อ ─── */}
           {billType === 'tax_full' && showFullForm && (
             <View style={iv.fullFormCard}>
-              <Text style={iv.fullFormTitle}>ข้อมูลผู้ซื้อ (สำหรับใบกำกับภาษีเต็ม)</Text>
+              <Text style={iv.fullFormTitle}>{t('pos.fullTax.formTitle')}</Text>
 
               {/* ชื่อ */}
               <View style={iv.fullFormField}>
-                <Text style={iv.fullFormLabel}>ชื่อ / บริษัท *</Text>
+                <Text style={iv.fullFormLabel}>{t('pos.fullTax.nameLabel')}</Text>
                 <TextInput
                   style={[iv.fullFormInput, !buyerName.trim() && buyerName !== '' && iv.fullFormInputErr]}
                   value={buyerName} onChangeText={setBuyerName}
-                  placeholder="ชื่อผู้ซื้อหรือบริษัท" placeholderTextColor={WebColors.textDisabled}
+                  placeholder={t('pos.fullTax.namePlaceholder')} placeholderTextColor={WebColors.textDisabled}
                 />
                 {!buyerName.trim() && buyerName !== '' && (
                   <View style={iv.fieldError}>
                     <Ionicons name="alert-circle-outline" size={12} color={WebColors.danger} />
-                    <Text style={iv.fieldErrorText}>กรุณากรอกชื่อ / บริษัท</Text>
+                    <Text style={iv.fieldErrorText}>{t('pos.fullTax.errName')}</Text>
                   </View>
                 )}
               </View>
 
               {/* ที่อยู่ */}
               <View style={iv.fullFormField}>
-                <Text style={iv.fullFormLabel}>ที่อยู่ *</Text>
+                <Text style={iv.fullFormLabel}>{t('pos.fullTax.addrLabel')}</Text>
                 <TextInput
                   style={[iv.fullFormInput, { height: 64, textAlignVertical: 'top', paddingTop: 8 },
                     !buyerAddr.trim() && buyerAddr !== '' && iv.fullFormInputErr]}
                   value={buyerAddr} onChangeText={setBuyerAddr} multiline
-                  placeholder="ที่อยู่ผู้ซื้อ" placeholderTextColor={WebColors.textDisabled}
+                  placeholder={t('pos.fullTax.addrPlaceholder')} placeholderTextColor={WebColors.textDisabled}
                 />
                 {!buyerAddr.trim() && buyerAddr !== '' && (
                   <View style={iv.fieldError}>
                     <Ionicons name="alert-circle-outline" size={12} color={WebColors.danger} />
-                    <Text style={iv.fieldErrorText}>กรุณากรอกที่อยู่</Text>
+                    <Text style={iv.fieldErrorText}>{t('pos.fullTax.errAddr')}</Text>
                   </View>
                 )}
               </View>
@@ -669,7 +659,7 @@ const InvoiceDetailTabs: React.FC<{
                 {/* เลขภาษี */}
                 <View style={{ flex: 1 }}>
                   <Text style={iv.fullFormLabel}>
-                    เลขประจำตัวผู้เสียภาษี / บัตรประชาชน * (13 หลัก)
+                    {t('pos.fullTax.taxIdLabel')}
                   </Text>
                   <TextInput
                     style={[iv.fullFormInput,
@@ -706,23 +696,22 @@ const InvoiceDetailTabs: React.FC<{
                     <View style={iv.fieldError}>
                       <Ionicons name="alert-circle-outline" size={12} color={WebColors.danger} />
                       <Text style={iv.fieldErrorText}>
-                        ต้องการอีก {13 - buyerTaxId.length} หลัก
-                        {' '}(กรอกมา {buyerTaxId.length} หลัก)
+                        {t('pos.fullTax.taxIdNeedMore', { remain: 13 - buyerTaxId.length, count: buyerTaxId.length })}
                       </Text>
                     </View>
                   )}
                   {buyerTaxId.length === 13 && (
                     <View style={iv.fieldOk}>
                       <Ionicons name="checkmark-circle-outline" size={12} color={WebColors.success} />
-                      <Text style={iv.fieldOkText}>ครบ 13 หลัก ✓</Text>
+                      <Text style={iv.fieldOkText}>{t('pos.fullTax.taxIdOk')}</Text>
                     </View>
                   )}
                 </View>
                 {/* สาขา */}
                 <View style={{ width: 140 }}>
-                  <Text style={iv.fullFormLabel}>สาขา</Text>
+                  <Text style={iv.fullFormLabel}>{t('pos.fullTax.branchLabel')}</Text>
                   <TextInput style={iv.fullFormInput} value={buyerBranch} onChangeText={setBuyerBranch}
-                    placeholder="สำนักงานใหญ่" placeholderTextColor={WebColors.textDisabled} />
+                    placeholder={t('pos.fullTax.branchPlaceholder')} placeholderTextColor={WebColors.textDisabled} />
                 </View>
               </View>
 
@@ -732,15 +721,15 @@ const InvoiceDetailTabs: React.FC<{
                 <View style={iv.formWarnBox}>
                   <Ionicons name="information-circle-outline" size={14} color="#92400E" />
                   <View style={{ flex: 1, gap: 2 }}>
-                    {!buyerName.trim() && <Text style={iv.formWarnText}>• ยังไม่ได้กรอกชื่อ / บริษัท</Text>}
-                    {!buyerAddr.trim() && <Text style={iv.formWarnText}>• ยังไม่ได้กรอกที่อยู่</Text>}
+                    {!buyerName.trim() && <Text style={iv.formWarnText}>• {t('pos.fullTax.warnName')}</Text>}
+                    {!buyerAddr.trim() && <Text style={iv.formWarnText}>• {t('pos.fullTax.warnAddr')}</Text>}
                     {buyerTaxId.length > 0 && buyerTaxId.length !== 13 && (
                       <Text style={iv.formWarnText}>
-                        • เลขประจำตัวผู้เสียภาษีต้องครบ 13 หลัก (กรอกมา {buyerTaxId.length} หลัก)
+                        • {t('pos.fullTax.warnTaxIdLen', { count: buyerTaxId.length })}
                       </Text>
                     )}
                     {buyerTaxId.length === 0 && (
-                      <Text style={iv.formWarnText}>• ยังไม่ได้กรอกเลขประจำตัวผู้เสียภาษี</Text>
+                      <Text style={iv.formWarnText}>• {t('pos.fullTax.warnTaxId')}</Text>
                     )}
                   </View>
                 </View>
@@ -766,7 +755,7 @@ const InvoiceDetailTabs: React.FC<{
                 }}
               >
                 <Ionicons name="checkmark-circle-outline" size={16} color="#fff" />
-                <Text style={iv.fullFormBtnTxt}>ยืนยันข้อมูลผู้ซื้อ</Text>
+                <Text style={iv.fullFormBtnTxt}>{t('pos.fullTax.confirmBuyer')}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -783,28 +772,28 @@ const InvoiceDetailTabs: React.FC<{
                   </View>
                   <Text style={iv.rcShopName}>{SHOP_NAME}</Text>
                   <Text style={iv.rcShopSub}>{SHOP_ADDR}</Text>
-                  <Text style={iv.rcShopSub}>โทร {SHOP_TEL}</Text>
+                  <Text style={iv.rcShopSub}>{rt('receipt.caption.tel')} {SHOP_TEL}</Text>
                   <View style={iv.rcDocTypeBadge}>
-                    <Text style={iv.rcDocTypeText}>ใบเสร็จรับเงิน</Text>
+                    <Text style={iv.rcDocTypeText}>{rt('receipt.docTitle.receipt')}</Text>
                   </View>
-                  {invoice.cancelReason && <View style={iv.cancelStamp}><Text style={iv.cancelStampText}>ยกเลิก</Text></View>}
+                  {invoice.cancelReason && <View style={iv.cancelStamp}><Text style={iv.cancelStampText}>{rt('receipt.cancelledStamp')}</Text></View>}
                 </View>
                 <View style={iv.rcDividerDash} />
                 {/* เลขบิล/วันที่ */}
                 <View style={iv.rcInfoGrid}>
-                  <View style={iv.rcInfoRow}><Text style={iv.rcInfoKey}>เลขที่</Text><Text style={iv.rcInfoVal}>{invoice.billNo}</Text></View>
-                  <View style={iv.rcInfoRow}><Text style={iv.rcInfoKey}>วันที่</Text><Text style={iv.rcInfoVal}>{invoice.date} {invoice.time} น.</Text></View>
-                  <View style={iv.rcInfoRow}><Text style={iv.rcInfoKey}>แคชเชียร์</Text><Text style={iv.rcInfoVal}>{invoice.cashier}</Text></View>
-                  <View style={iv.rcInfoRow}><Text style={iv.rcInfoKey}>ชำระด้วย</Text><Text style={iv.rcInfoVal}>{invoice.payMethod}</Text></View>
+                  <View style={iv.rcInfoRow}><Text style={iv.rcInfoKey}>{rt('receipt.caption.billNo')}</Text><Text style={iv.rcInfoVal}>{invoice.billNo}</Text></View>
+                  <View style={iv.rcInfoRow}><Text style={iv.rcInfoKey}>{rt('receipt.caption.date')}</Text><Text style={iv.rcInfoVal}>{paperDateTime}</Text></View>
+                  <View style={iv.rcInfoRow}><Text style={iv.rcInfoKey}>{rt('receipt.caption.cashier')}</Text><Text style={iv.rcInfoVal}>{invoice.cashier}</Text></View>
+                  <View style={iv.rcInfoRow}><Text style={iv.rcInfoKey}>{rt('receipt.caption.paidBy')}</Text><Text style={iv.rcInfoVal}>{paperPay}</Text></View>
                 </View>
                 <View style={iv.rcDividerDash} />
                 {/* Items */}
                 <View style={iv.rcItemsHead}>
-                  <Text style={[iv.rcItemH, { flex: 1 }]}>รายการ</Text>
-                  <Text style={[iv.rcItemH, { width: 32, textAlign: 'center' }]}>จำนวน</Text>
-                  <Text style={[iv.rcItemH, { width: 68, textAlign: 'right' }]}>ราคา/ชิ้น</Text>
-                  <Text style={[iv.rcItemH, { width: 52, textAlign: 'right' }]}>ส่วนลด</Text>
-                  <Text style={[iv.rcItemH, { width: 70, textAlign: 'right' }]}>รวม</Text>
+                  <Text style={[iv.rcItemH, { flex: 1 }]}>{rt('receipt.column.item')}</Text>
+                  <Text style={[iv.rcItemH, { width: 32, textAlign: 'center' }]}>{rt('receipt.column.qty')}</Text>
+                  <Text style={[iv.rcItemH, { width: 68, textAlign: 'right' }]}>{rt('receipt.column.unitPrice')}</Text>
+                  <Text style={[iv.rcItemH, { width: 52, textAlign: 'right' }]}>{rt('receipt.column.discount')}</Text>
+                  <Text style={[iv.rcItemH, { width: 70, textAlign: 'right' }]}>{rt('receipt.column.amount')}</Text>
                 </View>
                 {invoice.items.map((item, idx) => (
                   <View key={idx} style={[iv.rcItemRow, idx % 2 === 1 && { backgroundColor: '#FAFAFA' }]}>
@@ -819,15 +808,15 @@ const InvoiceDetailTabs: React.FC<{
                 ))}
                 <View style={iv.rcDividerDash} />
                 <View style={iv.rcSummary}>
-                  <View style={iv.rcSumRow}><Text style={iv.rcSumLbl}>ยอดรวมสินค้า</Text><Text style={iv.rcSumVal}>฿{fmt(invoice.subtotal)}</Text></View>
-                  {invoice.discount > 0 && <View style={iv.rcSumRow}><Text style={[iv.rcSumLbl, { color: WebColors.danger }]}>ส่วนลด</Text><Text style={[iv.rcSumVal, { color: WebColors.danger }]}>-฿{fmt(invoice.discount)}</Text></View>}
+                  <View style={iv.rcSumRow}><Text style={iv.rcSumLbl}>{rt('receipt.subtotal')}</Text><Text style={iv.rcSumVal}>฿{fmt(invoice.subtotal)}</Text></View>
+                  {invoice.discount > 0 && <View style={iv.rcSumRow}><Text style={[iv.rcSumLbl, { color: WebColors.danger }]}>{rt('receipt.discount')}</Text><Text style={[iv.rcSumVal, { color: WebColors.danger }]}>-฿{fmt(invoice.discount)}</Text></View>}
                   <View style={iv.rcGrandRow}>
-                    <Text style={iv.rcGrandLbl}>ยอดสุทธิ</Text>
+                    <Text style={iv.rcGrandLbl}>{rt('receipt.total')}</Text>
                     <Text style={iv.rcGrandVal}>฿{fmt(invoice.grand)}</Text>
                   </View>
                 </View>
                 <View style={iv.rcDividerDash} />
-                <Text style={iv.rcFooter}>ขอบคุณที่ใช้บริการ 🙏</Text>
+                <Text style={iv.rcFooter}>{rt('receipt.thankYou')}</Text>
                 <Text style={iv.rcFooterSub}>{SHOP_NAME}</Text>
               </>
             )}
@@ -841,30 +830,30 @@ const InvoiceDetailTabs: React.FC<{
                   </View>
                   <Text style={iv.rcShopName}>{SHOP_NAME}</Text>
                   <Text style={iv.rcShopSub}>{SHOP_ADDR}</Text>
-                  <Text style={iv.rcShopSub}>โทร {SHOP_TEL}</Text>
-                  <Text style={iv.rcShopSub}>เลขประจำตัวผู้เสียภาษี {taxIdFmt(SHOP_TAX_ID)} ({SHOP_BRANCH})</Text>
+                  <Text style={iv.rcShopSub}>{rt('receipt.caption.tel')} {SHOP_TEL}</Text>
+                  <Text style={iv.rcShopSub}>{rt('receipt.caption.taxId')} {taxIdFmt(SHOP_TAX_ID)} ({paperBranch})</Text>
                   {POS_REG_NO && (
-                    <Text style={iv.rcShopSub}>หมายเลขรหัสเครื่อง: {POS_REG_NO}</Text>
+                    <Text style={iv.rcShopSub}>{rt('receipt.caption.posRegNo')}: {POS_REG_NO}</Text>
                   )}
                   <View style={[iv.rcDocTypeBadge, { backgroundColor: '#EDE9FE', borderColor: '#7C3AED' }]}>
-                    <Text style={[iv.rcDocTypeText, { color: '#7C3AED' }]}>ใบกำกับภาษีอย่างย่อ</Text>
+                    <Text style={[iv.rcDocTypeText, { color: '#7C3AED' }]}>{rt('receipt.docTitle.taxShort')}</Text>
                   </View>
-                  {invoice.cancelReason && <View style={iv.cancelStamp}><Text style={iv.cancelStampText}>ยกเลิก</Text></View>}
+                  {invoice.cancelReason && <View style={iv.cancelStamp}><Text style={iv.cancelStampText}>{rt('receipt.cancelledStamp')}</Text></View>}
                 </View>
                 <View style={iv.rcDividerDash} />
                 <View style={iv.rcInfoGrid}>
-                  <View style={iv.rcInfoRow}><Text style={iv.rcInfoKey}>เลขที่</Text><Text style={iv.rcInfoVal}>{shortBillNo}</Text></View>
-                  <View style={iv.rcInfoRow}><Text style={iv.rcInfoKey}>วันที่</Text><Text style={iv.rcInfoVal}>{invoice.date} {invoice.time} น.</Text></View>
-                  <View style={iv.rcInfoRow}><Text style={iv.rcInfoKey}>แคชเชียร์</Text><Text style={iv.rcInfoVal}>{invoice.cashier}</Text></View>
-                  <View style={iv.rcInfoRow}><Text style={iv.rcInfoKey}>ชำระด้วย</Text><Text style={iv.rcInfoVal}>{invoice.payMethod}</Text></View>
+                  <View style={iv.rcInfoRow}><Text style={iv.rcInfoKey}>{rt('receipt.caption.billNo')}</Text><Text style={iv.rcInfoVal}>{shortBillNo}</Text></View>
+                  <View style={iv.rcInfoRow}><Text style={iv.rcInfoKey}>{rt('receipt.caption.date')}</Text><Text style={iv.rcInfoVal}>{paperDateTime}</Text></View>
+                  <View style={iv.rcInfoRow}><Text style={iv.rcInfoKey}>{rt('receipt.caption.cashier')}</Text><Text style={iv.rcInfoVal}>{invoice.cashier}</Text></View>
+                  <View style={iv.rcInfoRow}><Text style={iv.rcInfoKey}>{rt('receipt.caption.paidBy')}</Text><Text style={iv.rcInfoVal}>{paperPay}</Text></View>
                 </View>
                 <View style={iv.rcDividerDash} />
                 <View style={iv.rcItemsHead}>
-                  <Text style={[iv.rcItemH, { flex: 1 }]}>รายการ</Text>
-                  <Text style={[iv.rcItemH, { width: 32, textAlign: 'center' }]}>จำนวน</Text>
-                  <Text style={[iv.rcItemH, { width: 68, textAlign: 'right' }]}>ราคา/ชิ้น</Text>
-                  <Text style={[iv.rcItemH, { width: 52, textAlign: 'right' }]}>ส่วนลด</Text>
-                  <Text style={[iv.rcItemH, { width: 70, textAlign: 'right' }]}>รวม</Text>
+                  <Text style={[iv.rcItemH, { flex: 1 }]}>{rt('receipt.column.item')}</Text>
+                  <Text style={[iv.rcItemH, { width: 32, textAlign: 'center' }]}>{rt('receipt.column.qty')}</Text>
+                  <Text style={[iv.rcItemH, { width: 68, textAlign: 'right' }]}>{rt('receipt.column.unitPrice')}</Text>
+                  <Text style={[iv.rcItemH, { width: 52, textAlign: 'right' }]}>{rt('receipt.column.discount')}</Text>
+                  <Text style={[iv.rcItemH, { width: 70, textAlign: 'right' }]}>{rt('receipt.column.amount')}</Text>
                 </View>
                 {invoice.items.map((item, idx) => (
                   <View key={idx} style={[iv.rcItemRow, idx % 2 === 1 && { backgroundColor: '#FAFAFA' }]}>
@@ -879,15 +868,15 @@ const InvoiceDetailTabs: React.FC<{
                 ))}
                 <View style={iv.rcDividerDash} />
                 <View style={iv.rcSummary}>
-                  <View style={iv.rcSumRow}><Text style={iv.rcSumLbl}>ยอดรวมสินค้า (รวม VAT)</Text><Text style={iv.rcSumVal}>฿{fmt(invoice.subtotal)}</Text></View>
-                  {invoice.discount > 0 && <View style={iv.rcSumRow}><Text style={[iv.rcSumLbl, { color: WebColors.danger }]}>ส่วนลด</Text><Text style={[iv.rcSumVal, { color: WebColors.danger }]}>-฿{fmt(invoice.discount)}</Text></View>}
-                  <View style={iv.rcSumRow}><Text style={iv.rcSumLbl}>มูลค่าก่อน VAT</Text><Text style={iv.rcSumVal}>฿{fmt(grandEx)}</Text></View>
+                  <View style={iv.rcSumRow}><Text style={iv.rcSumLbl}>{rt('receipt.subtotalInclVat')}</Text><Text style={iv.rcSumVal}>฿{fmt(invoice.subtotal)}</Text></View>
+                  {invoice.discount > 0 && <View style={iv.rcSumRow}><Text style={[iv.rcSumLbl, { color: WebColors.danger }]}>{rt('receipt.discount')}</Text><Text style={[iv.rcSumVal, { color: WebColors.danger }]}>-฿{fmt(invoice.discount)}</Text></View>}
+                  <View style={iv.rcSumRow}><Text style={iv.rcSumLbl}>{rt('receipt.beforeVat')}</Text><Text style={iv.rcSumVal}>฿{fmt(grandEx)}</Text></View>
                   <View style={[iv.rcSumRow, { backgroundColor: '#F5F3FF', borderRadius: 8, padding: 5, marginVertical: 2 }]}>
-                    <Text style={[iv.rcSumLbl, { color: '#7C3AED', fontWeight: '700' }]}>ภาษีมูลค่าเพิ่ม 7%</Text>
+                    <Text style={[iv.rcSumLbl, { color: '#7C3AED', fontWeight: '700' }]}>{rt('receipt.vat', { rate: 7 })}</Text>
                     <Text style={[iv.rcSumVal, { color: '#7C3AED', fontWeight: '700' }]}>฿{fmt(vatAmt)}</Text>
                   </View>
                   <View style={iv.rcGrandRow}>
-                    <Text style={iv.rcGrandLbl}>ยอดสุทธิ (รวม VAT)</Text>
+                    <Text style={iv.rcGrandLbl}>{rt('receipt.totalInclVat')}</Text>
                     <Text style={[iv.rcGrandVal, { color: '#7C3AED' }]}>฿{fmt(invoice.grand)}</Text>
                   </View>
                 </View>
@@ -899,7 +888,7 @@ const InvoiceDetailTabs: React.FC<{
                     onPress={() => { setBillType('tax_full'); setShowFullForm(true); }}
                   >
                     <Ionicons name="document-outline" size={14} color="#7C3AED" />
-                    <Text style={iv.upgradeFullBtnTxt}>ออกใบกำกับภาษีเต็มรูปแบบ</Text>
+                    <Text style={iv.upgradeFullBtnTxt}>{t('pos.inv.issueFullTax')}</Text>
                     <Ionicons name="arrow-forward" size={13} color="#7C3AED" />
                   </TouchableOpacity>
                 )}
@@ -909,7 +898,7 @@ const InvoiceDetailTabs: React.FC<{
                     <View style={[iv.upgradeFullBtn, { backgroundColor: '#F0FDF4', borderColor: '#86EFAC' }]}>
                       <Ionicons name="checkmark-circle" size={14} color="#16A34A" />
                       <Text style={[iv.upgradeFullBtnTxt, { color: '#15803D', flex: 1 }]}>
-                        ออกใบกำกับภาษีเต็ม {fullTaxLinked} แล้ว
+                        {t('pos.inv.fullTaxIssued', { billNo: fullTaxLinked })}
                       </Text>
                     </View>
                     <TouchableOpacity
@@ -918,7 +907,7 @@ const InvoiceDetailTabs: React.FC<{
                     >
                       <Ionicons name="close-circle-outline" size={14} color={WebColors.danger} />
                       <Text style={[iv.upgradeFullBtnTxt, { color: WebColors.danger }]}>
-                        ยกเลิกใบกำกับภาษีเต็ม (เพื่อออกใหม่)
+                        {t('pos.inv.cancelFullTax')}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -927,12 +916,12 @@ const InvoiceDetailTabs: React.FC<{
                   <View style={[iv.upgradeFullBtn, { backgroundColor: '#F0FDF4', borderColor: '#86EFAC' }]}>
                     <Ionicons name="checkmark-circle" size={14} color="#16A34A" />
                     <Text style={[iv.upgradeFullBtnTxt, { color: '#15803D' }]}>
-                      ออกใบกำกับภาษีเต็ม {invoice.billNo} แล้ว
+                      {t('pos.inv.fullTaxIssued', { billNo: invoice.billNo })}
                     </Text>
                   </View>
                 )}
-                <Text style={iv.rcFooter}>ขอบคุณที่ใช้บริการ 🙏</Text>
-                <Text style={iv.rcFooterSub}>{SHOP_NAME} · เลขที่ {taxIdFmt(SHOP_TAX_ID)}</Text>
+                <Text style={iv.rcFooter}>{rt('receipt.thankYou')}</Text>
+                <Text style={iv.rcFooterSub}>{SHOP_NAME} · {rt('receipt.caption.billNo')} {taxIdFmt(SHOP_TAX_ID)}</Text>
               </>
             )}
 
@@ -942,19 +931,19 @@ const InvoiceDetailTabs: React.FC<{
                 {/* หัวกระดาษ */}
                 <View style={[iv.rcHeader, { backgroundColor: '#EDE9FE' }]}>
                   <View style={[iv.rcDocTypeBadge, { backgroundColor: '#7C3AED', borderColor: '#7C3AED', marginBottom: 6 }]}>
-                    <Text style={[iv.rcDocTypeText, { color: '#fff', fontSize: 12 }]}>ใบกำกับภาษี</Text>
+                    <Text style={[iv.rcDocTypeText, { color: '#fff', fontSize: 12 }]}>{rt('receipt.docTitle.taxFull')}</Text>
                   </View>
                   <View style={iv.rcShopIcon}>
                     <Ionicons name="storefront" size={24} color="#7C3AED" />
                   </View>
                   <Text style={iv.rcShopName}>{SHOP_NAME}</Text>
                   <Text style={iv.rcShopSub}>{SHOP_ADDR}</Text>
-                  <Text style={iv.rcShopSub}>โทร {SHOP_TEL}</Text>
+                  <Text style={iv.rcShopSub}>{rt('receipt.caption.tel')} {SHOP_TEL}</Text>
                   <Text style={[iv.rcShopSub, { fontWeight: '700', color: '#7C3AED' }]}>
-                    เลขประจำตัวผู้เสียภาษี {taxIdFmt(SHOP_TAX_ID)}
+                    {rt('receipt.caption.taxId')} {taxIdFmt(SHOP_TAX_ID)}
                   </Text>
-                  <Text style={iv.rcShopSub}>{SHOP_BRANCH}</Text>
-                  {invoice.cancelReason && <View style={iv.cancelStamp}><Text style={iv.cancelStampText}>ยกเลิก</Text></View>}
+                  <Text style={iv.rcShopSub}>{paperBranch}</Text>
+                  {invoice.cancelReason && <View style={iv.cancelStamp}><Text style={iv.cancelStampText}>{rt('receipt.cancelledStamp')}</Text></View>}
                 </View>
 
                 <View style={iv.rcDividerDash} />
@@ -969,28 +958,28 @@ const InvoiceDetailTabs: React.FC<{
                   const bBranch = invoice.buyerInfo?.branch || buyerBranch || '';
                   return (
                     <View style={iv.fullBuyerBox}>
-                      <Text style={iv.fullBuyerTitle}>ข้อมูลผู้ซื้อ</Text>
+                      <Text style={iv.fullBuyerTitle}>{rt('receipt.caption.buyerInfo')}</Text>
                       <View style={iv.rcInfoRow}>
-                        <Text style={iv.rcInfoKey}>ชื่อ/บริษัท</Text>
+                        <Text style={iv.rcInfoKey}>{rt('receipt.caption.buyerName')}</Text>
                         <Text style={iv.rcInfoVal}>{bName}</Text>
                       </View>
                       <View style={iv.rcInfoRow}>
-                        <Text style={iv.rcInfoKey}>ที่อยู่</Text>
+                        <Text style={iv.rcInfoKey}>{rt('receipt.caption.buyerAddress')}</Text>
                         <Text style={[iv.rcInfoVal, { flex: 1, flexWrap: 'wrap' }]}>{bAddr}</Text>
                       </View>
                       <View style={iv.rcInfoRow}>
-                        <Text style={iv.rcInfoKey}>เลขภาษี/บัตรปชช.</Text>
+                        <Text style={iv.rcInfoKey}>{rt('receipt.caption.buyerTaxId')}</Text>
                         <Text style={iv.rcInfoVal}>{bTaxId ? taxIdFmt(bTaxId) : '—'}</Text>
                       </View>
                       {bBranch ? (
                         <View style={iv.rcInfoRow}>
-                          <Text style={iv.rcInfoKey}>สาขา</Text>
+                          <Text style={iv.rcInfoKey}>{rt('receipt.caption.branch')}</Text>
                           <Text style={iv.rcInfoVal}>{bBranch}</Text>
                         </View>
                       ) : null}
                       <TouchableOpacity style={iv.editBuyerBtn} onPress={() => setShowFullForm(true)}>
                         <Ionicons name="pencil-outline" size={12} color={WebColors.primary} />
-                        <Text style={iv.editBuyerBtnTxt}>แก้ไขข้อมูลผู้ซื้อ</Text>
+                        <Text style={iv.editBuyerBtnTxt}>{t('pos.fullTax.editBuyer')}</Text>
                       </TouchableOpacity>
                     </View>
                   );
@@ -1000,20 +989,20 @@ const InvoiceDetailTabs: React.FC<{
 
                 {/* เลขที่เอกสาร */}
                 <View style={iv.rcInfoGrid}>
-                  <View style={iv.rcInfoRow}><Text style={iv.rcInfoKey}>เลขที่ใบกำกับภาษี</Text><Text style={iv.rcInfoVal}>{invoice.billNo}</Text></View>
-                  <View style={iv.rcInfoRow}><Text style={iv.rcInfoKey}>วันที่ออก</Text><Text style={iv.rcInfoVal}>{invoice.date}</Text></View>
-                  <View style={iv.rcInfoRow}><Text style={iv.rcInfoKey}>แคชเชียร์</Text><Text style={iv.rcInfoVal}>{invoice.cashier}</Text></View>
-                  <View style={iv.rcInfoRow}><Text style={iv.rcInfoKey}>ชำระด้วย</Text><Text style={iv.rcInfoVal}>{invoice.payMethod}</Text></View>
+                  <View style={iv.rcInfoRow}><Text style={iv.rcInfoKey}>{rt('receipt.caption.taxInvoiceNo')}</Text><Text style={iv.rcInfoVal}>{invoice.billNo}</Text></View>
+                  <View style={iv.rcInfoRow}><Text style={iv.rcInfoKey}>{rt('receipt.caption.issueDate')}</Text><Text style={iv.rcInfoVal}>{invoice.issuedAt ? rfmt.date(invoice.issuedAt) : invoice.date}</Text></View>
+                  <View style={iv.rcInfoRow}><Text style={iv.rcInfoKey}>{rt('receipt.caption.cashier')}</Text><Text style={iv.rcInfoVal}>{invoice.cashier}</Text></View>
+                  <View style={iv.rcInfoRow}><Text style={iv.rcInfoKey}>{rt('receipt.caption.paidBy')}</Text><Text style={iv.rcInfoVal}>{paperPay}</Text></View>
                 </View>
 
                 <View style={iv.rcDividerDash} />
 
                 {/* รายการสินค้า — แสดงแยก VAT */}
                 <View style={iv.rcItemsHead}>
-                  <Text style={[iv.rcItemH, { flex: 1 }]}>รายการสินค้า/บริการ</Text>
-                  <Text style={[iv.rcItemH, { width: 28, textAlign: 'center' }]}>จำนวน</Text>
-                  <Text style={[iv.rcItemH, { width: 72, textAlign: 'right' }]}>ราคา/หน่วย</Text>
-                  <Text style={[iv.rcItemH, { width: 70, textAlign: 'right' }]}>รวม (ไม่รวม VAT)</Text>
+                  <Text style={[iv.rcItemH, { flex: 1 }]}>{rt('receipt.column.itemService')}</Text>
+                  <Text style={[iv.rcItemH, { width: 28, textAlign: 'center' }]}>{rt('receipt.column.qty')}</Text>
+                  <Text style={[iv.rcItemH, { width: 72, textAlign: 'right' }]}>{rt('receipt.column.unitPriceUnit')}</Text>
+                  <Text style={[iv.rcItemH, { width: 70, textAlign: 'right' }]}>{rt('receipt.column.amountExVat')}</Text>
                 </View>
                 {invoice.items.map((item, idx) => {
                   const exVat = item.total / 1.07;
@@ -1031,32 +1020,32 @@ const InvoiceDetailTabs: React.FC<{
 
                 {/* Summary แยก VAT ชัดเจน */}
                 <View style={iv.rcSummary}>
-                  <View style={iv.rcSumRow}><Text style={iv.rcSumLbl}>มูลค่าสินค้า (ก่อน VAT)</Text><Text style={iv.rcSumVal}>฿{fmt(grandEx)}</Text></View>
+                  <View style={iv.rcSumRow}><Text style={iv.rcSumLbl}>{rt('receipt.taxInvoice.beforeVat')}</Text><Text style={iv.rcSumVal}>฿{fmt(grandEx)}</Text></View>
                   {invoice.discount > 0 && (
                     <View style={iv.rcSumRow}>
-                      <Text style={[iv.rcSumLbl, { color: WebColors.danger }]}>ส่วนลด (ก่อน VAT)</Text>
+                      <Text style={[iv.rcSumLbl, { color: WebColors.danger }]}>{rt('receipt.discountExVat')}</Text>
                       <Text style={[iv.rcSumVal, { color: WebColors.danger }]}>-฿{fmt(discEx)}</Text>
                     </View>
                   )}
-                  <View style={iv.rcSumRow}><Text style={iv.rcSumLbl}>มูลค่าฐานภาษี</Text><Text style={iv.rcSumVal}>฿{fmt(grandEx)}</Text></View>
+                  <View style={iv.rcSumRow}><Text style={iv.rcSumLbl}>{rt('receipt.taxBase')}</Text><Text style={iv.rcSumVal}>฿{fmt(grandEx)}</Text></View>
                   {/* VAT แสดงเด่นชัด */}
                   <View style={[iv.rcSumRow, { backgroundColor: '#F5F3FF', borderRadius: 8, padding: 8, marginVertical: 4 }]}>
                     <View>
-                      <Text style={[iv.rcSumLbl, { color: '#7C3AED', fontWeight: '800', fontSize: 12 }]}>ภาษีมูลค่าเพิ่ม (VAT 7%)</Text>
-                      <Text style={{ fontSize: 12, color: '#7C3AED' }}>คำนวณจากมูลค่าฐานภาษี</Text>
+                      <Text style={[iv.rcSumLbl, { color: '#7C3AED', fontWeight: '800', fontSize: 12 }]}>{rt('receipt.vatFull', { rate: 7 })}</Text>
+                      <Text style={{ fontSize: 12, color: '#7C3AED' }}>{rt('receipt.vatFromBase')}</Text>
                     </View>
                     <Text style={[iv.rcSumVal, { color: '#7C3AED', fontWeight: '900', fontSize: 12 }]}>฿{fmt(vatAmt)}</Text>
                   </View>
                   <View style={[iv.rcGrandRow, { borderTopColor: '#7C3AED' }]}>
-                    <Text style={iv.rcGrandLbl}>ยอดสุทธิ (รวม VAT 7%)</Text>
+                    <Text style={iv.rcGrandLbl}>{rt('receipt.totalInclVatRate', { rate: 7 })}</Text>
                     <Text style={[iv.rcGrandVal, { color: '#7C3AED' }]}>฿{fmt(invoice.grand)}</Text>
                   </View>
                 </View>
 
                 <View style={iv.rcDividerDash} />
-                <Text style={iv.rcFooter}>ขอบคุณที่ใช้บริการ 🙏</Text>
+                <Text style={iv.rcFooter}>{rt('receipt.thankYou')}</Text>
                 <Text style={iv.rcFooterSub}>
-                  {SHOP_NAME} · เลขที่ {taxIdFmt(SHOP_TAX_ID)} ({SHOP_BRANCH})
+                  {SHOP_NAME} · {rt('receipt.caption.billNo')} {taxIdFmt(SHOP_TAX_ID)} ({paperBranch})
                 </Text>
               </>
             )}
@@ -1065,7 +1054,7 @@ const InvoiceDetailTabs: React.FC<{
             {billType === 'tax_full' && showFullForm && (
               <View style={{ padding: 24, alignItems: 'center', gap: 8 }}>
                 <Ionicons name="document-outline" size={40} color={WebColors.border} />
-                <Text style={{ fontSize: 12, color: WebColors.textSecondary }}>กรอกข้อมูลผู้ซื้อด้านบนก่อน</Text>
+                <Text style={{ fontSize: 12, color: WebColors.textSecondary }}>{t('pos.fullTax.fillAbove')}</Text>
               </View>
             )}
 
@@ -1077,7 +1066,7 @@ const InvoiceDetailTabs: React.FC<{
       {tab === 'attach' && (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 12 }}>
           <View style={iv.attachHeader}>
-            <Text style={iv.attachTitle}>รูปใบเสร็จ / เอกสารแนบ</Text>
+            <Text style={iv.attachTitle}>{t('pos.inv.attachTitle')}</Text>
             {Platform.OS === 'web' && (
               <input
                 ref={receiptFileRef}
@@ -1102,15 +1091,15 @@ const InvoiceDetailTabs: React.FC<{
                 : undefined}
             >
               <Ionicons name="attach-outline" size={14} color={WebColors.primary} />
-              <Text style={iv.attachBtnText}>แนบไฟล์</Text>
+              <Text style={iv.attachBtnText}>{t('pos.inv.attachBtn')}</Text>
             </TouchableOpacity>
           </View>
 
           {(invoice.receiptImages?.length ?? 0) === 0 ? (
             <View style={iv.attachEmpty}>
               <Ionicons name="images-outline" size={40} color={WebColors.border} />
-              <Text style={iv.attachEmptyText}>ยังไม่มีรูปแนบ</Text>
-              <Text style={{ fontSize: 13, color: WebColors.textDisabled }}>กดปุ่ม "แนบไฟล์" เพื่อเพิ่มรูปใบเสร็จหรือเอกสาร</Text>
+              <Text style={iv.attachEmptyText}>{t('pos.inv.attachEmpty')}</Text>
+              <Text style={{ fontSize: 13, color: WebColors.textDisabled }}>{t('pos.inv.attachHint')}</Text>
             </View>
           ) : (
             <View style={iv.thumbGrid}>
@@ -1125,7 +1114,7 @@ const InvoiceDetailTabs: React.FC<{
                   <TouchableOpacity style={iv.thumbDel} onPress={() => onRemoveAttach(uri)}>
                     <Ionicons name="close-circle" size={18} color={WebColors.danger} />
                   </TouchableOpacity>
-                  <Text style={iv.thumbLabel} numberOfLines={1}>ไฟล์ {idx + 1}</Text>
+                  <Text style={iv.thumbLabel} numberOfLines={1}>{t('pos.inv.fileN', { n: idx + 1 })}</Text>
                 </View>
               ))}
             </View>
@@ -1136,11 +1125,11 @@ const InvoiceDetailTabs: React.FC<{
       {/* Actions — real */}
       <View style={iv.detailActions}>
         <TouchableOpacity style={iv.actionClose} onPress={onClose}>
-          <Text style={iv.actionCloseText}>ปิด</Text>
+          <Text style={iv.actionCloseText}>{t('common.close')}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={iv.actionPrint}>
           <Ionicons name="print-outline" size={15} color={WebColors.textSecondary} />
-          <Text style={iv.actionPrintText}>พิมพ์</Text>
+          <Text style={iv.actionPrintText}>{t('pos.inv.print')}</Text>
         </TouchableOpacity>
         {/* ปุ่มใบกำกับภาษีเต็ม — แสดงเฉพาะมี POS_REG_NO และไม่ใช่ void_note/full_tax */}
         {canIssueTax && invoice.status !== 'void_note' && invoice.status !== 'full_tax' && (
@@ -1148,7 +1137,7 @@ const InvoiceDetailTabs: React.FC<{
             /* มี full_tax แล้ว — ปุ่ม disabled */
             <View style={[iv.actionFull, { opacity: 0.45, backgroundColor: '#F3F4F6' }]}>
               <Ionicons name="lock-closed-outline" size={14} color="#6B7280" />
-              <Text style={[iv.actionFullText, { color: '#6B7280' }]}>ออกแล้ว ({fullTaxLinked})</Text>
+              <Text style={[iv.actionFullText, { color: '#6B7280' }]}>{t('pos.inv.issuedRef', { billNo: fullTaxLinked })}</Text>
             </View>
           ) : (
             <TouchableOpacity
@@ -1158,7 +1147,7 @@ const InvoiceDetailTabs: React.FC<{
               <Ionicons name="document-text-outline" size={14}
                 color={billType === 'tax_full' && !showFullForm ? '#fff' : '#7C3AED'} />
               <Text style={[iv.actionFullText, billType === 'tax_full' && !showFullForm && { color: '#fff' }]}>
-                ใบกำกับภาษีเต็ม
+                {t('pos.inv.taxFullShort')}
               </Text>
             </TouchableOpacity>
           )
@@ -1170,7 +1159,7 @@ const InvoiceDetailTabs: React.FC<{
             onPress={() => { setTab('receipt'); setShowFullForm(true); }}
           >
             <Ionicons name="pencil-outline" size={14} color="#7C3AED" />
-            <Text style={iv.actionFullText}>แก้ไขผู้ซื้อ</Text>
+            <Text style={iv.actionFullText}>{t('pos.inv.editBuyerShort')}</Text>
           </TouchableOpacity>
         )}
         {/* ถ้าบิล paid มี full_tax แล้ว — ปุ่มยกเลิกใบกำกับภาษีเต็ม */}
@@ -1180,13 +1169,13 @@ const InvoiceDetailTabs: React.FC<{
             onPress={() => onCancelFullTaxInvoice?.(fullTaxLinked)}
           >
             <Ionicons name="close-circle-outline" size={14} color={WebColors.danger} />
-            <Text style={[iv.actionFullText, { color: WebColors.danger }]}>ยกเลิกใบกำกับเต็ม</Text>
+            <Text style={[iv.actionFullText, { color: WebColors.danger }]}>{t('pos.inv.cancelFullTaxShort')}</Text>
           </TouchableOpacity>
         )}
         {isPaid && (
           <TouchableOpacity style={iv.actionCancel} onPress={onCancel}>
             <Ionicons name="close-circle-outline" size={14} color="#fff" />
-            <Text style={iv.actionCancelText}>ยกเลิกบิล</Text>
+            <Text style={iv.actionCancelText}>{t('pos.inv.cancelBill')}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -1199,22 +1188,24 @@ interface POSProps { onExit?: () => void }
 
 // ─── Top-Up Panel (ดูรายการเติมเงิน + ยกเลิก) ────────────────────────────────
 const TopUpPanel: React.FC = () => {
+  const t = useT();
+  const f = useFormat();
   const { transactions, balances } = useWalletStore();
   const { members } = useMemberStore();
-  const topups = transactions.filter(t => t.type === 'topup' || t.type === 'refund');
+  const topups = transactions.filter(tx => tx.type === 'topup' || tx.type === 'refund');
 
   const handleRefund = (tx: any) => {
-    if (!confirm(`ยกเลิกการเติมเงิน ฿${Math.abs(tx.amount).toLocaleString()} ?\n${tx.description}`)) return;
+    if (!confirm(t('pos.topup.confirmRefund', { amount: f.number(Math.abs(tx.amount)), desc: tx.description }))) return;
     useWalletStore.getState().refund(tx.memberId, Math.abs(tx.amount), `REFUND-${tx.id}`, 'cashier');
     logAction('POS', 'ยกเลิกเติมเงิน', `ยกเลิก ฿${Math.abs(tx.amount)} ของ ${tx.memberId}`, { txId: tx.id });
-    alert('ยกเลิกเรียบร้อย — คืนเงินเข้า Wallet แล้ว');
+    alert(t('pos.topup.refunded'));
   };
 
   return (
     <View style={{ gap: 8, padding: 8 }}>
-      <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.text }}>รายการเติมเงิน ({topups.length})</Text>
+      <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.text }}>{t('pos.topup.listTitle', { count: topups.length })}</Text>
       {topups.length === 0 ? (
-        <Text style={{ fontSize: 12, color: Colors.textMuted, textAlign: 'center', paddingVertical: 20 }}>ยังไม่มีรายการเติมเงิน</Text>
+        <Text style={{ fontSize: 12, color: Colors.textMuted, textAlign: 'center', paddingVertical: 20 }}>{t('pos.topup.empty')}</Text>
       ) : (
         topups.map((tx, i) => {
           const member = members.find(m => m.id === tx.memberId);
@@ -1223,14 +1214,14 @@ const TopUpPanel: React.FC = () => {
               <Ionicons name={tx.type === 'topup' ? 'add-circle' : 'remove-circle'} size={16} color={tx.type === 'topup' ? '#16A34A' : '#DC2626'} />
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 12, fontWeight: '600', color: Colors.text }}>{member?.name || tx.memberId}</Text>
-                <Text style={{ fontSize: 10, color: Colors.textSecondary }}>{new Date(tx.createdAt).toLocaleString('th-TH')} · {tx.description}</Text>
+                <Text style={{ fontSize: 10, color: Colors.textSecondary }}>{f.dateTime(tx.createdAt)} · {tx.description}</Text>
               </View>
               <Text style={{ fontSize: 13, fontWeight: '700', color: tx.type === 'topup' ? '#16A34A' : '#DC2626' }}>
-                {tx.type === 'topup' ? '+' : ''}฿{Math.abs(tx.amount).toLocaleString()}
+                {tx.type === 'topup' ? '+' : ''}฿{f.number(Math.abs(tx.amount))}
               </Text>
               {tx.type === 'topup' && (
                 <TouchableOpacity style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: '#FEE2E2' }} onPress={() => handleRefund(tx)}>
-                  <Text style={{ fontSize: 9, color: '#DC2626', fontWeight: '600' }}>ยกเลิก</Text>
+                  <Text style={{ fontSize: 9, color: '#DC2626', fontWeight: '600' }}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -1242,21 +1233,24 @@ const TopUpPanel: React.FC = () => {
 };
 
 // ─── Cash Count Form (นับเหรียญ/ธนบัตร) ─────────────────────────────────────
-const DENOMINATIONS = [
-  { label: 'เหรียญ 25 สต.', value: 0.25 },
-  { label: 'เหรียญ 50 สต.', value: 0.5 },
-  { label: 'เหรียญ 1 บาท', value: 1 },
-  { label: 'เหรียญ 2 บาท', value: 2 },
-  { label: 'เหรียญ 5 บาท', value: 5 },
-  { label: 'เหรียญ 10 บาท', value: 10 },
-  { label: 'ธนบัตร 20 บาท', value: 20 },
-  { label: 'ธนบัตร 50 บาท', value: 50 },
-  { label: 'ธนบัตร 100 บาท', value: 100 },
-  { label: 'ธนบัตร 500 บาท', value: 500 },
-  { label: 'ธนบัตร 1000 บาท', value: 1000 },
+// labelKey = ชนิดเหรียญ/ธนบัตร, n = ตัวเลขบนป้าย
+const DENOMINATIONS: { labelKey: UiKey; n: number; value: number }[] = [
+  { labelKey: 'pos.cash.coinSatang', n: 25,   value: 0.25 },
+  { labelKey: 'pos.cash.coinSatang', n: 50,   value: 0.5 },
+  { labelKey: 'pos.cash.coinBaht',   n: 1,    value: 1 },
+  { labelKey: 'pos.cash.coinBaht',   n: 2,    value: 2 },
+  { labelKey: 'pos.cash.coinBaht',   n: 5,    value: 5 },
+  { labelKey: 'pos.cash.coinBaht',   n: 10,   value: 10 },
+  { labelKey: 'pos.cash.note',       n: 20,   value: 20 },
+  { labelKey: 'pos.cash.note',       n: 50,   value: 50 },
+  { labelKey: 'pos.cash.note',       n: 100,  value: 100 },
+  { labelKey: 'pos.cash.note',       n: 500,  value: 500 },
+  { labelKey: 'pos.cash.note',       n: 1000, value: 1000 },
 ];
 
 const CashCountForm: React.FC<{ value: string; onChange: (v: string) => void }> = ({ value, onChange }) => {
+  const t = useT();
+  const f = useFormat();
   const [counts, setCounts] = useState<Record<number, string>>({});
 
   const total = DENOMINATIONS.reduce((sum, d) => sum + d.value * (parseInt(counts[d.value] || '0') || 0), 0);
@@ -1267,7 +1261,7 @@ const CashCountForm: React.FC<{ value: string; onChange: (v: string) => void }> 
     <View style={{ gap: 3 }}>
       {DENOMINATIONS.map(d => (
         <View key={d.value} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Text style={{ width: 120, fontSize: 11, color: Colors.text }}>{d.label}</Text>
+          <Text style={{ width: 120, fontSize: 11, color: Colors.text }}>{t(d.labelKey, { n: d.n })}</Text>
           <TextInput
             style={{ width: 60, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, fontSize: 12, textAlign: 'center' }}
             value={counts[d.value] || ''}
@@ -1277,12 +1271,12 @@ const CashCountForm: React.FC<{ value: string; onChange: (v: string) => void }> 
             placeholderTextColor="#D1D5DB"
           />
           <Text style={{ fontSize: 10, color: Colors.textSecondary, width: 70, textAlign: 'right' }}>
-            = ฿{(d.value * (parseInt(counts[d.value] || '0') || 0)).toLocaleString()}
+            = ฿{f.number(d.value * (parseInt(counts[d.value] || '0') || 0), 2).replace(/\.00$/, '')}
           </Text>
         </View>
       ))}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', borderTopWidth: 1, borderTopColor: '#E5E7EB', paddingTop: 6, marginTop: 4 }}>
-        <Text style={{ fontSize: 14, fontWeight: '800', color: WebColors.primary }}>รวม: ฿{total.toLocaleString()}</Text>
+        <Text style={{ fontSize: 14, fontWeight: '800', color: WebColors.primary }}>{t('pos.cash.total', { amount: f.number(total, 2).replace(/\.00$/, '') })}</Text>
       </View>
     </View>
   );
@@ -1302,7 +1296,13 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
   const { activeBranchId, activeBranch } = useBranchGuard();
   // ชื่อแคชเชียร์ = ผู้ใช้ที่ login อยู่
   const currentUser = useAuthStore((st) => st.user);
-  const cashierName = currentUser?.name || 'แคชเชียร์';
+  const t = useT();
+  const f = useFormat();
+  const fmt = useMoneyFmt();
+  const uiLang = useUiLanguage();
+  const cashierName = currentUser?.name || t('pos.cashierFallback');
+  // ค่าที่บันทึกลงข้อมูล (ประวัติขาย/กะ) คงเป็นภาษาไทยเหมือนเดิม ไม่ขึ้นกับภาษา UI
+  const cashierNameData = currentUser?.name || translate('th', 'pos.cashierFallback');
   const shift = useShiftStore();
   const posPerms = usePOSPermissionStore();
   const [showOpenShift, setShowOpenShift] = useState(!shift.isShiftOpen());
@@ -1342,7 +1342,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
       pinCallback();
     } else {
       logAction('POS', `สิทธิ์ถูกปฏิเสธ: ${POS_ACTION_LABELS[pinAction]}`, result.message || 'PIN ไม่ถูกต้อง', { action: pinAction, pin: pinInput.slice(0,2) + '**' });
-      alert(result.message || 'PIN ไม่ถูกต้องหรือไม่มีสิทธิ์');
+      alert(result.message || t('pos.pin.invalid'));
     }
     setPinInput('');
   };
@@ -1353,7 +1353,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
   , [masterProducts, activeBranchId]);
   const [posTab, setPosTab]           = useState<'pos' | 'invoice'>('pos'); // tab หลัก
   const [search, setSearch]           = useState('');
-  const [cat, setCat]                 = useState('ทั้งหมด');
+  const [cat, setCat]                 = useState(CATS[0]); // CATS[0] = ทุกหมวด
   const [gridView, setGridView]       = useState(true);
   const [showDisplay, setShowDisplay] = useState(false);
   const [gridWidth, setGridWidth]     = useState(0);
@@ -1394,7 +1394,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
         handleProductTap(prod);
         setScanFlash(`✅ ${prod.name}`);
       } else {
-        setScanFlash(`❌ ${prod.name} — สินค้าหมด`);
+        setScanFlash(`❌ ${t('pos.outOfStockFlash', { name: prod.name })}`);
       }
       setSearch('');
       setTimeout(() => setScanFlash(null), 1600);
@@ -1409,7 +1409,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
         handleProductTap(found);
         setScanFlash(`✅ ${found.name}`);
       } else {
-        setScanFlash(`❌ ${found.name} — สินค้าหมด`);
+        setScanFlash(`❌ ${t('pos.outOfStockFlash', { name: found.name })}`);
       }
       setSearch('');
       setTimeout(() => setScanFlash(null), 1600);
@@ -1418,7 +1418,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
       setSearch(trimmed);
     }
     setTimeout(() => searchRef.current?.focus(), 80);
-  }, [handleProductTap, masterProducts, activeBranchId]);
+  }, [handleProductTap, masterProducts, activeBranchId, t]);
 
   // Per-item overrides
   const [itemDiscounts, setItemDiscounts] = useState<Record<string, number>>({});   // disc per unit
@@ -1457,13 +1457,13 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
     [selectedMember, memberTypes]
   );
   /** ประเภทที่สมาชิกสังกัด (สำหรับแสดงป้าย) */
-  const typeForBadge = (mem: Member) => memberTypes.find(t => t.id === mem.memberTypeId) ?? getDefaultMemberType();
+  const typeForBadge = (mem: Member) => memberTypes.find(mt => mt.id === mem.memberTypeId) ?? getDefaultMemberType();
   const renderTypeBadge = (mem: Member) => {
-    const t = typeForBadge(mem);
-    const c = getMemberTypeColors(t.color, 'web');
+    const mt = typeForBadge(mem);
+    const c = getMemberTypeColors(mt.color, 'web');
     return (
       <View style={[s.levelBadge, { backgroundColor: c.bg }]}>
-        <Text style={[s.levelBadgeText, { color: c.fg, textTransform: 'none' }]} numberOfLines={1}>{mem.memberTypeName || t.name}</Text>
+        <Text style={[s.levelBadgeText, { color: c.fg, textTransform: 'none' }]} numberOfLines={1}>{mem.memberTypeName || mt.name}</Text>
       </View>
     );
   };
@@ -1491,7 +1491,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
     } else {
       setCouponDiscount(0);
       setCouponPromoName('');
-      setCouponError(result.error || 'คูปองไม่ถูกต้อง');
+      setCouponError(result.error || t('payment.couponInvalid'));
     }
   };
 
@@ -1535,11 +1535,12 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
   const [payMethod, setPayMethod]   = useState('');
   const [receivedAmt, setReceivedAmt] = useState('');
   // Split payment
-  const [splitPayments, setSplitPayments] = useState<{ method: string; label: string; amount: number }[]>([]);
+  // label มีเฉพาะประเภทที่ผู้ใช้เพิ่มเอง — อ่านผ่าน payMethodLabel() เท่านั้น
+  const [splitPayments, setSplitPayments] = useState<{ method: string; label?: string; amount: number }[]>([]);
 
   // Filtered products
   const filtered = useMemo(() => ALL_BASE.filter(p => {
-    const matchCat = cat === 'ทั้งหมด' || p.category === cat;
+    const matchCat = cat === CATS[0] || p.category === cat;
     const matchS   = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.barcode.includes(search);
     return matchCat && matchS;
   }), [search, cat]);
@@ -1622,7 +1623,9 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
         date: `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${thai}`,
         time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
         cashier: sale.cashierName,
-        payMethod: sale.payments.map(p => p.method === 'cash' ? 'เงินสด' : p.method === 'qr' ? 'QR Code' : p.method === 'credit' ? 'บัตร' : p.method === 'transfer' ? 'โอน' : p.method).join(' + '),
+        payMethod: sale.payments.map(p => payMethodLabel(p.method, 'th')).join(' + '),
+        payMethods: sale.payments.map(p => ({ id: p.method })),
+        issuedAt: d.getTime(),
         items: (sale.items || []).map(i => ({ name: i.product.name, qty: i.qty, unitPrice: i.unitPrice, disc: i.discountAmount, total: i.subtotal })),
         subtotal: sale.subtotal,
         discount: sale.discountTotal,
@@ -1649,11 +1652,12 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
     const matchSearch = !invSearch
       || inv.billNo.toLowerCase().includes(invSearch.toLowerCase())
       || inv.cashier.includes(invSearch)
+      || invPayLabel(inv, uiLang).toLowerCase().includes(invSearch.toLowerCase())
       || inv.payMethod.includes(invSearch)
       || (inv.refBillNo ?? '').toLowerCase().includes(invSearch.toLowerCase());
     const matchFilter = invFilter === 'all' || invFilter === 'topup' || inv.status === invFilter;
     return matchSearch && matchFilter;
-  }), [invoices, invSearch, invFilter]);
+  }), [invoices, invSearch, invFilter, uiLang]);
 
   const handleCancelBill = () => {
     if (!cancelTarget || !cancelReason.trim()) return;
@@ -1695,6 +1699,8 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
         time:         timeStr,
         cashier:      cancelTarget.cashier,
         payMethod:    cancelTarget.payMethod,
+        payMethods:   cancelTarget.payMethods,
+        issuedAt:     Date.now(),
         status:       'void_note',
         cancelReason: cancelReason.trim(),
         refBillNo:    cancelTarget.billNo,
@@ -1735,11 +1741,11 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
       {showOpenShift && !shift.isShiftOpen() && (
         <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 999, alignItems: 'center', justifyContent: 'center' }}>
           <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 24, width: 400, gap: 12 }}>
-            <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.text, textAlign: 'center' }}>เปิดกะ — นับเงินตั้งต้นในลิ้นชัก</Text>
-            <Text style={{ fontSize: 11, color: Colors.textSecondary, textAlign: 'center' }}>ใส่จำนวนเหรียญ/ธนบัตรแต่ละประเภท</Text>
+            <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.text, textAlign: 'center' }}>{t('pos.shift.openTitle')}</Text>
+            <Text style={{ fontSize: 11, color: Colors.textSecondary, textAlign: 'center' }}>{t('pos.shift.countHint')}</Text>
             <CashCountForm value={shiftOpenAmt} onChange={setShiftOpenAmt} />
-            <TouchableOpacity style={{ backgroundColor: WebColors.primary, borderRadius: 8, paddingVertical: 12, alignItems: 'center' }} onPress={() => { shift.openShift({ posId: 'pos-001', posName: 'POS 1', cashierName, openingAmount: parseInt(shiftOpenAmt) || 0 }); setShowOpenShift(false); }}>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: '#fff' }}>เปิดกะ (฿{(parseInt(shiftOpenAmt) || 0).toLocaleString()})</Text>
+            <TouchableOpacity style={{ backgroundColor: WebColors.primary, borderRadius: 8, paddingVertical: 12, alignItems: 'center' }} onPress={() => { shift.openShift({ posId: 'pos-001', posName: 'POS 1', cashierName: cashierNameData, openingAmount: parseInt(shiftOpenAmt) || 0 }); setShowOpenShift(false); }}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#fff' }}>{t('pos.shift.openBtn', { amount: f.number(parseInt(shiftOpenAmt) || 0) })}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1775,14 +1781,14 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
           onPress={() => setPosTab('pos')}
         >
           <Ionicons name="cart-outline" size={15} color={posTab === 'pos' ? WebColors.primary : WebColors.textSecondary} />
-          <Text style={[s.tabBtnText, posTab === 'pos' && s.tabBtnTextActive]}>ขายสินค้า</Text>
+          <Text style={[s.tabBtnText, posTab === 'pos' && s.tabBtnTextActive]}>{t('pos.tabSale')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[s.tabBtn, posTab === 'invoice' && s.tabBtnActive]}
           onPress={() => setPosTab('invoice')}
         >
           <Ionicons name="receipt-outline" size={15} color={posTab === 'invoice' ? WebColors.primary : WebColors.textSecondary} />
-          <Text style={[s.tabBtnText, posTab === 'invoice' && s.tabBtnTextActive]}>ใบกำกับ / บิลย้อนหลัง</Text>
+          <Text style={[s.tabBtnText, posTab === 'invoice' && s.tabBtnTextActive]}>{t('pos.tabInvoices')}</Text>
           {invoices.filter(i => i.status === 'paid').length > 0 && (
             <View style={s.tabBadge}>
               <Text style={s.tabBadgeText}>{invoices.filter(i => i.status === 'paid').length}</Text>
@@ -1803,7 +1809,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
         >
           <Ionicons name="layers-outline" size={14} color={holdBills.length > 0 ? '#7C3AED' : '#6B7280'} />
           <Text style={{ fontSize: 11, color: holdBills.length > 0 ? '#7C3AED' : '#6B7280', fontWeight: '600' }}>
-            {holdBills.length > 0 ? `พักบิล (${holdBills.length})` : 'พักบิล'}
+            {holdBills.length > 0 ? t('pos.hold.btnCount', { count: holdBills.length }) : t('pos.hold.btn')}
           </Text>
         </TouchableOpacity>
 
@@ -1813,11 +1819,11 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
             <>
               <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6, backgroundColor: '#FEF3C7' }} onPress={() => setShowCashMove(true)}>
                 <Ionicons name="swap-vertical" size={12} color="#D97706" />
-                <Text style={{ fontSize: 10, color: '#D97706', fontWeight: '600' }}>เงินเข้า/ออก</Text>
+                <Text style={{ fontSize: 10, color: '#D97706', fontWeight: '600' }}>{t('pos.shift.cashMoveBtn')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6, backgroundColor: '#FEE2E2' }} onPress={() => setShowCloseShift(true)}>
                 <Ionicons name="lock-closed" size={12} color="#DC2626" />
-                <Text style={{ fontSize: 10, color: '#DC2626', fontWeight: '600' }}>ปิดกะ</Text>
+                <Text style={{ fontSize: 10, color: '#DC2626', fontWeight: '600' }}>{t('pos.shift.closeBtn')}</Text>
               </TouchableOpacity>
             </>
           )}
@@ -1829,35 +1835,35 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' }}>
           <ScrollView contentContainerStyle={{ alignItems: 'center', paddingVertical: 40 }}>
           <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 24, width: 420, gap: 12 }}>
-            <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.text, textAlign: 'center' }}>ปิดกะ — นับเงินในลิ้นชัก</Text>
+            <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.text, textAlign: 'center' }}>{t('pos.shift.closeTitle')}</Text>
             <View style={{ backgroundColor: '#F0FDF4', borderRadius: 8, padding: 10, gap: 4 }}>
-              <Text style={{ fontSize: 11, color: '#16A34A' }}>เงินตั้งต้น: ฿{shift.currentShift?.openingAmount.toLocaleString()}</Text>
-              <Text style={{ fontSize: 11, color: '#16A34A' }}>ยอดขายเงินสด: ฿{shift.currentShift?.cashSalesTotal.toLocaleString()}</Text>
-              <Text style={{ fontSize: 11, color: '#16A34A' }}>เงินเข้า/ออก: {shift.currentShift?.movements.length} รายการ</Text>
-              <Text style={{ fontSize: 13, fontWeight: '700', color: '#16A34A' }}>คาดหวังในลิ้นชัก: ฿{shift.getExpectedCash().toLocaleString()}</Text>
+              <Text style={{ fontSize: 11, color: '#16A34A' }}>{t('pos.shift.opening', { amount: f.number(shift.currentShift?.openingAmount ?? 0) })}</Text>
+              <Text style={{ fontSize: 11, color: '#16A34A' }}>{t('pos.shift.cashSales', { amount: f.number(shift.currentShift?.cashSalesTotal ?? 0) })}</Text>
+              <Text style={{ fontSize: 11, color: '#16A34A' }}>{t('pos.shift.movements', { count: shift.currentShift?.movements.length ?? 0 })}</Text>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#16A34A' }}>{t('pos.shift.expected', { amount: f.number(shift.getExpectedCash()) })}</Text>
             </View>
-            <Text style={{ fontSize: 11, color: Colors.textSecondary }}>นับเงินจริงในลิ้นชัก:</Text>
+            <Text style={{ fontSize: 11, color: Colors.textSecondary }}>{t('pos.shift.countActual')}</Text>
             <CashCountForm value={shiftCloseAmt} onChange={setShiftCloseAmt} />
             {shiftCloseAmt && parseInt(shiftCloseAmt) !== shift.getExpectedCash() && (
               <View style={{ gap: 6 }}>
                 <Text style={{ fontSize: 12, color: (parseInt(shiftCloseAmt) - shift.getExpectedCash()) >= 0 ? '#16A34A' : '#DC2626', textAlign: 'center', fontWeight: '700' }}>
-                  ผลต่าง: ฿{((parseInt(shiftCloseAmt) || 0) - shift.getExpectedCash()).toLocaleString()} {(parseInt(shiftCloseAmt) || 0) < shift.getExpectedCash() ? '(ขาด)' : '(เกิน)'}
+                  {t('pos.shift.diff', { amount: f.number((parseInt(shiftCloseAmt) || 0) - shift.getExpectedCash()) })} {(parseInt(shiftCloseAmt) || 0) < shift.getExpectedCash() ? t('pos.shift.short') : t('pos.shift.over')}
                 </Text>
-                <TextInput style={{ borderWidth: 1, borderColor: '#FCA5A5', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, backgroundColor: '#FEF2F2' }} value={cashMoveReason} onChangeText={setCashMoveReason} placeholder="หมายเหตุ (บังคับ ถ้าเงินไม่ตรง)" placeholderTextColor="#9CA3AF" />
+                <TextInput style={{ borderWidth: 1, borderColor: '#FCA5A5', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, backgroundColor: '#FEF2F2' }} value={cashMoveReason} onChangeText={setCashMoveReason} placeholder={t('pos.shift.notePlaceholder')} placeholderTextColor="#9CA3AF" />
               </View>
             )}
             <View style={{ flexDirection: 'row', gap: 8, justifyContent: 'center', marginTop: 4 }}>
               <TouchableOpacity style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: '#F3F4F6' }} onPress={() => { setShowCloseShift(false); setShiftCloseAmt(''); setCashMoveReason(''); }}>
-                <Text style={{ fontSize: 13, color: Colors.textSecondary }}>ยกเลิก</Text>
+                <Text style={{ fontSize: 13, color: Colors.textSecondary }}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: '#DC2626' }} onPress={() => {
                 const amt = parseInt(shiftCloseAmt) || 0;
-                if (amt !== shift.getExpectedCash() && !cashMoveReason.trim()) { alert('กรุณาใส่หมายเหตุเมื่อเงินไม่ตรง'); return; }
+                if (amt !== shift.getExpectedCash() && !cashMoveReason.trim()) { alert(t('pos.shift.errNote')); return; }
                 shift.closeShift(amt);
                 setShowCloseShift(false); setShiftCloseAmt(''); setCashMoveReason('');
-                alert(`ปิดกะเรียบร้อย!\nนับได้: ฿${amt.toLocaleString()}\nคาดหวัง: ฿${shift.getExpectedCash().toLocaleString()}`);
+                alert(t('pos.shift.closed', { counted: f.number(amt), expected: f.number(shift.getExpectedCash()) }));
               }}>
-                <Text style={{ fontSize: 13, color: '#fff', fontWeight: '700' }}>ปิดกะ</Text>
+                <Text style={{ fontSize: 13, color: '#fff', fontWeight: '700' }}>{t('pos.shift.closeBtn')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1870,8 +1876,8 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' }}>
           <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 24, width: 440, maxHeight: '80%' }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <Text style={{ fontSize: 15, fontWeight: '700', color: '#1E293B' }}>บิลพักทั้งหมด ({holdBills.length})</Text>
-              <TouchableOpacity onPress={() => setShowHoldList(false)}>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: '#1E293B' }}>{t('pos.hold.listTitle', { count: holdBills.length })}</Text>
+              <TouchableOpacity onPress={() => setShowHoldList(false)} accessibilityLabel={t('common.close')}>
                 <Ionicons name="close" size={20} color="#64748B" />
               </TouchableOpacity>
             </View>
@@ -1882,7 +1888,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                 onPress={() => { holdBill(); logAction('POS', 'พักบิล', `พักบิล ${items.length} รายการ`); }}
               >
                 <Ionicons name="add-circle" size={16} color="#7C3AED" />
-                <Text style={{ fontSize: 12, fontWeight: '600', color: '#7C3AED' }}>พักบิลปัจจุบัน ({items.length} รายการ, ฿{grandTotal.toLocaleString()})</Text>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: '#7C3AED' }}>{t('pos.hold.holdCurrent', { count: items.length, amount: f.number(grandTotal, 2).replace(/\.00$/, '') })}</Text>
               </TouchableOpacity>
             )}
 
@@ -1895,8 +1901,8 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                       <Text style={{ fontSize: 12, fontWeight: '700', color: '#7C3AED' }}>{idx + 1}</Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#334155' }}>{bill.items.length} รายการ · ฿{total.toLocaleString()}</Text>
-                      <Text style={{ fontSize: 10, color: '#94A3B8' }}>{bill.remark || `บิลพัก #${idx + 1}`}</Text>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#334155' }}>{t('pos.hold.billSummary', { count: bill.items.length, amount: f.number(total, 2).replace(/\.00$/, '') })}</Text>
+                      <Text style={{ fontSize: 10, color: '#94A3B8' }}>{bill.remark || t('pos.hold.billN', { n: idx + 1 })}</Text>
                     </View>
                     <TouchableOpacity
                       style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, backgroundColor: '#7C3AED' }}
@@ -1906,7 +1912,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                         setShowHoldList(false);
                       }}
                     >
-                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#fff' }}>เรียกคืน</Text>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#fff' }}>{t('pos.hold.recall')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       onPress={() => { useCartStore.getState().deleteHoldBill(bill.id); }}
@@ -1920,7 +1926,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
               {holdBills.length === 0 && (
                 <View style={{ padding: 24, alignItems: 'center' }}>
                   <Ionicons name="layers-outline" size={32} color="#CBD5E1" />
-                  <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 8 }}>ไม่มีบิลพัก</Text>
+                  <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 8 }}>{t('pos.hold.empty')}</Text>
                 </View>
               )}
             </ScrollView>
@@ -1932,23 +1938,23 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
       <Modal visible={showCashMove} transparent animationType="fade">
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' }}>
           <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 24, width: 360, gap: 12 }}>
-            <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.text, textAlign: 'center' }}>เงินเข้า/ออกลิ้นชัก</Text>
+            <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.text, textAlign: 'center' }}>{t('pos.shift.cashMoveTitle')}</Text>
             <View style={{ flexDirection: 'row', gap: 8, justifyContent: 'center' }}>
               <TouchableOpacity style={{ flex: 1, paddingVertical: 10, borderRadius: 8, backgroundColor: cashMoveType === 'in' ? '#DCFCE7' : '#F3F4F6', alignItems: 'center' }} onPress={() => setCashMoveType('in')}>
-                <Text style={{ fontSize: 12, fontWeight: '600', color: cashMoveType === 'in' ? '#16A34A' : '#6B7280' }}>+ นำเงินเข้า</Text>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: cashMoveType === 'in' ? '#16A34A' : '#6B7280' }}>+ {t('pos.shift.cashIn')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={{ flex: 1, paddingVertical: 10, borderRadius: 8, backgroundColor: cashMoveType === 'out' ? '#FEE2E2' : '#F3F4F6', alignItems: 'center' }} onPress={() => setCashMoveType('out')}>
-                <Text style={{ fontSize: 12, fontWeight: '600', color: cashMoveType === 'out' ? '#DC2626' : '#6B7280' }}>- นำเงินออก</Text>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: cashMoveType === 'out' ? '#DC2626' : '#6B7280' }}>- {t('pos.shift.cashOut')}</Text>
               </TouchableOpacity>
             </View>
-            <TextInput style={{ borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 16, textAlign: 'center' }} value={cashMoveAmt} onChangeText={setCashMoveAmt} keyboardType="numeric" placeholder="จำนวนเงิน" />
-            <TextInput style={{ borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13 }} value={cashMoveReason} onChangeText={setCashMoveReason} placeholder="หมายเหตุ (เช่น ทอนเงินลูกค้า, ฝากธนาคาร)" />
+            <TextInput style={{ borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 16, textAlign: 'center' }} value={cashMoveAmt} onChangeText={setCashMoveAmt} keyboardType="numeric" placeholder={t('pos.shift.amountPlaceholder')} />
+            <TextInput style={{ borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13 }} value={cashMoveReason} onChangeText={setCashMoveReason} placeholder={t('pos.shift.moveNotePlaceholder')} />
             <View style={{ flexDirection: 'row', gap: 8, justifyContent: 'center' }}>
               <TouchableOpacity style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: '#F3F4F6' }} onPress={() => { setShowCashMove(false); setCashMoveAmt(''); setCashMoveReason(''); }}>
-                <Text style={{ fontSize: 13, color: Colors.textSecondary }}>ยกเลิก</Text>
+                <Text style={{ fontSize: 13, color: Colors.textSecondary }}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: WebColors.primary }} onPress={() => { shift.addCashMovement(cashMoveType, parseInt(cashMoveAmt) || 0, cashMoveReason || (cashMoveType === 'in' ? 'นำเงินเข้า' : 'นำเงินออก')); setShowCashMove(false); setCashMoveAmt(''); setCashMoveReason(''); }}>
-                <Text style={{ fontSize: 13, color: '#fff', fontWeight: '700' }}>บันทึก</Text>
+                <Text style={{ fontSize: 13, color: '#fff', fontWeight: '700' }}>{t('common.save')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1962,7 +1968,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
               <Ionicons name="search-outline" size={14} color={WebColors.textSecondary} />
               <TextInput
                 style={s.invSearchInput}
-                placeholder="ค้นหาเลขบิล, แคชเชียร์, ประเภทชำระ..."
+                placeholder={t('pos.invList.searchPlaceholder')}
                 placeholderTextColor={WebColors.textDisabled}
                 value={invSearch} onChangeText={setInvSearch}
               />
@@ -1970,20 +1976,20 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
             {/* Filter tabs */}
             <View style={s.invFilters}>
               {([
-                { key: 'all',       label: 'ทั้งหมด'      },
-                { key: 'paid',      label: 'สำเร็จ'        },
-                { key: 'full_tax',  label: 'ใบกำกับภาษี'  },
-                { key: 'void_note', label: 'ใบยกเลิก'      },
-                { key: 'cancelled', label: 'ยกเลิก'        },
-                { key: 'topup',     label: 'เติมเงิน'      },
-              ] as const).map(f => (
+                { key: 'all',       labelKey: 'pos.invList.filterAll'       },
+                { key: 'paid',      labelKey: 'pos.invList.statusPaid'      },
+                { key: 'full_tax',  labelKey: 'pos.invList.statusFullTax'   },
+                { key: 'void_note', labelKey: 'pos.invList.statusVoidNote'  },
+                { key: 'cancelled', labelKey: 'pos.invList.statusCancelled' },
+                { key: 'topup',     labelKey: 'pos.invList.filterTopup'     },
+              ] as const).map(flt => (
                 <TouchableOpacity
-                  key={f.key}
-                  style={[s.invFilterBtn, invFilter === f.key && s.invFilterBtnActive]}
-                  onPress={() => setInvFilter(f.key)}
+                  key={flt.key}
+                  style={[s.invFilterBtn, invFilter === flt.key && s.invFilterBtnActive]}
+                  onPress={() => setInvFilter(flt.key)}
                 >
-                  <Text style={[s.invFilterText, invFilter === f.key && s.invFilterTextActive]}>
-                    {f.label}
+                  <Text style={[s.invFilterText, invFilter === flt.key && s.invFilterTextActive]}>
+                    {t(flt.labelKey)}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -1993,10 +1999,10 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
           {/* KPI row */}
           <View style={s.invKpiRow}>
             {[
-              { label: 'บิลทั้งหมด',     value: invoices.length,                                                                    color: WebColors.primary, icon: 'receipt-outline'          },
-              { label: 'สำเร็จ',          value: invoices.filter(i => i.status === 'paid').length,                                   color: WebColors.success, icon: 'checkmark-circle-outline'  },
-              { label: 'ใบกำกับภาษี',    value: invoices.filter(i => i.status === 'full_tax').length,                               color: '#7C3AED',         icon: 'document-text-outline'     },
-              { label: 'ยอดรวมวันนี้',   value: `฿${fmt(invoices.filter(i => i.status === 'paid' || i.status === 'full_tax').reduce((s, i) => s + i.grand, 0))}`, color: WebColors.primary, icon: 'cash-outline' },
+              { label: t('pos.invList.kpiAll'),       value: invoices.length,                                                                    color: WebColors.primary, icon: 'receipt-outline'          },
+              { label: t('pos.invList.statusPaid'),   value: invoices.filter(i => i.status === 'paid').length,                                   color: WebColors.success, icon: 'checkmark-circle-outline'  },
+              { label: t('pos.invList.statusFullTax'), value: invoices.filter(i => i.status === 'full_tax').length,                              color: '#7C3AED',         icon: 'document-text-outline'     },
+              { label: t('pos.invList.kpiToday'),     value: `฿${fmt(invoices.filter(i => i.status === 'paid' || i.status === 'full_tax').reduce((s, i) => s + i.grand, 0))}`, color: WebColors.primary, icon: 'cash-outline' },
             ].map((k, i) => (
               <View key={i} style={s.invKpiCard}>
                 <Ionicons name={k.icon as any} size={20} color={k.color + '80'} />
@@ -2011,15 +2017,18 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
           {/* Table */}
           <View style={s.invTable}>
             <View style={s.invThead}>
-              {['เลขบิล', 'วันที่/เวลา', 'แคชเชียร์', 'ชำระ', 'สมาชิก', 'ยอดรวม/สถานะ', 'จัดการ'].map((h, i) => (
-                <Text key={i} style={[s.invTh, i === 0 && { flex: 1.4 }, i === 5 && { textAlign: 'right' }]}>{h}</Text>
+              {([
+                'pos.invList.colBillNo', 'pos.invList.colDateTime', 'pos.invList.colCashier', 'pos.invList.colPay',
+                'pos.invList.colMember', 'pos.invList.colTotalStatus', 'pos.invList.colActions',
+              ] as const).map((h, i) => (
+                <Text key={i} style={[s.invTh, i === 0 && { flex: 1.4 }, i === 5 && { textAlign: 'right' }]}>{t(h)}</Text>
               ))}
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
               {filteredInv.length === 0 ? (
                 <View style={s.invEmpty}>
                   <Ionicons name="receipt-outline" size={40} color={WebColors.border} />
-                  <Text style={s.invEmptyText}>ไม่พบบิล</Text>
+                  <Text style={s.invEmptyText}>{t('pos.invList.empty')}</Text>
                 </View>
               ) : invFilter === 'topup' ? (
                 <TopUpPanel />
@@ -2032,7 +2041,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
 
                   const stBg    = isPaid ? '#D1FAE5' : isVoid ? '#FEF3C7' : isFullTax ? '#EDE9FE' : '#FEE2E2';
                   const stDot   = isPaid ? '#16A34A' : isVoid ? '#F59E0B' : isFullTax ? '#7C3AED' : WebColors.danger;
-                  const stLabel = isPaid ? 'สำเร็จ' : isVoid ? 'ใบยกเลิก' : isFullTax ? 'ใบกำกับภาษี' : 'ยกเลิก';
+                  const stLabel = t(isPaid ? 'pos.invList.statusPaid' : isVoid ? 'pos.invList.statusVoidNote' : isFullTax ? 'pos.invList.statusFullTax' : 'pos.invList.statusCancelled');
 
                   return (
                     <View
@@ -2060,23 +2069,19 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                           </Text>
                           {(isVoid || isFullTax) && inv.refBillNo && (
                             <Text style={{ fontSize: 12, color: isFullTax ? '#7C3AED' : '#B45309' }}>
-                              {isFullTax ? '📎 อ้างอิง: ' : '↩ ยกเลิก: '}{inv.refBillNo}
+                              {isFullTax ? `📎 ${t('pos.invList.refPrefix')} ` : `↩ ${t('pos.invList.voidPrefix')} `}{inv.refBillNo}
                             </Text>
                           )}
                         </View>
                       </View>
                       <View style={s.invTdCol}>
-                        <Text style={s.invTdBold}>{inv.date}</Text>
-                        <Text style={s.invTdSub}>{inv.time} น.</Text>
+                        <Text style={s.invTdBold}>{inv.issuedAt ? f.date(inv.issuedAt) : inv.date}</Text>
+                        <Text style={s.invTdSub}>{inv.issuedAt ? t('pos.invList.timeValue', { time: f.time(inv.issuedAt) }) : t('pos.invList.timeValue', { time: inv.time })}</Text>
                       </View>
                       <Text style={s.invTd}>{inv.cashier}</Text>
                       <View style={s.invTdCol}>
-                        <Ionicons name={
-                          inv.payMethod === 'เงินสด' ? 'cash-outline'
-                          : inv.payMethod === 'QR Code' ? 'qr-code-outline'
-                          : 'phone-portrait-outline'
-                        } size={13} color={WebColors.textSecondary} />
-                        <Text style={s.invTd}>{inv.payMethod}</Text>
+                        <Ionicons name={(PAY_ICON[inv.payMethods?.[0]?.id ?? ''] ?? 'card-outline') as any} size={13} color={WebColors.textSecondary} />
+                        <Text style={s.invTd}>{invPayLabel(inv, uiLang)}</Text>
                       </View>
                       {/* สมาชิก */}
                       <Text style={[s.invTd, { fontSize: 11 }]}>{(inv as any).memberName || '—'}</Text>
@@ -2139,7 +2144,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
             <TextInput
               ref={searchRef}
               style={s.searchInput}
-              placeholder="สแกนบาร์โค้ด หรือพิมพ์ชื่อสินค้า..."
+              placeholder={t('pos.searchPlaceholder')}
               placeholderTextColor={WebColors.textDisabled}
               value={search}
               onChangeText={v => {
@@ -2180,7 +2185,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
         <View style={s.catRow}>
           {CATS.map(c => (
             <TouchableOpacity key={c} style={[s.catChip, cat === c && s.catChipActive]} onPress={() => setCat(c)}>
-              <Text style={[s.catText, cat === c && s.catTextActive]}>{c}</Text>
+              <Text style={[s.catText, cat === c && s.catTextActive]}>{c === CATS[0] ? t('pos.allCategories') : c}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -2191,7 +2196,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
             {filtered.length === 0 ? (
               <View style={s.empty}>
                 <Ionicons name="search-outline" size={40} color={WebColors.border} />
-                <Text style={s.emptyText}>ไม่พบสินค้า</Text>
+                <Text style={s.emptyText}>{t('pos.noProducts')}</Text>
               </View>
             ) : (
               <View style={s.grid5Wrap}>
@@ -2221,7 +2226,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                     <View style={s.productImg}>
                       <Ionicons name="cube-outline" size={28} color={WebColors.primary} />
                       {dStock === 0 && (
-                        <View style={s.outBadge}><Text style={s.outBadgeText}>หมด</Text></View>
+                        <View style={s.outBadge}><Text style={s.outBadgeText}>{t('pos.outBadge')}</Text></View>
                       )}
                       {dStock > 0 && dStock <= 5 && (
                         <View style={s.lowBadge}><Text style={s.lowBadgeText}>{dStock}</Text></View>
@@ -2280,7 +2285,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                 </View>
                 <Text style={s.listPrice}>฿{p.price}</Text>
                 <Text style={[s.listStock, dStock <= 5 && { color: WebColors.danger }]}>
-                  {dStock} ชิ้น
+                  {t('pos.pieces', { count: dStock })}
                 </Text>
               </TouchableOpacity>
               );
@@ -2288,7 +2293,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
             ListEmptyComponent={
               <View style={s.empty}>
                 <Ionicons name="search-outline" size={40} color={WebColors.border} />
-                <Text style={s.emptyText}>ไม่พบสินค้า</Text>
+                <Text style={s.emptyText}>{t('pos.noProducts')}</Text>
               </View>
             }
           />
@@ -2301,10 +2306,10 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
         <View style={s.cartHeader}>
           <View style={s.cartHeaderLeft}>
             <Ionicons name="cart-outline" size={18} color={WebColors.text} />
-            <Text style={s.cartTitle}>ตะกร้าสินค้า</Text>
+            <Text style={s.cartTitle}>{t('pos.cart.title')}</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: WebColors.primaryLight, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 }}>
               <Ionicons name="business-outline" size={11} color={WebColors.primary} />
-              <Text style={{ fontSize: 11, fontWeight: '700', color: WebColors.primary }}>{activeBranch?.name ?? 'สาขาหลัก'}</Text>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: WebColors.primary }}>{activeBranch?.name ?? t('pos.cart.mainBranch')}</Text>
             </View>
           </View>
           <View style={{ flexDirection: 'row', gap: 6 }}>
@@ -2314,9 +2319,9 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
               onPress={() => setShowDisplay(!showDisplay)}
             >
               <Ionicons name="tv-outline" size={15} color={showDisplay ? WebColors.white : WebColors.primary} />
-              <Text style={[s.display2BtnText, showDisplay && { color: WebColors.white }]}>จอ 2</Text>
+              <Text style={[s.display2BtnText, showDisplay && { color: WebColors.white }]}>{t('pos.cart.display2')}</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={clearCart}>
+            <TouchableOpacity onPress={clearCart} accessibilityLabel={t('pos.cart.clear')}>
               <Ionicons name="trash-outline" size={18} color={WebColors.danger} />
             </TouchableOpacity>
           </View>
@@ -2325,7 +2330,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
         {/* ── Cashier (from login) ── */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: WebColors.border }}>
           <Ionicons name="person-outline" size={14} color={WebColors.textSecondary} />
-          <Text style={{ fontSize: 12, color: WebColors.textSecondary }}>แคชเชียร์:</Text>
+          <Text style={{ fontSize: 12, color: WebColors.textSecondary }}>{t('pos.cart.cashierLabel')}</Text>
           <Text style={{ fontSize: 12, fontWeight: '700', color: WebColors.text }} numberOfLines={1}>{cashierName}</Text>
         </View>
 
@@ -2339,9 +2344,9 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                 <Text style={s.levelBadgeText}>{selectedMember.level}</Text>
               </View>
               {renderTypeBadge(selectedMember)}
-              <Text style={s.memberPoints}>{selectedMember.pointBalance} pts</Text>
-              <Text style={{ fontSize: 13, color: Colors.textSecondary }}>฿{selectedMember.totalSpent.toLocaleString()}</Text>
-              <Text style={{ fontSize: 11, color: '#16A34A', fontWeight: '600' }}>💰{getWalletBalance(selectedMember.id).toLocaleString()}</Text>
+              <Text style={s.memberPoints}>{t('pos.member.pts', { points: selectedMember.pointBalance })}</Text>
+              <Text style={{ fontSize: 13, color: Colors.textSecondary }}>฿{f.number(selectedMember.totalSpent)}</Text>
+              <Text style={{ fontSize: 11, color: '#16A34A', fontWeight: '600' }}>💰{f.number(getWalletBalance(selectedMember.id))}</Text>
               <TouchableOpacity onPress={() => { selectMember(null); setPointDiscount(0); setPointsToUse(''); }}>
                 <Ionicons name="close-circle" size={16} color={WebColors.textSecondary} />
               </TouchableOpacity>
@@ -2349,7 +2354,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
           ) : (
             <TouchableOpacity style={s.memberSelectBtn} onPress={() => { setShowMemberModal(true); setMemberSearch(''); }}>
               <Ionicons name="people-outline" size={14} color={WebColors.primary} />
-              <Text style={s.memberSelectBtnText}>เลือกสมาชิก</Text>
+              <Text style={s.memberSelectBtnText}>{t('pos.member.select')}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -2358,7 +2363,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
         {items.length === 0 ? (
           <View style={s.cartEmpty}>
             <Ionicons name="cart-outline" size={48} color={WebColors.border} />
-            <Text style={s.emptyText}>ไม่มีสินค้าในตะกร้า</Text>
+            <Text style={s.emptyText}>{t('pos.cart.empty')}</Text>
           </View>
         ) : (
           <FlatList
@@ -2385,11 +2390,11 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
 
         {/* Summary */}
         <View style={s.summary}>
-          <View style={s.sumRow}><Text style={s.sumLabel}>ยอดรวม</Text><Text style={s.sumVal}>฿{fmt(subtotal)}</Text></View>
+          <View style={s.sumRow}><Text style={s.sumLabel}>{t('pos.cart.subtotal')}</Text><Text style={s.sumVal}>฿{fmt(subtotal)}</Text></View>
           <View style={s.sumRow}>
             <TouchableOpacity onPress={() => { setBillDiscModal(true); setBillDiscInput(String(billDiscount)); }}>
               <Text style={[s.sumLabel, { color: WebColors.primary, textDecorationLine: 'underline' }]}>
-                ส่วนลด{billDiscType === 'percent' ? ` (${billDiscount}%)` : ''}
+                {t('pos.cart.discount')}{billDiscType === 'percent' ? ` (${billDiscount}%)` : ''}
               </Text>
             </TouchableOpacity>
             <Text style={[s.sumVal, { color: WebColors.danger }]}>-฿{fmt(billDiscAmt)}</Text>
@@ -2398,7 +2403,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
             <View style={s.sumRow}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <Ionicons name="people" size={12} color={WebColors.info} />
-                <Text style={[s.sumLabel, { color: WebColors.info }]}>{memberTypeDiscountLabel(memberType)}</Text>
+                <Text style={[s.sumLabel, { color: WebColors.info }]}>{memberTypeDiscountLabel(memberType, uiLang)}</Text>
               </View>
               <Text style={[s.sumVal, { color: WebColors.info }]}>-฿{fmt(memberTypeDiscount)}</Text>
             </View>
@@ -2407,7 +2412,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
             <View style={s.sumRow}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <Ionicons name="pricetag" size={12} color="#7C3AED" />
-                <Text style={[s.sumLabel, { color: '#7C3AED' }]}>คูปอง ({couponPromoName})</Text>
+                <Text style={[s.sumLabel, { color: '#7C3AED' }]}>{t('pos.cart.couponRow', { name: couponPromoName })}</Text>
               </View>
               <Text style={[s.sumVal, { color: '#7C3AED' }]}>-฿{fmt(couponDiscount)}</Text>
             </View>
@@ -2416,14 +2421,14 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
             <View style={s.sumRow}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <Ionicons name="star" size={12} color="#F59E0B" />
-                <Text style={[s.sumLabel, { color: '#F59E0B' }]}>แลกคะแนน</Text>
+                <Text style={[s.sumLabel, { color: '#F59E0B' }]}>{t('pos.cart.pointsRow')}</Text>
               </View>
               <Text style={[s.sumVal, { color: '#F59E0B' }]}>-฿{fmt(pointDiscount)}</Text>
             </View>
           )}
-          <View style={s.sumRow}><Text style={s.sumLabel}>VAT 7%</Text><Text style={s.sumVal}>฿{fmt(vat)}</Text></View>
+          <View style={s.sumRow}><Text style={s.sumLabel}>{t('pos.cart.vat', { rate: 7 })}</Text><Text style={s.sumVal}>฿{fmt(vat)}</Text></View>
           <View style={[s.sumRow, s.sumTotalRow]}>
-            <Text style={s.sumTotalLabel}>รวมทั้งสิ้น</Text>
+            <Text style={s.sumTotalLabel}>{t('pos.cart.grandTotal')}</Text>
             <Text style={s.sumTotalVal}>฿{fmt(grandTotal)}</Text>
           </View>
         </View>
@@ -2435,7 +2440,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
               style={s.couponInput}
               value={couponCode}
               onChangeText={(v) => { setCouponCode(v); setCouponError(''); }}
-              placeholder="รหัสคูปอง"
+              placeholder={t('pos.cart.couponPlaceholder')}
               placeholderTextColor={WebColors.textDisabled}
             />
             <TouchableOpacity
@@ -2443,7 +2448,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
               onPress={handleValidateCoupon}
               disabled={!couponCode.trim()}
             >
-              <Text style={s.couponBtnText}>ใช้คูปอง</Text>
+              <Text style={s.couponBtnText}>{t('pos.cart.couponApply')}</Text>
             </TouchableOpacity>
           </View>
           {couponError ? (
@@ -2455,7 +2460,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
           {couponDiscount > 0 && (
             <View style={s.couponSuccessRow}>
               <Ionicons name="checkmark-circle" size={12} color={WebColors.success} />
-              <Text style={s.couponSuccessText}>ลด ฿{fmt(couponDiscount)} ({couponPromoName})</Text>
+              <Text style={s.couponSuccessText}>{t('pos.cart.couponSaved', { amount: fmt(couponDiscount), name: couponPromoName })}</Text>
               <TouchableOpacity onPress={() => { setCouponDiscount(0); setCouponCode(''); setCouponPromoName(''); }}>
                 <Ionicons name="close-circle" size={14} color={WebColors.textSecondary} />
               </TouchableOpacity>
@@ -2466,18 +2471,18 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
             <>
               <TouchableOpacity style={s.pointRedeemBtn} onPress={() => { setShowPointRedeem(true); setPointsToUse(''); }}>
                 <Ionicons name="star-outline" size={14} color="#F59E0B" />
-                <Text style={s.pointRedeemBtnText}>ใช้คะแนน ({selectedMember.pointBalance} pts)</Text>
+                <Text style={s.pointRedeemBtnText}>{t('pos.cart.usePoints', { points: selectedMember.pointBalance })}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[s.pointRedeemBtn, { backgroundColor: '#DCFCE7', borderColor: '#16A34A' }]} onPress={() => { const cartItems = useCartStore.getState().items; if (cartItems.length > 0) { useCartStore.getState().holdBill('เติมเงิน Wallet'); } setShowTopUpModal(true); }}>
                 <Ionicons name="wallet-outline" size={14} color="#16A34A" />
-                <Text style={[s.pointRedeemBtnText, { color: '#16A34A' }]}>เติมเงิน Wallet (฿{getWalletBalance(selectedMember.id).toLocaleString()})</Text>
+                <Text style={[s.pointRedeemBtnText, { color: '#16A34A' }]}>{t('pos.cart.topUpWallet', { amount: f.number(getWalletBalance(selectedMember.id)) })}</Text>
               </TouchableOpacity>
             </>
           )}
           {pointDiscount > 0 && (
             <View style={s.couponSuccessRow}>
               <Ionicons name="star" size={12} color="#F59E0B" />
-              <Text style={[s.couponSuccessText, { color: '#F59E0B' }]}>ใช้ {pointsToUse} คะแนน = ลด ฿{fmt(pointDiscount)}</Text>
+              <Text style={[s.couponSuccessText, { color: '#F59E0B' }]}>{t('pos.cart.pointsApplied', { points: pointsToUse, amount: fmt(pointDiscount) })}</Text>
               <TouchableOpacity onPress={() => { setPointDiscount(0); setPointsToUse(''); }}>
                 <Ionicons name="close-circle" size={14} color={WebColors.textSecondary} />
               </TouchableOpacity>
@@ -2492,11 +2497,11 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
               <TouchableOpacity
                 key={pt.id}
                 style={[s.payBtn, { backgroundColor: pt.color }]}
-                onPress={() => { setPayMethod(pt.id); setPayModal(true); setReceivedAmt(''); setDisplayMode('payment_pending'); useCustomerDisplayStore.getState().broadcastDisplay({ mode: 'payment_pending', payMethodLabel: pt.label, syncedGrand: grandTotal }); }}
+                onPress={() => { setPayMethod(pt.id); setPayModal(true); setReceivedAmt(''); setDisplayMode('payment_pending'); useCustomerDisplayStore.getState().broadcastDisplay({ mode: 'payment_pending', payMethodLabel: payMethodLabel(pt.id, 'th', pt.label), syncedGrand: grandTotal }); }}
                 disabled={items.length === 0}
               >
                 <Ionicons name={pt.icon as any} size={15} color="#fff" />
-                <Text style={s.payBtnText}>{pt.label}</Text>
+                <Text style={s.payBtnText}>{payMethodLabel(pt.id, uiLang, pt.label)}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -2510,14 +2515,14 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
       <Modal visible={!!discModal} transparent animationType="fade">
         <View style={m.overlay}>
           <View style={[m.box, { width: 360 }]}>
-            <Text style={m.title}>ส่วนลดรายการสินค้า</Text>
+            <Text style={m.title}>{t('pos.disc.itemTitle')}</Text>
             <Text style={m.sub} numberOfLines={1}>{items.find(i => i.product.id === discModal)?.product.name}</Text>
             <View style={m.typeToggle}>
               <TouchableOpacity style={[m.typeBtn, discModalType === 'amount' && m.typeBtnActive]} onPress={() => setDiscModalType('amount')}>
-                <Text style={[m.typeBtnText, discModalType === 'amount' && { color: '#fff' }]}>จำนวนเงิน (฿)</Text>
+                <Text style={[m.typeBtnText, discModalType === 'amount' && { color: '#fff' }]}>{t('pos.disc.typeAmount')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[m.typeBtn, discModalType === 'percent' && m.typeBtnActive]} onPress={() => setDiscModalType('percent')}>
-                <Text style={[m.typeBtnText, discModalType === 'percent' && { color: '#fff' }]}>เปอร์เซ็นต์ (%)</Text>
+                <Text style={[m.typeBtnText, discModalType === 'percent' && { color: '#fff' }]}>{t('pos.disc.typePercent')}</Text>
               </TouchableOpacity>
             </View>
             {/* Display */}
@@ -2525,13 +2530,13 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
               <Text style={m.displayVal}>{discModalType === 'amount' ? '฿' : ''}{discInput || '0'}{discModalType === 'percent' ? ' %' : ''}</Text>
               {discModalType === 'percent' && parseFloat(discInput) > 0 && discModal && (() => {
                 const price = customPrices[discModal] ?? items.find(i => i.product.id === discModal)?.unitPrice ?? 0;
-                return <Text style={m.calcText}>= ลด ฿{fmt(price * (parseFloat(discInput) / 100))} ต่อชิ้น</Text>;
+                return <Text style={m.calcText}>{t('pos.disc.calcPerPiece', { amount: fmt(price * (parseFloat(discInput) / 100)) })}</Text>;
               })()}
             </View>
             <NumPad value={discInput || '0'} onChange={v => setDiscInput(v === '0' ? '' : v)} />
             <View style={m.actions}>
               <TouchableOpacity style={m.cancelBtn} onPress={() => setDiscModal(null)}>
-                <Text style={m.cancelText}>ยกเลิก</Text>
+                <Text style={m.cancelText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={m.okBtn} onPress={() => {
                 if (discModal) {
@@ -2540,7 +2545,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                 }
                 setDiscModal(null);
               }}>
-                <Text style={m.okText}>ตกลง</Text>
+                <Text style={m.okText}>{t('pos.disc.ok')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2551,18 +2556,18 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
       <Modal visible={!!priceModal} transparent animationType="fade">
         <View style={m.overlay}>
           <View style={[m.box, { width: 360 }]}>
-            <Text style={m.title}>เปลี่ยนราคา</Text>
+            <Text style={m.title}>{t('pos.disc.priceTitle')}</Text>
             <Text style={m.sub}>{items.find(i => i.product.id === priceModal)?.product.name}</Text>
             <View style={m.displayBox}>
               <Text style={m.displayVal}>฿ {priceInput || '0'}</Text>
             </View>
             <NumPad value={priceInput || '0'} onChange={v => setPriceInput(v === '0' ? '' : v)} />
             <View style={m.actions}>
-              <TouchableOpacity style={m.cancelBtn} onPress={() => setPriceModal(null)}><Text style={m.cancelText}>ยกเลิก</Text></TouchableOpacity>
+              <TouchableOpacity style={m.cancelBtn} onPress={() => setPriceModal(null)}><Text style={m.cancelText}>{t('common.cancel')}</Text></TouchableOpacity>
               <TouchableOpacity style={m.okBtn} onPress={() => {
                 if (priceModal) { setCustomPrices(prev => ({ ...prev, [priceModal]: parseFloat(priceInput) || 0 })); }
                 setPriceModal(null);
-              }}><Text style={m.okText}>ตกลง</Text></TouchableOpacity>
+              }}><Text style={m.okText}>{t('pos.disc.ok')}</Text></TouchableOpacity>
             </View>
           </View>
         </View>
@@ -2572,26 +2577,26 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
       <Modal visible={billDiscModal} transparent animationType="fade">
         <View style={m.overlay}>
           <View style={[m.box, { width: 360 }]}>
-            <Text style={m.title}>ส่วนลดท้ายบิล</Text>
+            <Text style={m.title}>{t('pos.disc.billTitle')}</Text>
             <View style={m.typeToggle}>
               <TouchableOpacity style={[m.typeBtn, billDiscType === 'amount' && m.typeBtnActive]} onPress={() => setBillDiscType('amount')}>
-                <Text style={[m.typeBtnText, billDiscType === 'amount' && { color: '#fff' }]}>จำนวนเงิน (฿)</Text>
+                <Text style={[m.typeBtnText, billDiscType === 'amount' && { color: '#fff' }]}>{t('pos.disc.typeAmount')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[m.typeBtn, billDiscType === 'percent' && m.typeBtnActive]} onPress={() => setBillDiscType('percent')}>
-                <Text style={[m.typeBtnText, billDiscType === 'percent' && { color: '#fff' }]}>เปอร์เซ็นต์ (%)</Text>
+                <Text style={[m.typeBtnText, billDiscType === 'percent' && { color: '#fff' }]}>{t('pos.disc.typePercent')}</Text>
               </TouchableOpacity>
             </View>
             <View style={m.displayBox}>
               <Text style={m.displayVal}>{billDiscType === 'amount' ? '฿' : ''}{billDiscInput || '0'}{billDiscType === 'percent' ? ' %' : ''}</Text>
               {billDiscType === 'percent' && parseFloat(billDiscInput) > 0 && (
-                <Text style={m.calcText}>= ลด ฿{fmt(subtotal * (parseFloat(billDiscInput) / 100))}</Text>
+                <Text style={m.calcText}>{t('pos.disc.calc', { amount: fmt(subtotal * (parseFloat(billDiscInput) / 100)) })}</Text>
               )}
             </View>
             <NumPad value={billDiscInput || '0'} onChange={v => setBillDiscInput(v === '0' ? '' : v)} />
             <View style={m.actions}>
-              <TouchableOpacity style={m.cancelBtn} onPress={() => setBillDiscModal(false)}><Text style={m.cancelText}>ยกเลิก</Text></TouchableOpacity>
+              <TouchableOpacity style={m.cancelBtn} onPress={() => setBillDiscModal(false)}><Text style={m.cancelText}>{t('common.cancel')}</Text></TouchableOpacity>
               <TouchableOpacity style={m.okBtn} onPress={() => { setBillDiscount(parseFloat(billDiscInput) || 0); setBillDiscModal(false); }}>
-                <Text style={m.okText}>ใช้ส่วนลด</Text>
+                <Text style={m.okText}>{t('pos.disc.apply')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2602,9 +2607,9 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
       <Modal visible={payModal} transparent animationType="fade">
         <View style={m.overlay}>
           <View style={[m.box, { width: 420 }]}>
-            <Text style={m.title}>ชำระเงิน</Text>
+            <Text style={m.title}>{t('payment.title')}</Text>
             <View style={m.totalBox}>
-              <Text style={m.totalLabel}>ยอดที่ต้องชำระ</Text>
+              <Text style={m.totalLabel}>{t('payment.amountDue')}</Text>
               <Text style={m.totalAmt}>฿{fmt(grandTotal)}</Text>
             </View>
 
@@ -2613,23 +2618,23 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
               <View style={{ marginBottom: 8, gap: 4 }}>
                 {splitPayments.map((sp, i) => (
                   <View key={i} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F0FDF4', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
-                    <Text style={{ fontSize: 12, color: '#16A34A', fontWeight: '600' }}>{sp.label}</Text>
+                    <Text style={{ fontSize: 12, color: '#16A34A', fontWeight: '600' }}>{payMethodLabel(sp.method, uiLang, sp.label)}</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#16A34A' }}>฿{sp.amount.toLocaleString()}</Text>
-                      <TouchableOpacity onPress={() => setSplitPayments(prev => prev.filter((_, idx) => idx !== i))}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#16A34A' }}>฿{f.number(sp.amount, 2).replace(/\.00$/, '')}</Text>
+                      <TouchableOpacity onPress={() => setSplitPayments(prev => prev.filter((_, idx) => idx !== i))} accessibilityLabel={t('payment.removeSplit')}>
                         <Ionicons name="close-circle" size={16} color="#EF4444" />
                       </TouchableOpacity>
                     </View>
                   </View>
                 ))}
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 4 }}>
-                  <Text style={{ fontSize: 11, color: Colors.textSecondary }}>ชำระแล้ว:</Text>
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#16A34A' }}>฿{splitPayments.reduce((s, p) => s + p.amount, 0).toLocaleString()}</Text>
+                  <Text style={{ fontSize: 11, color: Colors.textSecondary }}>{t('payment.paidSoFar')}</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#16A34A' }}>฿{f.number(splitPayments.reduce((s, p) => s + p.amount, 0), 2).replace(/\.00$/, '')}</Text>
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text style={{ fontSize: 11, color: Colors.textSecondary }}>คงเหลือ:</Text>
+                  <Text style={{ fontSize: 11, color: Colors.textSecondary }}>{t('payment.remaining')}</Text>
                   <Text style={{ fontSize: 12, fontWeight: '700', color: (grandTotal - splitPayments.reduce((s, p) => s + p.amount, 0)) <= 0 ? '#16A34A' : WebColors.primary }}>
-                    ฿{Math.max(0, grandTotal - splitPayments.reduce((s, p) => s + p.amount, 0)).toLocaleString()}
+                    ฿{f.number(Math.max(0, grandTotal - splitPayments.reduce((s, p) => s + p.amount, 0)), 2).replace(/\.00$/, '')}
                   </Text>
                 </View>
               </View>
@@ -2637,13 +2642,13 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
 
             {/* เพิ่มช่องทางชำระ */}
             <Text style={{ fontSize: 11, fontWeight: '600', color: Colors.textSecondary, marginBottom: 4 }}>
-              {splitPayments.length === 0 ? 'เลือกวิธีชำระ:' : 'เพิ่มช่องทาง:'}
+              {splitPayments.length === 0 ? t('payment.chooseMethod') : t('payment.addMethod')}
             </Text>
             <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
               {payTypes.map(pt => (
                 <TouchableOpacity key={pt.id} style={[{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 }, payMethod === pt.id ? { backgroundColor: pt.color + '18', borderColor: pt.color } : { borderColor: Colors.border }]} onPress={() => setPayMethod(pt.id)}>
                   <Ionicons name={pt.icon as any} size={13} color={pt.color} />
-                  <Text style={{ fontSize: 11, color: pt.color, fontWeight: '600' }}>{pt.label}</Text>
+                  <Text style={{ fontSize: 11, color: pt.color, fontWeight: '600' }}>{payMethodLabel(pt.id, uiLang, pt.label)}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -2651,13 +2656,13 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
             {/* จำนวนเงินสำหรับวิธีที่เลือก */}
             {payMethod && (
               <View style={{ marginBottom: 8 }}>
-                <Text style={{ fontSize: 11, color: Colors.textSecondary, marginBottom: 4 }}>จำนวนเงิน ({payTypes.find(p => p.id === payMethod)?.label}):</Text>
+                <Text style={{ fontSize: 11, color: Colors.textSecondary, marginBottom: 4 }}>{t('payment.amountFor', { method: payMethodLabel(payMethod, uiLang, payTypes.find(p => p.id === payMethod)?.label) })}</Text>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <TextInput
                     style={[m.input, { flex: 1, marginBottom: 0 }]}
                     value={receivedAmt}
                     onChangeText={setReceivedAmt}
-                    placeholder={`ใส่จำนวน (คงเหลือ ฿${Math.max(0, grandTotal - splitPayments.reduce((s, p) => s + p.amount, 0)).toLocaleString()})`}
+                    placeholder={t('payment.amountPlaceholder', { amount: f.number(Math.max(0, grandTotal - splitPayments.reduce((s, p) => s + p.amount, 0)), 2).replace(/\.00$/, '') })}
                     placeholderTextColor={WebColors.textDisabled}
                     keyboardType="decimal-pad"
                   />
@@ -2666,12 +2671,13 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                     onPress={() => {
                       const amt = parseFloat(receivedAmt) || 0;
                       if (amt <= 0) return;
-                      const label = payTypes.find(p => p.id === payMethod)?.label || payMethod;
+                      // label เก็บเฉพาะประเภทที่ผู้ใช้เพิ่มเอง (built-in = undefined)
+                      const label = payTypes.find(p => p.id === payMethod)?.label;
                       setSplitPayments(prev => [...prev, { method: payMethod, label, amount: amt }]);
                       setReceivedAmt('');
                     }}
                   >
-                    <Text style={{ fontSize: 12, color: '#fff', fontWeight: '600' }}>+ เพิ่ม</Text>
+                    <Text style={{ fontSize: 12, color: '#fff', fontWeight: '600' }}>+ {t('payment.settings.add')}</Text>
                   </TouchableOpacity>
                 </View>
                 {/* Quick amounts */}
@@ -2683,12 +2689,12 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                       </TouchableOpacity>
                     ))}
                     <TouchableOpacity style={[m.quickBtn, { backgroundColor: WebColors.primaryLight }]} onPress={() => setReceivedAmt(String(Math.max(0, grandTotal - splitPayments.reduce((s, p) => s + p.amount, 0))))}>
-                      <Text style={[m.quickText, { color: WebColors.primary }]}>เต็มจำนวน</Text>
+                      <Text style={[m.quickText, { color: WebColors.primary }]}>{t('payment.fullAmount')}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
                 {payMethod === 'wallet' && selectedMember && (
-                  <Text style={{ fontSize: 10, color: '#92400E', marginTop: 4 }}>💰 Wallet: ฿{getWalletBalance(selectedMember.id).toLocaleString()}</Text>
+                  <Text style={{ fontSize: 10, color: '#92400E', marginTop: 4 }}>💰 {t('payment.walletBalance', { amount: f.number(getWalletBalance(selectedMember.id)) })}</Text>
                 )}
               </View>
             )}
@@ -2696,13 +2702,13 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
             {/* เงินทอน (กรณีจ่ายเกิน) */}
             {splitPayments.reduce((s, p) => s + p.amount, 0) > grandTotal && (
               <View style={m.changeBox}>
-                <Text style={m.changeLabel}>เงินทอน</Text>
+                <Text style={m.changeLabel}>{t('payment.change')}</Text>
                 <Text style={m.changeAmt}>฿{fmt(splitPayments.reduce((s, p) => s + p.amount, 0) - grandTotal)}</Text>
               </View>
             )}
 
             <View style={m.actions}>
-              <TouchableOpacity style={m.cancelBtn} onPress={() => { setPayModal(false); setSplitPayments([]); setDisplayMode('idle'); useCustomerDisplayStore.getState().broadcastDisplay({ mode: 'idle' }); }}><Text style={m.cancelText}>ยกเลิก</Text></TouchableOpacity>
+              <TouchableOpacity style={m.cancelBtn} onPress={() => { setPayModal(false); setSplitPayments([]); setDisplayMode('idle'); useCustomerDisplayStore.getState().broadcastDisplay({ mode: 'idle' }); }}><Text style={m.cancelText}>{t('common.cancel')}</Text></TouchableOpacity>
               <TouchableOpacity
                 style={[m.okBtn, splitPayments.reduce((s, p) => s + p.amount, 0) < grandTotal && m.okBtnDisabled]}
                 disabled={splitPayments.reduce((s, p) => s + p.amount, 0) < grandTotal}
@@ -2715,8 +2721,11 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                     billNo:    `INV-${thai}-${String(invoices.length + 1).padStart(4,'0')}`,
                     date:      `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${thai}`,
                     time:      `${pad(now.getHours())}:${pad(now.getMinutes())}`,
-                    cashier:   cashierName,
-                    payMethod: splitPayments.map(sp => sp.label).join(' + '),
+                    issuedAt:  now.getTime(),
+                    // ว่าง → เอกสารพิมพ์ใช้คำว่า "แคชเชียร์" ตามภาษาใบเสร็จ
+                    cashier:   currentUser?.name ?? '',
+                    payMethods: splitPayments.map(sp => ({ id: sp.method, label: sp.label })),
+                    payMethod: splitPayments.map(sp => payMethodLabel(sp.method, 'th', sp.label)).join(' + '),
                     items:     items.map(i => {
                       const usePrice = customPrices[i.product.id] ?? i.unitPrice;
                       const discVal  = itemDiscounts[i.product.id] ?? 0;
@@ -2743,12 +2752,12 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                   const walletSplit = splitPayments.find(sp => sp.method === 'wallet');
                   if (walletSplit) {
                     if (!selectedMember) {
-                      alert('กรุณาเลือกสมาชิกก่อนชำระผ่าน Wallet');
+                      alert(t('payment.walletNeedMember'));
                       return;
                     }
                     const walletBal = getWalletBalance(selectedMember.id);
                     if (walletBal < walletSplit.amount) {
-                      alert(`ยอดเงินใน Wallet ไม่เพียงพอ (คงเหลือ ฿${walletBal.toLocaleString()}, ต้องชำระ ฿${walletSplit.amount.toLocaleString()})`);
+                      alert(t('payment.walletInsufficient', { balance: f.number(walletBal, 2).replace(/\.00$/, ''), amount: f.number(walletSplit.amount, 2).replace(/\.00$/, '') }));
                       return;
                     }
                     walletPay(selectedMember.id, walletSplit.amount, newInvoice.billNo, 'แคชเชียร์');
@@ -2774,7 +2783,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                   const cashAmount = splitPayments.filter(sp => sp.method === 'cash').reduce((s, p) => s + p.amount, 0);
                   if (cashAmount > 0) shift.addCashSale(cashAmount);
                   shift.addBill();
-                  logAction('POS', 'ขายสินค้า', `บิล ${newInvoice.billNo} ยอด ฿${grandTotal.toLocaleString()} ชำระ: ${splitPayments.map(sp => `${sp.label} ฿${sp.amount}`).join(', ')}`, { billNo: newInvoice.billNo, grandTotal, payments: splitPayments });
+                  logAction('POS', 'ขายสินค้า', `บิล ${newInvoice.billNo} ยอด ฿${grandTotal.toLocaleString()} ชำระ: ${splitPayments.map(sp => `${payMethodLabel(sp.method, 'th', sp.label)} ฿${sp.amount}`).join(', ')}`, { billNo: newInvoice.billNo, grandTotal, payments: splitPayments });
                   useSaleHistoryStore.getState().addSale({
                     id: `sale_${Date.now()}`,
                     saleNo: newInvoice.billNo,
@@ -2785,7 +2794,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                     serviceCharge: 0, vatAmount: vat, grandTotal,
                     receivedAmount: splitPayments.reduce((s, p) => s + p.amount, 0),
                     changeAmount: Math.max(0, splitPayments.reduce((s, p) => s + p.amount, 0) - grandTotal),
-                    cashierName, posName: 'POS 1',
+                    cashierName: cashierNameData, posName: 'POS 1',
                     memberId: selectedMember?.id, memberName: selectedMember?.name,
                     memberTypeId: memberType?.id, memberTypeName: memberType?.name,
                     pointsEarned: pointsToEarn,
@@ -2812,7 +2821,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                   resetCrmState();
                 }}
               >
-                <Text style={m.okText}>ยืนยัน & พิมพ์บิล</Text>
+                <Text style={m.okText}>{t('payment.confirmPrint')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2833,7 +2842,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
           <View style={s.displayPanel}>
             {/* Header bar — เหลือแค่ชื่อ + ปุ่มเปิดหน้าต่างใหม่ + ปิด */}
             <View style={s.displayModeBar}>
-              <Text style={s.displayModeTitle}>จอที่ 2 — Customer Display</Text>
+              <Text style={s.displayModeTitle}>{t('pos.display.title')}</Text>
               {/* ปุ่มเปิด URL แยก (สำหรับลาก window ไปจอ HDMI) */}
               {Platform.OS === 'web' && (
                 <TouchableOpacity
@@ -2848,10 +2857,10 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                   }}
                 >
                   <Ionicons name="tv-outline" size={14} color="#fff" />
-                  <Text style={[s.displayModeBtnText, { color: '#fff' }]}>เปิดหน้าต่างแยก</Text>
+                  <Text style={[s.displayModeBtnText, { color: '#fff' }]}>{t('pos.display.openWindow')}</Text>
                 </TouchableOpacity>
               )}
-              <TouchableOpacity style={s.displayCloseBtn} onPress={() => setShowDisplay(false)}>
+              <TouchableOpacity style={s.displayCloseBtn} onPress={() => setShowDisplay(false)} accessibilityLabel={t('common.close')}>
                 <Ionicons name="close" size={18} color={WebColors.textSecondary} />
               </TouchableOpacity>
             </View>
@@ -2895,20 +2904,20 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
       <Modal visible={showMemberModal} transparent animationType="fade">
         <View style={m.overlay}>
           <View style={[m.box, { width: 520, maxHeight: 620 }]}>
-            <Text style={m.title}>เลือกสมาชิก</Text>
+            <Text style={m.title}>{t('pos.member.select')}</Text>
             <View style={s.couponRow}>
               <TextInput
                 style={[s.couponInput, { flex: 1 }]}
                 value={memberSearch}
                 onChangeText={setMemberSearch}
-                placeholder="🔍 ค้นหาชื่อ / เบอร์โทร / เลขสมาชิก"
+                placeholder={`🔍 ${t('pos.member.searchPlaceholder')}`}
                 placeholderTextColor={WebColors.textDisabled}
                 autoFocus
               />
             </View>
             <ScrollView style={{ maxHeight: 440, marginTop: 8 }} showsVerticalScrollIndicator={false}>
               {memberSearchResults.length === 0 ? (
-                <Text style={{ textAlign: 'center', color: WebColors.textSecondary, padding: 20 }}>ไม่พบสมาชิก</Text>
+                <Text style={{ textAlign: 'center', color: WebColors.textSecondary, padding: 20 }}>{t('pos.member.notFound')}</Text>
               ) : (
                 memberSearchResults.map((mem: Member) => {
                   // คำนวณคูปองที่สมาชิกใช้ได้
@@ -2939,10 +2948,10 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                         <Text style={s.memberListSub}>{mem.phone} · {mem.memberNo}</Text>
                         {/* ข้อมูลเพิ่มเติม */}
                         <View style={{ flexDirection: 'row', gap: 10, marginTop: 3 }}>
-                          <Text style={{ fontSize: 12, color: '#F59E0B' }}>⭐ {mem.pointBalance} แต้ม</Text>
-                          <Text style={{ fontSize: 12, color: Colors.textSecondary }}>💰 ซื้อสะสม ฿{mem.totalSpent.toLocaleString()}</Text>
+                          <Text style={{ fontSize: 12, color: '#F59E0B' }}>⭐ {t('pos.member.points', { points: mem.pointBalance })}</Text>
+                          <Text style={{ fontSize: 12, color: Colors.textSecondary }}>💰 {t('pos.member.totalSpent', { amount: f.number(mem.totalSpent) })}</Text>
                           {mem.lastPurchaseDate && (
-                            <Text style={{ fontSize: 12, color: Colors.textMuted }}>📅 ซื้อล่าสุด {new Date(mem.lastPurchaseDate).toLocaleDateString('th-TH')}</Text>
+                            <Text style={{ fontSize: 12, color: Colors.textMuted }}>📅 {t('pos.member.lastPurchase', { date: f.date(mem.lastPurchaseDate) })}</Text>
                           )}
                         </View>
                         {/* คูปองที่ใช้ได้ */}
@@ -2955,7 +2964,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                               </View>
                             ))}
                             {availableCoupons.length > 3 && (
-                              <Text style={{ fontSize: 12, color: Colors.textSecondary }}>+{availableCoupons.length - 3} อื่นๆ</Text>
+                              <Text style={{ fontSize: 12, color: Colors.textSecondary }}>{t('pos.member.moreCoupons', { count: availableCoupons.length - 3 })}</Text>
                             )}
                           </View>
                         )}
@@ -2966,7 +2975,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
               )}
             </ScrollView>
             <TouchableOpacity style={m.cancelBtn} onPress={() => setShowMemberModal(false)}>
-              <Text style={m.cancelText}>ปิด</Text>
+              <Text style={m.cancelText}>{t('common.close')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -2976,38 +2985,38 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
       <Modal visible={showPointRedeem} transparent animationType="fade">
         <View style={m.overlay}>
           <View style={[m.box, { width: 360 }]}>
-            <Text style={m.title}>ใช้คะแนนแลกส่วนลด</Text>
+            <Text style={m.title}>{t('pos.points.title')}</Text>
             {selectedMember && (
               <>
-                <Text style={m.sub}>คะแนนคงเหลือ: {selectedMember.pointBalance} คะแนน</Text>
+                <Text style={m.sub}>{t('pos.points.balance', { points: selectedMember.pointBalance })}</Text>
                 <Text style={{ fontSize: 13, color: WebColors.textSecondary, marginTop: -4, marginBottom: 8 }}>
-                  อัตราแลก: 1 คะแนน = {pointConfig.redeemRate} บาท | ขั้นต่ำ {pointConfig.minRedeemPoints} คะแนน
+                  {t('pos.points.rate', { rate: pointConfig.redeemRate, min: pointConfig.minRedeemPoints })}
                 </Text>
                 <TextInput
                   style={m.input}
                   value={pointsToUse}
                   onChangeText={setPointsToUse}
-                  placeholder={`จำนวนคะแนน (สูงสุด ${selectedMember.pointBalance})`}
+                  placeholder={t('pos.points.placeholder', { max: selectedMember.pointBalance })}
                   placeholderTextColor={WebColors.textDisabled}
                   keyboardType="number-pad"
                 />
                 {parseInt(pointsToUse) > 0 && (
                   <Text style={{ fontSize: 12, color: '#F59E0B', fontWeight: '600', marginTop: 4 }}>
-                    = ส่วนลด ฿{fmt((parseInt(pointsToUse) || 0) * pointConfig.redeemRate)}
+                    {t('pos.points.calc', { amount: fmt((parseInt(pointsToUse) || 0) * pointConfig.redeemRate) })}
                   </Text>
                 )}
               </>
             )}
             <View style={m.actions}>
               <TouchableOpacity style={m.cancelBtn} onPress={() => setShowPointRedeem(false)}>
-                <Text style={m.cancelText}>ยกเลิก</Text>
+                <Text style={m.cancelText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[m.okBtn, (!(parseInt(pointsToUse) > 0) || (parseInt(pointsToUse) > (selectedMember?.pointBalance ?? 0))) && m.okBtnDisabled]}
                 disabled={!(parseInt(pointsToUse) > 0) || (parseInt(pointsToUse) > (selectedMember?.pointBalance ?? 0)) || (parseInt(pointsToUse) < pointConfig.minRedeemPoints)}
                 onPress={handleApplyPoints}
               >
-                <Text style={m.okText}>ยืนยัน</Text>
+                <Text style={m.okText}>{t('common.confirm')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -3026,8 +3035,8 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
               <View style={{ flex: 1 }}>
                 <Text style={iv.modalTitle}>{selectedInv?.billNo}</Text>
                 <Text style={iv.modalSub}>
-                  {selectedInv?.date}  {selectedInv?.time} น. • {selectedInv?.cashier}
-                  {selectedInv?.refBillNo ? `  •  อ้างอิง: ${selectedInv.refBillNo}` : ''}
+                  {selectedInv?.issuedAt ? f.date(selectedInv.issuedAt) : selectedInv?.date}  {t('pos.invList.timeValue', { time: selectedInv?.issuedAt ? f.time(selectedInv.issuedAt) : (selectedInv?.time ?? '') })} • {selectedInv?.cashier}
+                  {selectedInv?.refBillNo ? `  •  ${t('pos.invList.refPrefix')} ${selectedInv.refBillNo}` : ''}
                 </Text>
               </View>
               <View style={iv.modalBadges}>
@@ -3035,10 +3044,10 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                 {(() => {
                   const st = selectedInv?.status;
                   const cfg =
-                    st === 'paid'      ? { bg: '#D1FAE5', dot: '#16A34A', label: 'ชำระแล้ว'       } :
-                    st === 'full_tax'  ? { bg: '#EDE9FE', dot: '#7C3AED', label: 'ใบกำกับภาษีเต็ม' } :
-                    st === 'void_note' ? { bg: '#FEF3C7', dot: '#F59E0B', label: 'ใบยกเลิก'        } :
-                                        { bg: '#FEE2E2', dot: WebColors.danger, label: 'ยกเลิกแล้ว' };
+                    st === 'paid'      ? { bg: '#D1FAE5', dot: '#16A34A', label: t('pos.invDetail.statusPaid')     } :
+                    st === 'full_tax'  ? { bg: '#EDE9FE', dot: '#7C3AED', label: t('pos.inv.taxFullShort')         } :
+                    st === 'void_note' ? { bg: '#FEF3C7', dot: '#F59E0B', label: t('pos.invList.statusVoidNote')   } :
+                                        { bg: '#FEE2E2', dot: WebColors.danger, label: t('pos.invDetail.statusCancelled') };
                   return (
                     <View style={[iv.badge, { backgroundColor: cfg.bg }]}>
                       <View style={[iv.badgeDot, { backgroundColor: cfg.dot }]} />
@@ -3048,10 +3057,10 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                 })()}
                 <View style={iv.payBadge}>
                   <Ionicons name="card-outline" size={12} color={WebColors.primary} />
-                  <Text style={iv.payBadgeText}>{selectedInv?.payMethod}</Text>
+                  <Text style={iv.payBadgeText}>{selectedInv ? invPayLabel(selectedInv, uiLang) : ''}</Text>
                 </View>
               </View>
-              <TouchableOpacity style={iv.closeBtn} onPress={() => setSelectedInv(null)}>
+              <TouchableOpacity style={iv.closeBtn} onPress={() => setSelectedInv(null)} accessibilityLabel={t('common.close')}>
                 <Ionicons name="close" size={18} color={WebColors.textSecondary} />
               </TouchableOpacity>
             </View>
@@ -3107,6 +3116,8 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                   time:       `${pad(now.getHours())}:${pad(now.getMinutes())}`,
                   cashier:    selectedInv.cashier,
                   payMethod:  selectedInv.payMethod,
+                  payMethods: selectedInv.payMethods,
+                  issuedAt:   now.getTime(),
                   status:     'full_tax',
                   refBillNo:  selectedInv.billNo,
                   buyerInfo:  {
@@ -3164,7 +3175,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
             />
           )}
           <Text style={{ color: 'rgba(255,255,255,0.5)', marginTop: 12, fontSize: 12 }}>
-            แตะที่ใดก็ได้เพื่อปิด
+            {t('pos.inv.tapToClose')}
           </Text>
         </TouchableOpacity>
       </Modal>
@@ -3173,32 +3184,32 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
       <Modal visible={showCancelModal} transparent animationType="fade">
         <View style={m.overlay}>
           <View style={[m.box, { width: 400 }]}>
-            <Text style={[m.title, { color: WebColors.danger }]}>ยกเลิกบิล</Text>
+            <Text style={[m.title, { color: WebColors.danger }]}>{t('pos.inv.cancelBill')}</Text>
             <View style={iv.cancelWarn}>
               <Ionicons name="warning-outline" size={18} color="#F97316" />
               <Text style={iv.cancelWarnText}>
-                การยกเลิกบิล {cancelTarget?.billNo} ไม่สามารถย้อนกลับได้
+                {t('pos.voidBill.warn', { billNo: cancelTarget?.billNo ?? '' })}
               </Text>
             </View>
-            <Text style={m.sub}>เหตุผลที่ยกเลิก *</Text>
+            <Text style={m.sub}>{t('pos.voidBill.reasonLabel')}</Text>
             <TextInput
               style={[m.input, { height: 80, textAlignVertical: 'top', paddingTop: 10, textAlign: 'left' }]}
               value={cancelReason}
               onChangeText={setCancelReason}
-              placeholder="ระบุเหตุผล เช่น ลูกค้าเปลี่ยนใจ, บิลผิด..."
+              placeholder={t('pos.voidBill.reasonPlaceholder')}
               placeholderTextColor={WebColors.textDisabled}
               multiline
             />
             <View style={m.actions}>
               <TouchableOpacity style={m.cancelBtn} onPress={() => setShowCancelModal(false)}>
-                <Text style={m.cancelText}>ยกเลิก</Text>
+                <Text style={m.cancelText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[m.okBtn, { backgroundColor: WebColors.danger }, !cancelReason.trim() && { backgroundColor: '#FCA5A5' }]}
                 disabled={!cancelReason.trim()}
                 onPress={handleCancelBill}
               >
-                <Text style={m.okText}>ยืนยันยกเลิกบิล</Text>
+                <Text style={m.okText}>{t('pos.voidBill.confirm')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -3209,7 +3220,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
       <Modal visible={!!uomPickerProduct} transparent animationType="fade">
         <View style={m.overlay}>
           <View style={[m.box, { width: 360 }]}>
-            <Text style={m.title}>เลือกหน่วย</Text>
+            <Text style={m.title}>{t('pos.uom.title')}</Text>
             <Text style={m.sub}>{uomPickerProduct?.name?.replace(/ \(.*\)/, '')}</Text>
             {(() => {
               const baseId = uomPickerProduct?.id?.split('_')[0];
@@ -3225,7 +3236,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                     <View>
                       <Text style={{ fontSize: 12, fontWeight: '700', color: WebColors.text }}>{uom.unit}</Text>
                       <Text style={{ fontSize: 13, color: WebColors.textSecondary }}>
-                        {uom.ratio > 1 ? `1 ${uom.unit} = ${uom.ratio} ${master.unit}` : 'หน่วยพื้นฐาน'}
+                        {uom.ratio > 1 ? `1 ${uom.unit} = ${uom.ratio} ${master.unit}` : t('pos.uom.base')}
                       </Text>
                     </View>
                     <Text style={{ fontSize: 13, fontWeight: '800', color: WebColors.primary }}>฿{uom.salePrice}</Text>
@@ -3234,7 +3245,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
               });
             })()}
             <TouchableOpacity style={m.cancelBtn} onPress={() => setUomPickerProduct(null)}>
-              <Text style={m.cancelText}>ยกเลิก</Text>
+              <Text style={m.cancelText}>{t('common.cancel')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -3244,7 +3255,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
       <Modal visible={!!variantPickerMaster} transparent animationType="fade">
         <View style={m.overlay}>
           <View style={[m.box, { width: 380 }]}>
-            <Text style={m.title}>เลือกตัวเลือกสินค้า</Text>
+            <Text style={m.title}>{t('pos.variant.title')}</Text>
             <Text style={m.sub}>{variantPickerMaster?.name}</Text>
             {(() => {
               const master = variantPickerMaster;
@@ -3255,7 +3266,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                 return (
                   <View style={{ alignItems: 'center', paddingVertical: 16, gap: 8 }}>
                     <Ionicons name="cube-outline" size={40} color={WebColors.border} />
-                    <Text style={{ fontSize: 12, color: WebColors.textSecondary }}>ไม่มีข้อมูลตัวเลือก</Text>
+                    <Text style={{ fontSize: 12, color: WebColors.textSecondary }}>{t('pos.variant.noOptions')}</Text>
                   </View>
                 );
               }
@@ -3299,18 +3310,18 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                   {allChosen && !matched && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FEF2F2', borderRadius: 12, padding: 12 }}>
                       <Ionicons name="alert-circle-outline" size={18} color={WebColors.danger} />
-                      <Text style={{ fontSize: 12, color: WebColors.danger, flex: 1 }}>ไม่มีสินค้าตามตัวเลือกที่เลือก</Text>
+                      <Text style={{ fontSize: 12, color: WebColors.danger, flex: 1 }}>{t('pos.variant.noMatch')}</Text>
                     </View>
                   )}
                   {matched && (
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 }}>
-                      <Text style={{ fontSize: 12, color: WebColors.textSecondary }}>ราคา</Text>
+                      <Text style={{ fontSize: 12, color: WebColors.textSecondary }}>{t('pos.variant.price')}</Text>
                       <Text style={{ fontSize: 18, fontWeight: '900', color: WebColors.primary }}>฿{fmt(previewPrice)}</Text>
                     </View>
                   )}
                   <View style={m.actions}>
                     <TouchableOpacity style={m.cancelBtn} onPress={() => { setVariantPickerMaster(null); setVariantSelected({}); }}>
-                      <Text style={m.cancelText}>ยกเลิก</Text>
+                      <Text style={m.cancelText}>{t('common.cancel')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[m.okBtn, !matched && m.okBtnDisabled]}
@@ -3322,7 +3333,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                         setVariantSelected({});
                       }}
                     >
-                      <Text style={m.okText}>เพิ่มลงบิล</Text>
+                      <Text style={m.okText}>{t('pos.variant.addToBill')}</Text>
                     </TouchableOpacity>
                   </View>
                 </>
@@ -3336,14 +3347,14 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
       <Modal visible={showPinModal} transparent animationType="fade">
         <View style={m.overlay}>
           <View style={[m.box, { width: 300 }]}>
-            <Text style={m.title}>ใส่ PIN เพื่อยืนยัน</Text>
+            <Text style={m.title}>{t('pos.pin.title')}</Text>
             <Text style={{ fontSize: 12, color: Colors.textSecondary, textAlign: 'center', marginBottom: 8 }}>
               {pinAction ? POS_ACTION_LABELS[pinAction] : ''}
             </Text>
             <TextInput
               style={[m.input, { textAlign: 'center', fontSize: 24, fontWeight: '800', letterSpacing: 8 }]}
               value={pinInput}
-              onChangeText={t => { if (t.length <= 4) setPinInput(t); }}
+              onChangeText={v => { if (v.length <= 4) setPinInput(v); }}
               keyboardType="numeric"
               placeholder="● ● ● ●"
               placeholderTextColor="#D1D5DB"
@@ -3354,10 +3365,10 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
             />
             <View style={m.actions}>
               <TouchableOpacity style={m.cancelBtn} onPress={() => { setShowPinModal(false); setPinInput(''); }}>
-                <Text style={m.cancelText}>ยกเลิก</Text>
+                <Text style={m.cancelText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[m.okBtn, pinInput.length < 4 && m.okBtnDisabled]} disabled={pinInput.length < 4} onPress={handlePinSubmit}>
-                <Text style={m.okText}>ยืนยัน</Text>
+                <Text style={m.okText}>{t('common.confirm')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -3368,29 +3379,29 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
       <Modal visible={showTopUpModal} transparent animationType="fade">
         <View style={m.overlay}>
           <View style={[m.box, { width: 340 }]}>
-            <Text style={m.title}>เติมเงิน Wallet</Text>
+            <Text style={m.title}>{t('pos.topup.title')}</Text>
             {selectedMember && (
               <>
-                <Text style={m.sub}>สมาชิก: {selectedMember.name}</Text>
-                <Text style={{ fontSize: 12, color: '#16A34A', marginBottom: 8 }}>ยอดคงเหลือ: ฿{getWalletBalance(selectedMember.id).toLocaleString()}</Text>
+                <Text style={m.sub}>{t('pos.topup.member', { name: selectedMember.name })}</Text>
+                <Text style={{ fontSize: 12, color: '#16A34A', marginBottom: 8 }}>{t('pos.topup.balance', { amount: f.number(getWalletBalance(selectedMember.id)) })}</Text>
                 <TextInput
                   style={m.input}
                   value={topUpAmount}
                   onChangeText={setTopUpAmount}
-                  placeholder="จำนวนเงินที่เติม (บาท)"
+                  placeholder={t('pos.topup.amountPlaceholder')}
                   placeholderTextColor={WebColors.textDisabled}
                   keyboardType="number-pad"
                 />
                 {parseInt(topUpAmount) > 0 && (
                   <Text style={{ fontSize: 12, color: '#16A34A', marginTop: 4 }}>
-                    ยอดหลังเติม: ฿{(getWalletBalance(selectedMember.id) + (parseInt(topUpAmount) || 0)).toLocaleString()}
+                    {t('pos.topup.after', { amount: f.number(getWalletBalance(selectedMember.id) + (parseInt(topUpAmount) || 0)) })}
                   </Text>
                 )}
               </>
             )}
             <View style={m.actions}>
               <TouchableOpacity style={m.cancelBtn} onPress={() => { setShowTopUpModal(false); setTopUpAmount(''); }}>
-                <Text style={m.cancelText}>ยกเลิก</Text>
+                <Text style={m.cancelText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[m.okBtn, !(parseInt(topUpAmount) > 0) && m.okBtnDisabled]}
@@ -3405,32 +3416,35 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                     // พิมพ์ใบเสร็จเติมเงิน
                     if (Platform.OS === 'web') {
                       const now = new Date();
-                      const receiptHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>ใบเสร็จเติมเงิน</title>
+                      // ใบเสร็จเติมเงินใช้ "ภาษาใบเสร็จ" (แยกจากภาษา UI)
+                      const rl = useReceiptStore.getState().config.receiptLanguage ?? 'th';
+                      const tr = (key: Parameters<typeof translate>[1]) => translate(rl, key);
+                      const receiptHtml = `<!DOCTYPE html><html lang="${rl}"><head><meta charset="UTF-8"/><title>${tr('receipt.topup.title')}</title>
 <style>body{font-family:'Sarabun',sans-serif;font-size:14px;max-width:300px;margin:20px auto;padding:20px}
 .center{text-align:center}.line{border-top:1px dashed #000;margin:10px 0}
 .row{display:flex;justify-content:space-between;margin:4px 0}.bold{font-weight:700}
 .big{font-size:20px;font-weight:800}</style></head><body>
-<div class="center"><h3>ใบเสร็จเติมเงิน Wallet</h3>
+<div class="center"><h3>${tr('receipt.topup.title')}</h3>
 <p>${useStoreConfigStore?.getState?.()?.storeName || 'Xcellence POS'}</p></div>
 <div class="line"></div>
-<div class="row"><span>วันที่:</span><span>${now.toLocaleDateString('th-TH')} ${now.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})}</span></div>
-<div class="row"><span>สมาชิก:</span><span>${selectedMember.name}</span></div>
-<div class="row"><span>เลขสมาชิก:</span><span>${selectedMember.memberNo}</span></div>
+<div class="row"><span>${tr('receipt.caption.date')}:</span><span>${receiptDateTime(now, rl)}</span></div>
+<div class="row"><span>${tr('receipt.topup.member')}:</span><span>${selectedMember.name}</span></div>
+<div class="row"><span>${tr('receipt.topup.memberNo')}:</span><span>${selectedMember.memberNo}</span></div>
 <div class="line"></div>
-<div class="row bold"><span>เติมเงิน:</span><span class="big">฿${amt.toLocaleString()}</span></div>
-<div class="row"><span>ยอดคงเหลือ:</span><span>฿${getWalletBalance(selectedMember.id).toLocaleString()}</span></div>
+<div class="row bold"><span>${tr('receipt.topup.amount')}:</span><span class="big">${formatMoney(amt, rl)}</span></div>
+<div class="row"><span>${tr('receipt.topup.balance')}:</span><span>${formatMoney(getWalletBalance(selectedMember.id), rl)}</span></div>
 <div class="line"></div>
-<div class="center"><p>ขอบคุณที่ใช้บริการ</p></div>
+<div class="center"><p>${tr('receipt.thankYou')}</p></div>
 </body></html>`;
                       const w = window.open('', '_blank', 'width=350,height=500');
                       if (w) { w.document.write(receiptHtml); w.document.close(); setTimeout(() => w.print(), 400); }
                     }
 
-                    alert(`เติมเงิน ฿${amt.toLocaleString()} สำเร็จ!\nยอดคงเหลือ: ฿${getWalletBalance(selectedMember.id).toLocaleString()}`);
+                    alert(t('pos.topup.success', { amount: f.number(amt), balance: f.number(getWalletBalance(selectedMember.id)) }));
                   }
                 }}
               >
-                <Text style={m.okText}>เติมเงิน</Text>
+                <Text style={m.okText}>{t('pos.topup.submit')}</Text>
               </TouchableOpacity>
             </View>
           </View>
