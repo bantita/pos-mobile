@@ -44,6 +44,8 @@ export const LanguageToggle: React.FC<LanguageToggleProps> = ({
             activeOpacity={0.8}
             accessibilityRole="button"
             accessibilityState={{ selected }}
+            // native ไม่อ่าน label ของ View ครอบ → ใส่บริบทไว้ในแต่ละปุ่มด้วย
+            accessibilityLabel={accessibilityLabel ? `${accessibilityLabel}: ${t(labelKey)}` : undefined}
             style={[styles.segment, styles[`size_${size}`], selected && styles.segmentSelected]}
           >
             <Text style={[styles.text, selected && styles.textSelected]}>{t(labelKey)}</Text>

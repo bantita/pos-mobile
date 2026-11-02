@@ -11,6 +11,8 @@ import { Space, Radius, Font } from '../../design-system/tokens';
 import { useReceiptStore } from '../../store/receiptStore';
 import { LanguageToggle } from '../../components/ui/LanguageToggle';
 import { useT } from '../../i18n/useT';
+import { translate } from '../../i18n/translate';
+import { DEFAULT_FOOTER_TH } from '../../i18n/labels';
 import type { Language } from '../../i18n/types';
 
 export const WebDocumentSettingsScreen: React.FC = () => {
@@ -107,6 +109,10 @@ export const WebDocumentSettingsScreen: React.FC = () => {
               multiline={f.multiline}
               numberOfLines={f.multiline ? 3 : 1}
             />
+            {/* ค่า seed ไทย + ภาษาใบเสร็จ EN → แจ้งว่าจะพิมพ์ข้อความขอบคุณภาษาอังกฤษให้อัตโนมัติ */}
+            {f.set === setFooterText && receiptLanguage === 'en' && footerText.trim() === DEFAULT_FOOTER_TH && (
+              <Text style={st.hint}>{t('settings.footerSeedHint', { text: translate('en', 'receipt.thankYou') })}</Text>
+            )}
           </View>
         ))}
 

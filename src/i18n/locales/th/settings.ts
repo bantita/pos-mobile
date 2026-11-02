@@ -6,4 +6,5 @@ export const settings = {
   uiLanguage: 'ภาษาที่แสดงผล',
   receiptLanguage: 'ภาษาใบเสร็จ / Receipt language',
   receiptLanguageHint: 'ใบกำกับภาษีตามกฎหมายควรออกเป็นภาษาไทย',
+  footerSeedHint: 'ข้อความเริ่มต้น: ใบเสร็จภาษาอังกฤษจะพิมพ์เป็น "{text}" โดยอัตโนมัติ',
 } as const;

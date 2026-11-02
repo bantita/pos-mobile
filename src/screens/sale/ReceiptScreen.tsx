@@ -16,7 +16,7 @@ import { Typography } from '../../constants/typography';
 import { Spacing, BorderRadius } from '../../constants/spacing';
 import { useT, useReceiptT, payMethodLabel, ORDER_TYPE_KEYS, type UiKey } from '../../i18n';
 import { translate } from '../../i18n/translate';
-import { receiptCashier } from '../../utils/receiptTemplate';
+import { receiptCashier, receiptDateTime } from '../../utils/receiptTemplate';
 
 interface ReceiptScreenProps {
   saleNo: string;
@@ -129,7 +129,7 @@ export const ReceiptScreen: React.FC<ReceiptScreenProps> = ({
           <View style={styles.receiptInfo}>
             {[
               { label: rt('receipt.paper.receiptNo'), value: saleNo },
-              { label: rt('receipt.caption.date'), value: fmt.dateTime(now) },
+              { label: rt('receipt.caption.date'), value: receiptDateTime(now, rl) },
               { label: rt('receipt.caption.cashier'), value: receiptCashier(cashierName, rl) },
               { label: rt('receipt.paper.posName'), value: posName },
             ].map((row, i) => (

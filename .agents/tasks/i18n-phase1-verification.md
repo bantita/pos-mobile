@@ -1,6 +1,6 @@
 # i18n Phase 1 — Verification
 
-Branch `feat/i18n-phase1` in worktree `d:\pos-mobile\.worktrees\i18n`, based on `main` @ `36e25a3`. Nothing has been pushed.
+Branch `feat/i18n-phase1` in worktree `d:\pos-mobile\.worktrees\i18n`, originally based on `main` @ `36e25a3`; `main` @ `d65c8cc` (customer-display / ad-settings workflow + cart-scroll fix) is merged in, so the current base is `d65c8cc`. Nothing has been pushed.
 
 | Commit | Feature |
 |---|---|
@@ -51,8 +51,8 @@ These are leaf keys in the th source of truth. The en files have exactly the sam
 | `payment` | 65 | pay methods, web payment modal, mobile PaymentScreen (`payment.mobile.*`), member-type discount |
 | `receipt` | 77 | **printed/paper text only** (receipt language): captions, totals, tax invoice, top-up slip, `receipt.paper.*` |
 | `receiptScreen` | 30 | UI chrome of the receipt / tax-invoice / cancel-document screens |
-| `settings` | 4 | language selectors and the receipt-language hint |
-| **Total** | **554** | |
+| `settings` | 5 | language selectors, the receipt-language hint and the footer-seed hint |
+| **Total** | **555** | |
 
 Unused-key scan (integration pass): every key is referenced except six `common.*` seeds that the plan asked for up front (`loading`, `error`, `errorTitle`, `noData`, `retry`, `search`) and are kept for phase 2. The two dead FEAT-001 placeholders `receiptScreen.print` / `receiptScreen.share` were removed.
 
@@ -81,12 +81,14 @@ The remaining work is listed in `.agents/tasks/i18n-phase2-inventory.md` (217 fi
 
 ## 5. Lint and test results vs baseline
 
-| Check | Baseline (`baseline.md`) | Now (after cross-FEAT integration fix) |
+| Check | Baseline (`baseline.md`) | Now (after merging `main` @ `d65c8cc` + review fixes) |
 |---|---|---|
 | `npm run lint` (`tsc --noEmit`) | 13 errors in 6 files | **13 errors**, same 6 files (BranchSelector ×3, DatePicker ×4, PermissionMatrixScreen ×1, RoleManageScreen ×2, WebUserStaffScreen ×2, errorTracking ×1). **0 in touched files.** |
-| `npm test` (`vitest run`) | 214 pass + 3 suite-load failures | **301 pass**, 0 failing tests. The 3 suite-load failures are the same known ones: `src/engine/__tests__/engine.test.ts`, `src/services/sync/SyncService.test.ts` and `src/store/__tests__/branchPermissionStore.test.ts`, which fail on react-native `Libraries/Image/Image` resolution. |
+| `npm test` (`vitest run`) | 214 pass + 3 suite-load failures | **353 pass** (301 from this branch + 52 from main's customer-display / ad tests), 29 test files pass, 0 failing tests. The 3 suite-load failures are the same known ones: `src/engine/__tests__/engine.test.ts`, `src/services/sync/SyncService.test.ts` and `src/store/__tests__/branchPermissionStore.test.ts`, which fail on react-native `Libraries/Image/Image` resolution. |
 
 Cross-FEAT integration pass (re-run after the fix commit): lint 13 errors in the same 6 baseline files, 0 in touched files; tests 301 passed, 26 test files passed, only the 3 known suite-load failures. Fixes: the WebPOSScreen wallet top-up slip helper `tr` now takes `ReceiptKey` (it was the generic `TranslationKey`), so a UI key can't leak onto the printed slip, and the two unused `receiptScreen` keys were dropped. Remaining Thai in the phase-1 files falls into the categories listed in §3 and in the FEAT notes: comments, mock/shop data, `logAction`, persisted actor strings and the `฿` glyph. It also covers the parts that are phase 2 by design: the other SettingsHub rows, the WebDocumentSettings fields, the designer chrome and the rest of WebSimpleScreens. `git diff --name-only main...HEAD` touches no forbidden file.
+
+Review-fix pass (after `review.md`, re-run on the merged tree): lint 13 errors in the same 6 baseline files, 0 in touched files; tests 353 passed, only the 3 known suite-load failures. Fixes: (1) merged `main` @ `d65c8cc`; the `WebPOSScreen.tsx` conflict was resolved by keeping main's payment-modal cancel (`setDisplayMode('idle')` + `broadcastDisplay({ mode: 'idle' })`) with this branch's `t('common.cancel')`; main's `effectiveDisplayMode`, `successDurationSec * 1000` and cart-scroll styles merged cleanly and are unchanged vs main. (2) Mobile `ReceiptScreen` / `TaxInvoiceScreen` paper dates use `receiptDateTime` so paper = print. (3) `WebDocumentSettingsScreen` shows a hint under the footer field when the receipt language is EN and the footer is still the Thai seed (`settings.footerSeedHint`). (4) `LanguageToggle` segments carry `"<accessibilityLabel>: TH/EN"` so the two SettingsHub toggles are distinguishable on native screen readers.
 
 The 87 new tests: FEAT-001 added 45 (labels 15, translate 10, format 9, parity 4, languageStore 6, useT 1) and FEAT-002 added 42 (posReceiptData, taxInvoiceHtml, receiptTemplate, receiptStore migration, memberTypeBenefits). FEAT-003/004/005 added no tests; their screen logic goes through the tested pure modules. No previously passing test fails.
 
@@ -97,7 +99,7 @@ These are the deliberate changes to Thai output:
   - Mobile PaymentScreen buttons/split list and ReceiptScreen pay rows: `โอนเงิน` → `โอน`, `บัตรเครดิต` → `บัตร`. The ewallet button keeps `E-Wallet / อื่นๆ` through `payment.ewalletOther`.
   - Web new-sale path: `QR` → `QR Code`, which matches what `invoicesFromHistory` already printed.
 - **Designer sample `dateTime`** gains ` น.` (`01/01/2567 10:30 น.`), and an empty footer now renders the thank-you line, so preview = print. An empty `shopBranch` in the sample shows `สำนักงานใหญ่`.
-- **Tax-invoice HTML date** changes from `toLocaleString('th-TH')` to `dd/MM/(BE) HH:mm น.`. On-screen dates in ReceiptScreen, TaxInvoiceScreen and HoldBillScreen also switch from the engine-dependent `toLocale*` to the deterministic `dd/MM/(BE) HH:mm`.
+- **Tax-invoice HTML date** changes from `toLocaleString('th-TH')` to `dd/MM/(BE) HH:mm น.`. On-screen paper dates in ReceiptScreen and TaxInvoiceScreen now use `receiptDateTime(…, receiptLang)` (th: `dd/MM/(BE) HH:mm น.`, same string as print). HoldBillScreen switches from the engine-dependent `toLocale*` to the deterministic `dd/MM/(BE) HH:mm`.
 - **Mobile ReceiptScreen footer** becomes `ขอบคุณที่ใช้บริการ 🙏`. It now uses the shared `receipt.thankYou`, which adds the emoji.
 - **DocumentCancellationScreen doc type** for `receipt` changes from `ใบเสร็จ` to `ใบเสร็จรับเงิน` (`common.docType.receipt`). `tax_invoice` still shows `ใบกำกับภาษี`.
 - **Mobile point balances** use digit grouping (`1,234 คะแนน`) through `f.number`.

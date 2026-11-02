@@ -19,6 +19,7 @@ import { Typography } from '../../constants/typography';
 import { Spacing, BorderRadius } from '../../constants/spacing';
 import { useT, useReceiptT } from '../../i18n';
 import { buildTaxInvoiceHtml } from '../../utils/taxInvoiceHtml';
+import { receiptDateTime } from '../../utils/receiptTemplate';
 
 interface TaxInvoiceScreenProps {
   saleNo: string;
@@ -127,7 +128,7 @@ export const TaxInvoiceScreen: React.FC<TaxInvoiceScreenProps> = ({
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>{rt('receipt.caption.date')}</Text>
-            <Text style={styles.infoValue}>{fmt.dateTime(sale.createdAt)}</Text>
+            <Text style={styles.infoValue}>{receiptDateTime(sale.createdAt, receiptLang)}</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>{rt('receipt.taxInvoice.refBill')}</Text>
