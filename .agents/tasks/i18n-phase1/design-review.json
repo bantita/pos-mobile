@@ -1,0 +1,24 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    {
+      "id": 1,
+      "severity": "NIT",
+      "title": "PaymentSettingsModal reads PaymentType.label directly at WebPOSScreen.tsx:341 and isn't in the call-site list",
+      "fix": "Render payMethodLabel(pt.id, uiLang, pt.label) at :341. Rename the map variable from t to pt so it doesn't shadow useT() (do the same at LoginScreen :118/:133)."
+    },
+    {
+      "id": 2,
+      "severity": "NIT",
+      "title": "The invoice-detail pay badge at WebPOSScreen.tsx:3045 still shows the legacy Thai payMethod",
+      "fix": "Use the same payMethods ? map(payMethodLabel(m.id, uiLang, m.label)).join(' + ') : payMethod expression as :2073, ideally through a shared invPayLabel(inv, uiLang) helper."
+    },
+    {
+      "id": 3,
+      "severity": "NIT",
+      "title": "memberTypeDiscountLabel defaults to 'th', so the :2395 call site can stay Thai without any error",
+      "fix": "State that :2395 becomes memberTypeDiscountLabel(memberType, uiLang), and that PaymentScreen :122 passes lang: uiLang and adds uiLang to the memo deps (:134)."
+    }
+  ],
+  "reviewDoc": "d:\\pos-mobile\\.worktrees\\i18n\\.agents\\tasks\\i18n-phase1\\design-review.md"
+}

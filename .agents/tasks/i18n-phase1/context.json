@@ -1,0 +1,33 @@
+{
+  "project_type": "Expo 51 / React Native 0.74.5 / react-native-web 0.19 POS CRM app (web back-office + mobile), single package",
+  "language": "TypeScript ~5.3.3, React 18.2",
+  "build_system": "npm; no build needed for verification. NEVER run an export/build that writes d:\\pos-mobile\\dist.",
+  "test_framework": "vitest 2 + happy-dom (vitest.config.ts: include src/**/*.{test,spec}.{ts,tsx}, alias @ -> ./src, globals true)",
+  "build_command": "npm run lint   (tsc --noEmit; type-checks tests too)",
+  "test_command": "npm test   (vitest run)",
+  "verification_instructions": "Run both in d:\\pos-mobile\\.worktrees\\i18n. Baseline (.agents/tasks/i18n-phase1/baseline.md): lint = 13 errors in 6 pre-existing files (BranchSelector, DatePicker, PermissionMatrixScreen, RoleManageScreen, WebUserStaffScreen, errorTracking) — total must stay 13 and no error may be in a touched file. Tests = 214 pass + 3 known suite-load failures (src/engine/__tests__/engine.test.ts, src/services/sync/SyncService.test.ts, src/store/__tests__/branchPermissionStore.test.ts); no previously passing test may fail; new tests must pass. Quick count: `npm run lint 2>&1 | Select-String 'error TS' | Measure-Object`.",
+  "snapshot_or_generated_files": null,
+  "environment_constraints": "Windows/PowerShell. Use ABSOLUTE paths under d:\\pos-mobile\\.worktrees\\i18n — relative paths land in the parent workspace d:\\pos-mobile. Never push. Never touch d:\\pos-mobile\\dist. Read Thai files with UTF-8 (Get-Content -Encoding UTF8). Commit with `git -C d:\\pos-mobile\\.worktrees\\i18n add <specific files>` then commit; never `git add -A`; do not commit .agents/ (the merge step does that).",
+  "contribution_requirements": "Conventional commits (feat:/fix:/test:/docs:). Steering .kiro/steering/design-system.md: no hardcoded colors/font sizes/spacing (web uses WebColors white + dark red #B91C2C; mobile uses Colors/Typography/Spacing/BorderRadius + src/components/ui); touch targets >= 44 (ComponentSize.button.md); flex/gap layouts, no new fixed widths; TypeScript props interfaces, no `any`; Thai default. FORBIDDEN FILES (another workflow edits them, do not modify): src/screens/web/WebAdSettingsScreen.tsx, src/store/customerDisplayStore.ts, src/types/customerDisplay.ts, WebCustomerDisplayScreen, WebDisplayScreen, CustomerDisplayScreen, AdManagerScreen. Check `git -C d:\\pos-mobile\\.worktrees\\i18n diff --name-only HEAD` before each commit.",
+  "key_patterns": "Design: d:\\pos-mobile\\.worktrees\\i18n\\.agents\\tasks\\i18n-phase1\\design.md (rev 3, authoritative; section refs §1-§10) + design-review.md NITs (PaymentSettingsModal :341 label via payMethodLabel and rename map var t->pt; invoice-detail badge :3045 via invPayLabel helper; memberTypeDiscountLabel(memberType, uiLang) at WebPOSScreen :2395 and PaymentScreen runCartPromotions lang: uiLang + memo deps). In-house i18n, NO new dependency. Locales: src/i18n/locales/{th,en}/{common,nav,auth,pos,payment,receipt,receiptScreen,settings}.ts; th `as const` is source of truth; en files annotated LocaleShape<typeof thX>. UiKey = keys not under receipt.*; ReceiptKey = receipt.*; t()/useT() accept UiKey only; useReceiptT().rt accepts ReceiptKey only; translate(lang, key) generic for pure helpers. Pure modules (translate/format/labels/types/locales/memberTypeBenefits/cartAdapter) never import stores or react-native or i18n/index. i18n/index.ts does NOT re-export format.ts. Zustand persist pattern: create()(persist(..., { name, version, storage: createJSONStorage(() => persistStorage), partialize, migrate, merge })) as in src/store/receiptStore.ts. Test mocks for anything reaching persistStorage: vi.mock('react-native', () => ({ Platform: { OS: 'web' } })) and vi.mock('@react-native-async-storage/async-storage', () => ({ default: { getItem: async () => null, setItem: async () => {}, removeItem: async () => {} } })) as in src/store/__tests__/receiptStore.migration.test.ts:7-10. Ambient decl precedent: src/types/xlsx-dist.d.ts. Line numbers in the design refer to HEAD 36e25a3 and drift as you edit — locate by symbol (printReceipt80mm, invoicesFromHistory, voidNote, fullTaxInv, PaymentSettingsModal, MOCK_INVOICES, DEFAULT_PAY_TYPES). logAction sentences and mock product/member/shop data stay Thai. Module constants store keys (labelKey), never t() at module scope.",
+  "relevant_files": [
+    "src/i18n/** (new)",
+    "src/store/languageStore.ts (new)",
+    "src/components/ui/LanguageToggle.tsx (new), src/components/ui/index.ts",
+    "src/types/react-dom-test.d.ts (new), src/types/xlsx-dist.d.ts (pattern)",
+    "src/store/receiptStore.ts, src/store/persistStorage.ts",
+    "src/utils/receiptTemplate.ts, src/utils/posReceiptData.ts (new), src/utils/taxInvoiceHtml.ts (new)",
+    "src/utils/memberTypeBenefits.ts, src/engine/adapter/cartAdapter.ts",
+    "src/types/sale.ts (ORDER_TYPE_LABELS :91, PAYMENT_LABELS :107 — keep for phase 2)",
+    "src/screens/web/WebPOSScreen.tsx (4078 lines)",
+    "src/components/web/WebSidebar.tsx, WebTopBar.tsx, WebLayout.tsx",
+    "src/navigation/WebNavigator.tsx, MainNavigator.tsx, AuthNavigator.tsx, SaleNavigator.tsx (no change)",
+    "src/screens/auth/LoginScreen.tsx, AuthLayout.tsx, OTPLoginScreen.tsx, ForgotPasswordScreen.tsx, RegisterShopScreen.tsx, WelcomeScreen.tsx",
+    "src/screens/sale/POSSaleScreen.tsx, CartScreen.tsx, HoldBillScreen.tsx, PaymentScreen.tsx, ReceiptScreen.tsx, TaxInvoiceScreen.tsx, DocumentCancellationScreen.tsx",
+    "src/components/sale/VariantSelector.tsx",
+    "src/screens/web/WebDocumentSettingsScreen.tsx, WebReceiptDesignerScreen.tsx, WebSimpleScreens.tsx (WebSettingsScreen only)",
+    "src/screens/settings/SettingsHubScreen.tsx",
+    "tests: src/utils/__tests__/receiptTemplate.test.ts, memberTypeBenefits.test.ts; src/store/__tests__/receiptStore.migration.test.ts"
+  ],
+  "directory_structure": "src/components/{ui,web,sale} shared components; src/screens/{auth,sale,settings,web,...} screens (web back-office in src/screens/web); src/navigation navigators; src/store zustand stores (+ __tests__); src/utils pure utilities (+ __tests__); src/engine pricing/promo engine; src/constants design tokens (colors/typography/spacing, WebColors for web); src/types shared types and ambient decls; .agents/tasks/i18n-phase1 workflow artifacts (design, plan, FEATs)."
+}

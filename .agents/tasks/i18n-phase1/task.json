@@ -1,0 +1,13 @@
+﻿{
+    "task_id":  "task-i18n-phase1",
+    "task_description":  "Phase 1 bilingual UI (th default / en) for the Expo RN-Web POS CRM: in-house i18n infra + persisted per-device UI language + TH|EN switcher (login, web top bar, settings) + translate nav/auth/POS sale/payment/receipt screens + a SEPARATE persisted receiptLanguage driving all printed/paper output; phase-2 inventory + verification doc. Follows .agents/tasks/i18n-phase1/design.md rev 3 (APPROVED) and plan.md.",
+    "status":  "completed",
+    "feature_order":  [
+                          "FEAT-001",
+                          "FEAT-002",
+                          "FEAT-003",
+                          "FEAT-004",
+                          "FEAT-005"
+                      ],
+    "blocked_reason":  null
+}
