@@ -12,3 +12,5 @@ export { StepIndicator } from './StepIndicator';
 export type { StepIndicatorProps } from './StepIndicator';
 export { ConfirmModal } from './ConfirmModal';
 export type { ConfirmModalProps } from './ConfirmModal';
+export { LanguageToggle } from './LanguageToggle';
+export type { LanguageToggleProps } from './LanguageToggle';
