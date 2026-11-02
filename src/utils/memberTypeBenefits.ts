@@ -3,6 +3,8 @@
  * ใช้ร่วมกันทั้ง memberStore, PaymentScreen (mobile) และ WebPOSScreen
  */
 import { MemberTypeBenefit } from '../types/memberType';
+import { translate } from '../i18n/translate';
+import type { Language } from '../i18n/types';
 
 type EarnRule = Pick<MemberTypeBenefit, 'earnPoints' | 'pointMultiplier'>;
 
@@ -26,7 +28,10 @@ export function computeMemberTypeDiscount(amount: number, type?: Pick<MemberType
   return Math.round(amount * pct) / 100;
 }
 
-/** ชื่อส่วนลดที่แสดงในบิล เช่น "ส่วนลดพนักงาน 10%" */
-export function memberTypeDiscountLabel(type: Pick<MemberTypeBenefit, 'name' | 'discountPercent'>): string {
-  return `ส่วนลด${type.name} ${type.discountPercent}%`;
+/** ชื่อส่วนลดที่แสดงในบิล เช่น "ส่วนลดพนักงาน 10%" / en "พนักงาน discount 10%" (ชื่อประเภทไม่แปล) */
+export function memberTypeDiscountLabel(
+  type: Pick<MemberTypeBenefit, 'name' | 'discountPercent'>,
+  lang: Language = 'th',
+): string {
+  return translate(lang, 'payment.memberTypeDiscount', { name: type.name, percent: type.discountPercent });
 }

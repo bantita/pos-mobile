@@ -4,6 +4,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { persistStorage } from './persistStorage';
+import { isLanguage, type Language } from '../i18n/types';
+import { DEFAULT_FOOTER_TH, DEFAULT_BRANCH_TH } from '../i18n/labels';
 
 /** รหัสบล็อกของบิล (ลำดับการแสดงผลควบคุมผ่าน layout) */
 export type ReceiptBlockId =
@@ -118,6 +120,8 @@ export interface ReceiptConfig {
   layout:      ReceiptBlock[];
   /** รูปแบบบิลแบบ canvas (มิลลิเมตร) — authoritative เมื่อมีค่า */
   template?:   ReceiptTemplate;
+  /** ภาษาของเอกสารที่พิมพ์ (แยกจากภาษา UI) */
+  receiptLanguage: Language;
 }
 
 /** เลย์เอาต์เริ่มต้น — ลำดับเดิมของบิล, แสดงทุกบล็อก (backward compatible) */
@@ -244,16 +248,17 @@ const DEFAULT: ReceiptConfig = {
   shopAddr:   '123 ถนนสุขุมวิท แขวงคลองเตย เขตคลองเตย กรุงเทพฯ 10110',
   shopTel:    '02-123-4567',
   shopTaxId:  '0105560123456',
-  shopBranch: 'สำนักงานใหญ่',
+  shopBranch: DEFAULT_BRANCH_TH,
   posRegNo:   'POS-001',
   paperSize:  '80mm',
   headerLogo: '',
   headerText: '',
-  footerText: 'ขอบคุณที่ใช้บริการ 🙏',
+  footerText: DEFAULT_FOOTER_TH,
   showLogo:   true,
   copies:     1,
   taxInvoiceEnabled: true,
   layout:     DEFAULT_LAYOUT.map(b => ({ ...b })),
+  receiptLanguage: 'th',
 };
 
 /** seed paper จาก config.paperSize */
@@ -429,21 +434,20 @@ export const useReceiptStore = create<ReceiptStoreState>()(
     },
     {
       name: 'pos-receipt',
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => persistStorage),
-      // migrate เฉพาะตอน version ที่เก็บไว้ต่ำกว่า persisted version
+      // migrate เฉพาะตอน version ที่เก็บไว้ต่ำกว่า persisted version (ขั้นต่อกันเป็นลำดับ)
       migrate: (persisted, fromVersion) => {
         const blob = persisted as { config?: Partial<ReceiptConfig> } | undefined;
-        if (fromVersion < 2 && blob?.config) {
-          return {
-            ...blob,
-            config: {
-              ...blob.config,
-              template: migrateLayoutToTemplate(blob.config),
-            },
-          };
+        if (!blob?.config || fromVersion >= 3) return persisted; // identity pass-through
+        let config: Partial<ReceiptConfig> = { ...blob.config };
+        // v1 -> v2: block-list -> canvas template
+        if (fromVersion < 2) config = { ...config, template: migrateLayoutToTemplate(blob.config) };
+        // v2 -> v3: ภาษาใบเสร็จ (ค่าเดิมคือไทย)
+        if (fromVersion < 3) {
+          config = { ...config, receiptLanguage: isLanguage(config.receiptLanguage) ? config.receiptLanguage : 'th' };
         }
-        return persisted;
+        return { ...blob, config };
       },
       // รวม state ที่ persist เข้ากับ default; layout ครบเสมอ; template idempotent
       merge: (persisted, current) => {
@@ -453,6 +457,8 @@ export const useReceiptStore = create<ReceiptStoreState>()(
           ...(saved ?? {}),
           layout: mergeLayout(saved?.layout),
         };
+        // ภาษาใบเสร็จต้องถูกต้องเสมอ (ค่าแปลก/ไม่มี -> 'th')
+        if (!isLanguage(mergedConfig.receiptLanguage)) mergedConfig.receiptLanguage = 'th';
         // ตัดสินใจจาก template well-formedness เท่านั้น (idempotent)
         if (!isWellFormedTemplate(mergedConfig.template)) {
           mergedConfig.template = migrateLayoutToTemplate(mergedConfig);

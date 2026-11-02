@@ -5,4 +5,6 @@
 export * from './types';
 export { useT, t, useUiLanguage, useFormat, bindFormat } from './useT';
 export type { TFunction, BoundFormat } from './useT';
+export { useReceiptT } from './useReceiptT';
+export type { RtFunction, ReceiptT } from './useReceiptT';
 export * from './labels';

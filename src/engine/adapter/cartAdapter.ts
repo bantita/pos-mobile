@@ -37,6 +37,7 @@ import { Promotion } from '../../types/promotion';
 import { Member } from '../../types/member';
 import { MemberTypeBenefit } from '../../types/memberType';
 import { memberTypeDiscountLabel } from '../../utils/memberTypeBenefits';
+import type { Language } from '../../i18n/types';
 
 /** สมาชิกแบบย่อ (รับได้ทั้ง Member เต็มหรือ null สำหรับลูกค้าทั่วไป) */
 export type AdapterMember = (Pick<Member, 'id' | 'level'> & { memberTypeId?: string }) | null | undefined;
@@ -58,6 +59,8 @@ export interface BuildCalculationArgs {
   couponCode?: string;
   /** ประเภทสมาชิกที่ resolve แล้ว (caller ส่งมา เพื่อให้ adapter ยัง pure) */
   memberType?: MemberTypeBenefit | null;
+  /** ภาษาของชื่อโปรสังเคราะห์ (ส่วนลดประเภทสมาชิก) — ค่าเริ่มต้น 'th' */
+  lang?: Language;
 }
 
 /** ผลลัพธ์แบบย่อที่หน้าจอ cart/payment นำไปใช้ได้ทันที */
@@ -258,11 +261,14 @@ function mapPromotion(promo: Promotion): PromotionConfig | null {
 const MEMBER_TYPE_PROMO_START = '2000-01-01T00:00:00';
 const MEMBER_TYPE_PROMO_END = '2999-12-31T23:59:59';
 
-function buildMemberTypePromotion(memberType: MemberTypeBenefit | null | undefined): PromotionConfig | null {
+function buildMemberTypePromotion(
+  memberType: MemberTypeBenefit | null | undefined,
+  lang: Language = 'th',
+): PromotionConfig | null {
   if (!memberType || !(memberType.discountPercent > 0)) return null;
   return {
     promotionId: `${MEMBER_TYPE_PROMO_PREFIX}${memberType.id}`,
-    name: memberTypeDiscountLabel(memberType),
+    name: memberTypeDiscountLabel(memberType, lang),
     type: PromotionType.PROMOTION,
     status: PromotionStatus.ACTIVE,
     priority: MEMBER_TYPE_PROMO_PRIORITY,
@@ -291,7 +297,7 @@ function couponMatches(promo: Promotion, couponCode?: string): boolean {
  * - โปรทั่วไปเข้าทุกใบ ยกเว้นโปรประเภท coupon ที่เข้าเฉพาะเมื่อรหัสตรงกับ couponCode
  */
 export function buildCalculationRequest(args: BuildCalculationArgs): CalculationRequest {
-  const { cartItems, subtotal, member, promotions, businessDateTime, storeCode, couponCode, memberType } = args;
+  const { cartItems, subtotal, member, promotions, businessDateTime, storeCode, couponCode, memberType, lang } = args;
 
   const candidates: PromotionConfig[] = [];
   for (const promo of promotions) {
@@ -303,7 +309,7 @@ export function buildCalculationRequest(args: BuildCalculationArgs): Calculation
   // ประเภทสมาชิกที่ใช้คำนวณ: จาก memberType ที่ resolve แล้ว (fallback = memberTypeId ของสมาชิก)
   const memberTypeId = member ? (memberType?.id ?? member.memberTypeId) : undefined;
   if (member) {
-    const typePromo = buildMemberTypePromotion(memberType);
+    const typePromo = buildMemberTypePromotion(memberType, lang ?? 'th');
     if (typePromo) candidates.push(typePromo);
   }
 

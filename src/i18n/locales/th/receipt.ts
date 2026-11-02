@@ -58,4 +58,13 @@ export const receipt = {
   totalInclVat: 'ยอดสุทธิ (รวม VAT)',
   cash: 'เงินสด',
   change: 'เงินทอน',
+  taxInvoice: {
+    title: 'ใบกำกับภาษีเต็มรูป',
+    seller: 'ผู้ขาย',
+    buyer: 'ผู้ซื้อ',
+    address: 'ที่อยู่',
+    taxId: 'เลขผู้เสียภาษี',
+    beforeVat: 'มูลค่าสินค้า (ก่อน VAT)',
+    grandTotal: 'ยอดรวมสุทธิ',
+  },
 } as const;

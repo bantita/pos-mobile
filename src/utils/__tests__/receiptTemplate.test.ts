@@ -5,7 +5,7 @@
  *   - buildTemplateHtml: z-order, mm units, @page margin:0, empty bordered box,
  *     undefined template -> DEFAULT_TEMPLATE, escaping, custom paper dims
  */
-import { describe, test, expect, vi } from 'vitest';
+import { describe, test, expect, vi, afterEach } from 'vitest';
 
 // receiptTemplate -> receiptStore -> persistStorage นำเข้า react-native + AsyncStorage
 vi.mock('react-native', () => ({ Platform: { OS: 'web' } }));
@@ -21,8 +21,16 @@ import {
   layoutElement,
   buildTemplateHtml,
   makeSampleData,
+  receiptDocTitle,
+  receiptDateTime,
+  receiptPayMethod,
+  receiptCashier,
+  receiptFooter,
+  receiptBranch,
 } from '../receiptTemplate';
+import { useLanguageStore } from '../../store/languageStore';
 import {
+  useReceiptStore,
   ReceiptElement,
   ReceiptElementStyle,
   ReceiptFieldKey,
@@ -308,5 +316,105 @@ describe('makeSampleData', () => {
     expect(d.shopName).toBe('ร้านของฉัน');
     expect(d.items).toHaveLength(5);
     expect(d.total).toBeGreaterThan(0);
+  });
+});
+
+// ─── Receipt language (design §5.2 / §10) ─────────────────────────────────────
+
+describe('receipt language — makeSampleData + buildTemplateHtml', () => {
+  const defaultConfig = (): ReceiptConfig => ({ ...useReceiptStore.getState().config });
+  const fieldTpl = (): ReceiptTemplate => ({
+    version: 1,
+    paper: DEFAULT_PAPER,
+    elements: (
+      ['docTitle', 'dateTime', 'payMethod', 'cashier', 'footerText', 'shopBranch'] as ReceiptFieldKey[]
+    ).map((field, i) => el({ id: `f${i}`, type: 'field', field, z: i + 1 })),
+  });
+  const render = (cfg: ReceiptConfig) => buildTemplateHtml(fieldTpl(), makeSampleData(cfg));
+
+  afterEach(() => {
+    useLanguageStore.setState({ uiLanguage: 'th' });
+  });
+
+  test('(a) UI en + receipt th → Thai document', () => {
+    useLanguageStore.setState({ uiLanguage: 'en' });
+    const html = render({ ...defaultConfig(), receiptLanguage: 'th' });
+    for (const s of ['ใบกำกับภาษีอย่างย่อ', '2567', 'เงินสด', ' น.', 'พนักงาน A', 'ขอบคุณที่ใช้บริการ']) {
+      expect(html).toContain(s);
+    }
+  });
+
+  test('(b) UI th + receipt en → English document with no Thai labels', () => {
+    useLanguageStore.setState({ uiLanguage: 'th' });
+    const html = render({ ...defaultConfig(), receiptLanguage: 'en' });
+    for (const s of ['Abbreviated Tax Invoice', '01/01/2024', 'Cash', 'Staff A', 'Thank you', 'Head Office']) {
+      expect(html).toContain(s);
+    }
+    for (const s of ['ใบกำกับภาษีอย่างย่อ', 'เงินสด', '2567', ' น.', 'พนักงาน A', 'ขอบคุณที่ใช้บริการ', 'สำนักงานใหญ่']) {
+      expect(html).not.toContain(s);
+    }
+  });
+
+  test('(c) text elements pass through verbatim in both languages', () => {
+    const tpl: ReceiptTemplate = {
+      version: 1,
+      paper: DEFAULT_PAPER,
+      elements: [el({ type: 'text', text: 'ข้อความอิสระ Free text' })],
+    };
+    for (const receiptLanguage of ['th', 'en'] as const) {
+      const html = buildTemplateHtml(tpl, makeSampleData({ ...defaultConfig(), receiptLanguage }));
+      expect(html).toContain('ข้อความอิสระ Free text');
+    }
+  });
+
+  test('(d) th DEFAULT output unchanged except sample dateTime suffix and empty-footer thank-you', () => {
+    const d = makeSampleData(defaultConfig());
+    expect(d.docTitle).toBe('ใบกำกับภาษีอย่างย่อ');
+    expect(d.dateTime).toBe('01/01/2567 10:30 น.');
+    expect(d.cashier).toBe('พนักงาน A');
+    expect(d.payMethod).toBe('เงินสด');
+    expect(d.footerText).toBe('ขอบคุณที่ใช้บริการ 🙏');
+    expect(d.shopBranch).toBe('สำนักงานใหญ่');
+    expect(d.shopName).toBe(defaultConfig().shopName);
+    // footer ว่าง → ขอบคุณ
+    expect(makeSampleData({ ...defaultConfig(), footerText: '' }).footerText).toBe('ขอบคุณที่ใช้บริการ 🙏');
+  });
+
+  test('explicit lang argument overrides config.receiptLanguage', () => {
+    expect(makeSampleData({ ...defaultConfig(), receiptLanguage: 'th' }, 'en').docTitle).toBe('Abbreviated Tax Invoice');
+  });
+});
+
+describe('receipt label helpers', () => {
+  test('receiptDocTitle × 3 × lang', () => {
+    expect(receiptDocTitle('receipt', 'th')).toBe('ใบเสร็จรับเงิน');
+    expect(receiptDocTitle('tax_short', 'th')).toBe('ใบกำกับภาษีอย่างย่อ');
+    expect(receiptDocTitle('tax_full', 'th')).toBe('ใบกำกับภาษี');
+    expect(receiptDocTitle('receipt', 'en')).toBe('Receipt');
+    expect(receiptDocTitle('tax_short', 'en')).toBe('Abbreviated Tax Invoice');
+    expect(receiptDocTitle('tax_full', 'en')).toBe('Tax Invoice');
+  });
+
+  test('receiptDateTime BE vs Gregorian', () => {
+    const d = new Date(2026, 5, 8, 9, 5);
+    expect(receiptDateTime(d, 'th')).toBe('08/06/2569 09:05 น.');
+    expect(receiptDateTime(d, 'en')).toBe('08/06/2026 09:05');
+  });
+
+  test('receiptPayMethod joins with " + " and keeps custom labels', () => {
+    expect(receiptPayMethod([{ id: 'cash' }, { id: 'qr' }], 'th')).toBe('เงินสด + QR Code');
+    expect(receiptPayMethod([{ id: 'cash' }, { id: 'pay_x', label: 'แลกแต้ม' }], 'en')).toBe('Cash + แลกแต้ม');
+  });
+
+  test('receiptCashier / receiptFooter / receiptBranch fallbacks', () => {
+    expect(receiptCashier('', 'th')).toBe('แคชเชียร์');
+    expect(receiptCashier('', 'en')).toBe('Cashier');
+    expect(receiptCashier('สมชาย', 'en')).toBe('สมชาย');
+    expect(receiptFooter('', 'en')).toBe('Thank you 🙏');
+    expect(receiptFooter('ขอบคุณที่ใช้บริการ 🙏', 'en')).toBe('Thank you 🙏');
+    expect(receiptFooter('แวะมาใหม่นะ', 'en')).toBe('แวะมาใหม่นะ');
+    expect(receiptBranch('', 'en')).toBe('Head Office');
+    expect(receiptBranch('สำนักงานใหญ่', 'en')).toBe('Head Office');
+    expect(receiptBranch('สาขา 2', 'en')).toBe('สาขา 2');
   });
 });

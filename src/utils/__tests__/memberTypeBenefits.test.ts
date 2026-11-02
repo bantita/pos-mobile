@@ -32,4 +32,8 @@ describe('computeMemberTypeDiscount / label', () => {
   test('label ภาษาไทย', () => {
     expect(memberTypeDiscountLabel({ name: 'พนักงาน', discountPercent: 10 })).toBe('ส่วนลดพนักงาน 10%');
   });
+  test('label en — ชื่อประเภทไม่ถูกแปล', () => {
+    expect(memberTypeDiscountLabel({ name: 'Staff', discountPercent: 10 }, 'en')).toBe('Staff discount 10%');
+    expect(memberTypeDiscountLabel({ name: 'พนักงาน', discountPercent: 5 }, 'en')).toBe('พนักงาน discount 5%');
+  });
 });

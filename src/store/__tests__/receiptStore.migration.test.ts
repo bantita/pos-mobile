@@ -21,6 +21,7 @@ import {
   ReceiptConfig,
   ReceiptTemplate,
 } from '../receiptStore';
+import { DEFAULT_FOOTER_TH, DEFAULT_BRANCH_TH } from '../../i18n/labels';
 
 const baseConfig = (over?: Partial<ReceiptConfig>): Partial<ReceiptConfig> => ({
   shopName: 'ร้านทดสอบ',
@@ -168,9 +169,59 @@ describe('persist migrate — v1 -> v2', () => {
     expect(Array.isArray(out.config.template?.elements)).toBe(true);
   });
 
-  test('fromVersion >= 2 passes through unchanged', () => {
+  test('fromVersion >= 3 passes through unchanged', () => {
     const blob = { config: baseConfig() };
-    const out = migrate(blob, 2);
+    const out = migrate(blob, 3);
     expect(out).toBe(blob);
+  });
+});
+
+describe('persist migrate/merge — v3 receiptLanguage', () => {
+  const migrate = useReceiptStore.persist.getOptions().migrate!;
+  const merge = useReceiptStore.persist.getOptions().merge!;
+  const currentState = () => ({ config: { ...useReceiptStore.getState().config } });
+
+  test('persist version is 3', () => {
+    expect(useReceiptStore.persist.getOptions().version).toBe(3);
+  });
+
+  test('v2 → adds receiptLanguage th, keeps template untouched', () => {
+    const existing = migrateLayoutToTemplate(baseConfig());
+    const blob = { config: baseConfig({ template: existing }) };
+    const out = migrate(blob, 2) as { config: ReceiptConfig };
+    expect(out.config.receiptLanguage).toBe('th');
+    expect(out.config.template).toBe(existing);
+  });
+
+  test('v1 → template + receiptLanguage th', () => {
+    const out = migrate({ config: baseConfig() }, 1) as { config: ReceiptConfig };
+    expect(out.config.template?.version).toBe(1);
+    expect(out.config.receiptLanguage).toBe('th');
+  });
+
+  test('existing en kept by migrate', () => {
+    const out = migrate({ config: baseConfig({ receiptLanguage: 'en' }) }, 2) as { config: ReceiptConfig };
+    expect(out.config.receiptLanguage).toBe('en');
+  });
+
+  test('blob without config passes through', () => {
+    const blob = {};
+    expect(migrate(blob, 1)).toBe(blob);
+  });
+
+  test('merge normalizes garbage receiptLanguage → th; keeps en', () => {
+    const garbage = { config: { ...baseConfig(), receiptLanguage: 'jp' as unknown as 'th' } };
+    expect((merge(garbage, currentState() as never) as { config: ReceiptConfig }).config.receiptLanguage).toBe('th');
+    const nullish = { config: { ...baseConfig(), receiptLanguage: null as unknown as 'th' } };
+    expect((merge(nullish, currentState() as never) as { config: ReceiptConfig }).config.receiptLanguage).toBe('th');
+    const en = { config: baseConfig({ receiptLanguage: 'en' }) };
+    expect((merge(en, currentState() as never) as { config: ReceiptConfig }).config.receiptLanguage).toBe('en');
+  });
+
+  test('DEFAULT footer/branch equal the Thai seed constants; receiptLanguage th', () => {
+    const cfg = useReceiptStore.getState().config;
+    expect(cfg.footerText).toBe(DEFAULT_FOOTER_TH);
+    expect(cfg.shopBranch).toBe(DEFAULT_BRANCH_TH);
+    expect(cfg.receiptLanguage).toBe('th');
   });
 });

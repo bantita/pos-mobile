@@ -15,6 +15,10 @@ import {
   ReceiptTemplate,
   DEFAULT_TEMPLATE,
 } from '../store/receiptStore';
+import { translate } from '../i18n/translate';
+import { formatDate, formatTime, type DateInput } from '../i18n/format';
+import { payMethodLabel, DEFAULT_FOOTER_TH, DEFAULT_BRANCH_TH } from '../i18n/labels';
+import type { Language, ReceiptKey } from '../i18n/types';
 
 /** CSS reference pixel ที่ 96dpi — พื้นฐานของหน่วย mm ใน @page/print ของ browser */
 export const PX_PER_MM = 96 / 25.4; // ≈ 3.7795
@@ -263,10 +267,56 @@ export function buildTemplateHtml(
     </body></html>`;
 }
 
+// ─── Receipt-language label helpers (ใช้ร่วม preview / print / paper mocks) ─────
+
+export type ReceiptDocType = 'receipt' | 'tax_short' | 'tax_full';
+
+const DOC_TITLE_KEYS: Record<ReceiptDocType, ReceiptKey> = {
+  receipt: 'receipt.docTitle.receipt',
+  tax_short: 'receipt.docTitle.taxShort',
+  tax_full: 'receipt.docTitle.taxFull',
+};
+
+/** ชื่อเอกสารตามภาษาใบเสร็จ */
+export function receiptDocTitle(type: ReceiptDocType, lang: Language): string {
+  return translate(lang, DOC_TITLE_KEYS[type]);
+}
+
+/** วันเวลาบนเอกสาร — th: 01/01/2567 10:30 น. / en: 01/01/2024 10:30 */
+export function receiptDateTime(d: DateInput, lang: Language): string {
+  return translate(lang, 'receipt.dateTimeValue', { date: formatDate(d, lang), time: formatTime(d, lang) });
+}
+
+/** วิธีชำระ (หลายวิธีคั่นด้วย ' + ') — custom pay type ใช้ label ของผู้ใช้ */
+export function receiptPayMethod(methods: { id: string; label?: string }[], lang: Language): string {
+  return methods.map((m) => payMethodLabel(m.id, lang, m.label)).join(' + ');
+}
+
+/** ชื่อแคชเชียร์ — ว่าง → คำว่า แคชเชียร์/Cashier */
+export function receiptCashier(name: string, lang: Language): string {
+  return name || translate(lang, 'receipt.cashierFallback');
+}
+
+/** ข้อความท้ายบิล — ว่าง/ค่า seed ไทย → ขอบคุณตามภาษาใบเสร็จ; ข้อความที่ผู้ใช้แก้ → คงเดิม */
+export function receiptFooter(cfgFooter: string, lang: Language): string {
+  return !cfgFooter || cfgFooter === DEFAULT_FOOTER_TH ? translate(lang, 'receipt.thankYou') : cfgFooter;
+}
+
+/** สาขา — ว่าง/ค่า seed ไทย → สำนักงานใหญ่/Head Office; ข้อความที่ผู้ใช้แก้ → คงเดิม */
+export function receiptBranch(cfgBranch: string, lang: Language): string {
+  return !cfgBranch || cfgBranch === DEFAULT_BRANCH_TH ? translate(lang, 'receipt.headOffice') : cfgBranch;
+}
+
 // ─── Sample data (live preview ในดีไซเนอร์) ────────────────────────────────────
 
-/** สร้างข้อมูลตัวอย่างจริงสำหรับ live preview (ชื่อร้านจาก config, items จำลอง 5 แถว) */
-export function makeSampleData(config: ReceiptConfig): ReceiptRenderData {
+/**
+ * สร้างข้อมูลตัวอย่างจริงสำหรับ live preview (ชื่อร้านจาก config, items จำลอง 5 แถว)
+ * ข้อความเอกสารตาม lang (ค่าเริ่มต้น = ภาษาใบเสร็จของ config); ชื่อสินค้าตัวอย่างคงเป็นไทย
+ */
+export function makeSampleData(
+  config: ReceiptConfig,
+  lang: Language = config.receiptLanguage ?? 'th',
+): ReceiptRenderData {
   const items = [
     { name: 'น้ำดื่ม 600ml',   qty: 2, unitPrice: 10,  disc: 0,  lineTotal: 20 },
     { name: 'ขนมปัง',          qty: 1, unitPrice: 35,  disc: 5,  lineTotal: 30 },
@@ -285,17 +335,17 @@ export function makeSampleData(config: ReceiptConfig): ReceiptRenderData {
     shopAddr: config.shopAddr ?? '',
     shopTel: config.shopTel ?? '',
     shopTaxId: config.shopTaxId ?? '',
-    shopBranch: config.shopBranch ?? '',
+    shopBranch: receiptBranch(config.shopBranch ?? '', lang),
     posRegNo: config.posRegNo ?? '',
-    footerText: config.footerText ?? '',
+    footerText: receiptFooter(config.footerText ?? '', lang),
     headerText: config.headerText ?? '',
     logoUri: config.headerLogo ?? '',
     showLogo: !!config.showLogo,
-    docTitle: 'ใบกำกับภาษีอย่างย่อ',
+    docTitle: receiptDocTitle('tax_short', lang),
     billNo: '20240001',
-    dateTime: '01/01/2567 10:30',
-    cashier: 'พนักงาน A',
-    payMethod: 'เงินสด',
+    dateTime: receiptDateTime(new Date(2024, 0, 1, 10, 30), lang),
+    cashier: translate(lang, 'receipt.sampleCashier'),
+    payMethod: receiptPayMethod([{ id: 'cash' }], lang),
     cancelReason: '',
     buyerName: '',
     buyerAddr: '',

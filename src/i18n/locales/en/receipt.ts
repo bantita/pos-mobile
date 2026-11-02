@@ -57,4 +57,13 @@ export const receipt: LocaleShape<typeof thReceipt> = {
   totalInclVat: 'Total (incl. VAT)',
   cash: 'Cash',
   change: 'Change',
+  taxInvoice: {
+    title: 'Full Tax Invoice',
+    seller: 'Seller',
+    buyer: 'Buyer',
+    address: 'Address',
+    taxId: 'Tax ID',
+    beforeVat: 'Amount before VAT',
+    grandTotal: 'Grand total',
+  },
 };
