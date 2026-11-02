@@ -3,6 +3,8 @@ import { View, ScrollView, StyleSheet, Platform, useWindowDimensions, TouchableO
 import { WebSidebar } from './WebSidebar';
 import { WebTopBar } from './WebTopBar';
 import { WebColors } from '../../constants/webColors';
+import { useT, t as tNow } from '../../i18n/useT';
+import type { UiKey } from '../../i18n/types';
 
 // เส้นทางที่ไม่มี padding (ใช้พื้นที่เต็ม — report routes ต้องการ flex:1 เต็มจอ)
 const NO_PADDING_ROUTES = ['pos', 'reports'];
@@ -16,13 +18,14 @@ interface Props {
   children: React.ReactNode;
 }
 
-const PAGE_NAMES: Record<string, string> = {
-  dashboard: 'หน้าหลัก', pos: 'ขายสินค้า', products: 'จัดการสินค้า',
-  inventory: 'คลังสินค้า', reports: 'รายงาน', users: 'ผู้ใช้งาน',
-  auditlog: 'Audit Log', settings: 'ตั้งค่า',
+const PAGE_NAMES: Record<string, UiKey> = {
+  dashboard: 'nav.dashboard', pos: 'nav.pos', products: 'nav.productManage',
+  inventory: 'nav.inventory', reports: 'nav.reports', users: 'nav.users',
+  auditlog: 'nav.auditLog', settings: 'nav.settings',
 };
 
 export const WebLayout: React.FC<Props> = ({ activeRoute, onNavigate, pageName, children }) => {
+  const t = useT();
   const [expanded, setExpanded] = useState(false);
   const { width } = useWindowDimensions();
   // report routes ต้องการ flex:1 เต็มจอ (มี sidebar ของตัวเอง)
@@ -44,7 +47,7 @@ export const WebLayout: React.FC<Props> = ({ activeRoute, onNavigate, pageName, 
       const el = document.documentElement;
       if (!document.fullscreenElement && el.requestFullscreen) {
         setTimeout(() => {
-          if (confirm('เปิดโหมดเต็มจอ?')) {
+          if (confirm(tNow('nav.fullscreenConfirm'))) {
             el.requestFullscreen().catch(() => {});
           }
         }, 300);
@@ -102,7 +105,7 @@ export const WebLayout: React.FC<Props> = ({ activeRoute, onNavigate, pageName, 
 
       <View style={s.main}>
         <WebTopBar
-          pageName={pageName || PAGE_NAMES[activeRoute] || ''}
+          pageName={pageName || (PAGE_NAMES[activeRoute] ? t(PAGE_NAMES[activeRoute]) : '')}
           onMenuPress={isMobile ? () => setMobileMenuOpen(true) : undefined}
         />
         {noPadding ? (

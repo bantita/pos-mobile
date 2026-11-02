@@ -17,6 +17,14 @@ import { Button } from '../../components/ui/Button';
 import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
 import { Spacing } from '../../constants/spacing';
+import { useT } from '../../i18n/useT';
+import type { UiKey } from '../../i18n/types';
+
+const FEATURES: { icon: string; labelKey: UiKey }[] = [
+  { icon: 'phone-portrait-outline', labelKey: 'auth.welcome.featureMobile' },
+  { icon: 'cloud-offline-outline', labelKey: 'auth.welcome.featureOffline' },
+  { icon: 'business-outline', labelKey: 'auth.welcome.featureBranches' },
+];
 
 const { width } = Dimensions.get('window');
 
@@ -33,6 +41,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   appVersion = '1.0.0',
   isOnline = true,
 }) => {
+  const t = useT();
   const fadeAnim = new Animated.Value(0);
   const slideAnim = new Animated.Value(40);
 
@@ -51,7 +60,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
       {!isOnline && (
         <View style={styles.offlineBanner}>
           <Ionicons name="cloud-offline-outline" size={14} color={Colors.white} />
-          <Text style={styles.offlineText}>ไม่มีการเชื่อมต่ออินเทอร์เน็ต</Text>
+          <Text style={styles.offlineText}>{t('auth.welcome.offline')}</Text>
         </View>
       )}
 
@@ -62,19 +71,15 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
             <Ionicons name="storefront" size={56} color={Colors.white} />
           </View>
           <Text style={styles.appName}>POS Mobile</Text>
-          <Text style={styles.tagline}>ระบบขายหน้าร้านบนมือถือ</Text>
+          <Text style={styles.tagline}>{t('auth.welcome.tagline')}</Text>
         </Animated.View>
 
         {/* Features */}
         <Animated.View style={[styles.features, { opacity: fadeAnim }]}>
-          {[
-            { icon: 'phone-portrait-outline', label: 'ใช้งานบน iOS & Android' },
-            { icon: 'cloud-offline-outline', label: 'รองรับ Offline' },
-            { icon: 'business-outline', label: 'รองรับหลายสาขา' },
-          ].map((f, i) => (
+          {FEATURES.map((f, i) => (
             <View key={i} style={styles.featureItem}>
               <Ionicons name={f.icon as any} size={18} color={Colors.primaryLight} />
-              <Text style={styles.featureText}>{f.label}</Text>
+              <Text style={styles.featureText}>{t(f.labelKey)}</Text>
             </View>
           ))}
         </Animated.View>
@@ -83,7 +88,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
       {/* Action Buttons */}
       <Animated.View style={[styles.actions, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
         <Button
-          title="มีบัญชีอยู่แล้ว — เข้าสู่ระบบ"
+          title={t('auth.welcome.login')}
           onPress={onLogin}
           variant="primary"
           size="lg"
@@ -91,7 +96,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
           style={styles.btnLogin}
         />
         <Button
-          title="สมัครร้านค้าใหม่"
+          title={t('auth.welcome.register')}
           onPress={onRegister}
           variant="outline"
           size="lg"

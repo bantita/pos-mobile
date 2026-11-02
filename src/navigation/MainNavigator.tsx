@@ -19,6 +19,7 @@ import { PromotionNavigator } from './PromotionNavigator';
 import { Colors }     from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { useSyncStore } from '../store/syncStore';
+import { useT } from '../i18n/useT';
 
 export type MainTabParamList = {
   Dashboard: undefined;
@@ -48,6 +49,7 @@ const ICONS: Record<string, { active: string; inactive: string }> = {
 };
 
 export const MainNavigator: React.FC = () => {
+  const t = useT();
   const [userRole] = useState<'owner' | 'manager' | 'cashier'>('owner');
   const { getStats } = useSyncStore();
   const stats = getStats();
@@ -74,23 +76,23 @@ export const MainNavigator: React.FC = () => {
         },
       })}
     >
-      <Tab.Screen name="Dashboard" options={{ tabBarLabel: 'หน้าหลัก' }}>
+      <Tab.Screen name="Dashboard" options={{ tabBarLabel: t('nav.tab.dashboard') }}>
         {() => (
           <DashboardNavigator userRole={userRole} onStartSale={() => {}} />
         )}
       </Tab.Screen>
 
-      <Tab.Screen name="Sale"      options={{ tabBarLabel: 'ขาย' }}      component={SaleNavigator} />
-      <Tab.Screen name="Product"   options={{ tabBarLabel: 'สินค้า' }}   component={ProductNavigator} />
-      <Tab.Screen name="Inventory" options={{ tabBarLabel: 'คลัง' }}     component={InventoryNavigator} />
-      <Tab.Screen name="Member"    options={{ tabBarLabel: 'สมาชิก' }}   component={MemberNavigator} />
-      <Tab.Screen name="Promo"     options={{ tabBarLabel: 'โปรโมชั่น' }} component={PromotionNavigator} />
-      <Tab.Screen name="Reports"   options={{ tabBarLabel: 'รายงาน' }}   component={ReportsNavigator} />
+      <Tab.Screen name="Sale"      options={{ tabBarLabel: t('nav.tab.sale') }}      component={SaleNavigator} />
+      <Tab.Screen name="Product"   options={{ tabBarLabel: t('nav.tab.product') }}   component={ProductNavigator} />
+      <Tab.Screen name="Inventory" options={{ tabBarLabel: t('nav.tab.inventory') }}     component={InventoryNavigator} />
+      <Tab.Screen name="Member"    options={{ tabBarLabel: t('nav.tab.member') }}   component={MemberNavigator} />
+      <Tab.Screen name="Promo"     options={{ tabBarLabel: t('nav.tab.promo') }} component={PromotionNavigator} />
+      <Tab.Screen name="Reports"   options={{ tabBarLabel: t('nav.tab.reports') }}   component={ReportsNavigator} />
 
       <Tab.Screen
         name="Sync"
         options={{
-          tabBarLabel: 'Sync',
+          tabBarLabel: t('nav.tab.sync'),
           tabBarBadge: syncBadge > 0 ? (syncBadge > 99 ? '99+' : String(syncBadge)) : undefined,
           tabBarBadgeStyle: {
             backgroundColor: stats.failed > 0 ? Colors.danger : Colors.warning,
@@ -100,7 +102,7 @@ export const MainNavigator: React.FC = () => {
         component={SyncNavigator}
       />
 
-      <Tab.Screen name="Settings"  options={{ tabBarLabel: 'ตั้งค่า' }}  component={SettingsNavigator} />
+      <Tab.Screen name="Settings"  options={{ tabBarLabel: t('nav.tab.settings') }}  component={SettingsNavigator} />
     </Tab.Navigator>
   );
 };

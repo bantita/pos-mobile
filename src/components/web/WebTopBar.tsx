@@ -5,6 +5,11 @@ import { WebColors } from '../../constants/webColors';
 import { Colors, Space, Radius, Shadow, Font } from '../../design-system/tokens';
 import { useAuthStore } from '../../store/authStore';
 import { ROLE_LABELS } from '../../constants/rolePermissions';
+import { useLanguageStore } from '../../store/languageStore';
+import { LanguageToggle } from '../ui/LanguageToggle';
+import { useT } from '../../i18n/useT';
+import { ROLE_KEYS } from '../../i18n/labels';
+import type { UiKey } from '../../i18n/types';
 
 interface Props {
   pageName: string;
@@ -23,10 +28,15 @@ export const WebTopBar: React.FC<Props> = ({
   const isSmall = width < 768;
 
   const user = useAuthStore(s => s.user);
+  const t = useT();
+  const uiLanguage = useLanguageStore(s => s.uiLanguage);
+  const setUiLanguage = useLanguageStore(s => s.setUiLanguage);
 
   const shopName  = shopNameProp ?? user?.shopName ?? '';
-  const userName  = user?.name  ?? 'ผู้ใช้ทดลอง';
-  const roleLabel = user?.role  ? ROLE_LABELS[user.role] : '';
+  const userName  = user?.name  ?? t('nav.demoUser');
+  // role ที่ไม่รู้จัก (ข้อมูลเก่า) → fallback ป้ายเดิมจาก ROLE_LABELS
+  const roleKey: UiKey | undefined = user?.role ? ROLE_KEYS[user.role] : undefined;
+  const roleLabel = roleKey ? t(roleKey) : user?.role ? (ROLE_LABELS[user.role] ?? '') : '';
   const initial   = userName.charAt(0).toUpperCase();
 
   return (
@@ -41,6 +51,11 @@ export const WebTopBar: React.FC<Props> = ({
       </Text>
       <View style={styles.right}>
       {/* ชื่อร้านค้าย้ายไปอยู่ที่ WebSidebar แล้ว — ใน topbar แสดงแค่ user + role + pos */}
+        <LanguageToggle
+          value={uiLanguage}
+          onChange={setUiLanguage}
+          accessibilityLabel={t('settings.uiLanguage')}
+        />
         {!isSmall && (
           <View style={styles.userInfo}>
             <Text style={styles.userName}>{userName}</Text>

@@ -21,42 +21,44 @@ import { WebBrandScreen }       from '../screens/web/WebBrandScreen';
 import { WebReceiptDesignerScreen } from '../screens/web/WebReceiptDesignerScreen';
 import { useAuthStore }       from '../store/authStore';
 import { canAccess }          from '../constants/rolePermissions';
+import { useT }               from '../i18n/useT';
+import type { UiKey }         from '../i18n/types';
 
-// map route → page name ที่แสดงใน TopBar
-const PAGE_NAMES: Record<string, string> = {
-  dashboard:                  'หน้าหลัก',
-  pos:                        'ขายสินค้า',
-  salehistory:                'ประวัติขาย',
-  products:                   'สินค้า',
-  pricing:                    'กำหนดราคา',
-  suppliers:                  'ผู้จำหน่าย',
-  brands:                     'แบรนด์',
-  reports:                    'รายงาน',
-  crm:                        'CRM',
-  promotions:                 'โปรโมชั่น',
-  team:                       'จัดการทีม',
-  auditlog:                   'Audit Log',
-  settings:                   'ตั้งค่า',
-  'receipt-designer':         'แก้ไขรูปแบบบิล',
-  licenses:                   'ใบอนุญาต',
-  documents:                  'ตั้งค่า › เอกสาร',
-  branches:                   'สาขา',
-  report_sales_main:          'รายงาน › รายงานการขาย',
-  report_sales_summary:       'รายงาน › สรุปการขาย',
-  report_daily_summary:       'รายงาน › สรุปประจำวัน',
-  report_tax_all:             'รายงาน › ภาษีขายรวมทุกร้าน',
-  report_tax_by_shop:         'รายงาน › ภาษีขายแยกร้านค้า',
-  report_pay_summary:         'รายงาน › สรุปยอดรับจ่ายแยกร้าน',
-  report_sales_by_pos:        'รายงาน › ยอดขายแยกตามเครื่อง',
-  report_sales_by_cashier:    'รายงาน › ยอดขายแยกตามผู้ขาย',
-  report_sales_by_product:    'รายงาน › ยอดขายแยกตามสินค้า',
-  report_transfer:            'รายงาน › รายการโอนเงิน',
-  report_bill_payment:        'รายงาน › รายการชำระบิล',
-  report_void_sales:          'รายงาน › ยกเลิกการขาย',
-  report_products:            'รายงาน › รายงานสินค้า',
-  report_inventory:           'รายงาน › รายงานคลังสินค้า',
-  report_profit:              'รายงาน › รายงานกำไร',
-  report_enterprise:          'รายงาน › Enterprise',
+// map route → page name ที่แสดงใน TopBar (เก็บ key — แปลตอน render; [a, b] = breadcrumb 'a › b')
+const PAGE_NAMES: Record<string, UiKey | [UiKey, UiKey]> = {
+  dashboard:                  'nav.dashboard',
+  pos:                        'nav.pos',
+  salehistory:                'nav.saleHistory',
+  products:                   'nav.products',
+  pricing:                    'nav.pricing',
+  suppliers:                  'nav.suppliers',
+  brands:                     'nav.brands',
+  reports:                    'nav.reports',
+  crm:                        'nav.crm',
+  promotions:                 'nav.promotions',
+  team:                       'nav.team',
+  auditlog:                   'nav.auditLog',
+  settings:                   'nav.settings',
+  'receipt-designer':         'nav.receiptDesigner',
+  licenses:                   'nav.licenses',
+  documents:                  ['nav.settings', 'nav.documents'],
+  branches:                   'nav.branches',
+  report_sales_main:          ['nav.reports', 'nav.report.salesMain'],
+  report_sales_summary:       ['nav.reports', 'nav.report.salesSummary'],
+  report_daily_summary:       ['nav.reports', 'nav.report.dailySummary'],
+  report_tax_all:             ['nav.reports', 'nav.report.taxAll'],
+  report_tax_by_shop:         ['nav.reports', 'nav.report.taxByShop'],
+  report_pay_summary:         ['nav.reports', 'nav.report.paySummary'],
+  report_sales_by_pos:        ['nav.reports', 'nav.report.salesByPos'],
+  report_sales_by_cashier:    ['nav.reports', 'nav.report.salesByCashier'],
+  report_sales_by_product:    ['nav.reports', 'nav.report.salesByProduct'],
+  report_transfer:            ['nav.reports', 'nav.report.transfer'],
+  report_bill_payment:        ['nav.reports', 'nav.report.billPayment'],
+  report_void_sales:          ['nav.reports', 'nav.report.voidSales'],
+  report_products:            ['nav.reports', 'nav.report.products'],
+  report_inventory:           ['nav.reports', 'nav.report.inventory'],
+  report_profit:              ['nav.reports', 'nav.report.profit'],
+  report_enterprise:          ['nav.reports', 'nav.report.enterpriseShort'],
 };
 
 // map report_ route → sub-view key ใน WebReportsScreen
@@ -80,6 +82,7 @@ const REPORT_ROUTE_TO_VIEW: Record<string, string> = {
 };
 
 export const WebNavigator: React.FC = () => {
+  const t = useT();
   const { user } = useAuthStore();
   const [route, setRoute] = useState<string>('welcome');
 
@@ -101,7 +104,7 @@ export const WebNavigator: React.FC = () => {
         onLogin={async (cred, pass) => {
           const ok = useAuthStore.getState().login(cred, pass);
           if (ok) setRoute('dashboard');
-          else throw new Error('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+          else throw new Error(t('auth.errInvalidCredentials'));
         }}
         onOTPLogin={() => {}}
         onForgotPassword={() => {}}
@@ -159,11 +162,18 @@ export const WebNavigator: React.FC = () => {
     }
   };
 
+  const pageEntry = PAGE_NAMES[route];
+  const pageTitle = pageEntry == null
+    ? ''
+    : Array.isArray(pageEntry)
+      ? `${t(pageEntry[0])} › ${t(pageEntry[1])}`
+      : t(pageEntry);
+
   return (
     <WebLayout
       activeRoute={route}
       onNavigate={navigate}
-      pageName={PAGE_NAMES[route] ?? ''}
+      pageName={pageTitle}
     >
       {renderContent()}
     </WebLayout>

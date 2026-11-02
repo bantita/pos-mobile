@@ -24,6 +24,9 @@ import { LookupCheckbox } from '../../components/ui/LookupCheckbox';
 import { usePOSPermissionStore, POSAction, POS_ACTION_LABELS, POSUser } from '../../store/posPermissionStore';
 import { useEmployeeStore } from '../../store/employeeStore';
 import { usePaymentConfigStore } from '../../store/paymentConfigStore';
+import { useLanguageStore } from '../../store/languageStore';
+import { LanguageToggle } from '../../components/ui/LanguageToggle';
+import { useT } from '../../i18n/useT';
 
 // ─── Inventory ────────────────────────────────────────────────────────────────
 export const WebInventoryScreen: React.FC = () => {
@@ -2792,6 +2795,9 @@ const TEST_DATA_KEYS = [
 export const WebSettingsScreen: React.FC = () => {
   const [subView, setSubView] = useState<string | null>(null);
   const [showResetModal, setShowResetModal] = useState(false);
+  const t = useT();
+  const uiLanguage = useLanguageStore((st) => st.uiLanguage);
+  const setUiLanguage = useLanguageStore((st) => st.setUiLanguage);
 
   const handleResetTestData = () => {
     if (typeof localStorage !== 'undefined') {
@@ -2847,6 +2853,23 @@ export const WebSettingsScreen: React.FC = () => {
     <View style={g.root}>
       <Text style={g.pageTitle}>ตั้งค่า</Text>
       <Text style={g.pageSub}>จัดการการตั้งค่าระบบ</Text>
+
+      {/* ── ภาษา / Language (ภาษา UI ต่อเครื่อง) ── */}
+      <View style={g.settingCard}>
+        <View style={[g.settingIcon, { backgroundColor: WebColors.infoLight }]}>
+          <Ionicons name="language-outline" size={24} color={WebColors.info} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={g.settingLabel}>{t('settings.language')}</Text>
+          <Text style={g.settingSub}>{t('settings.uiLanguage')}</Text>
+        </View>
+        <LanguageToggle
+          value={uiLanguage}
+          onChange={setUiLanguage}
+          accessibilityLabel={t('settings.uiLanguage')}
+        />
+      </View>
+
       <View style={g.settingsGrid}>
         {cards.map((c, i) => (
           <TouchableOpacity key={i} style={g.settingCard} onPress={() => setSubView(c.key)}>

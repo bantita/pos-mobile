@@ -9,6 +9,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/authStore';
+import { useLanguageStore } from '../../store/languageStore';
+import { LanguageToggle } from '../../components/ui/LanguageToggle';
+import { Spacing } from '../../constants/spacing';
+import { useT } from '../../i18n/useT';
+import { type AuthError, authErrorText, caughtAuthError } from './AuthLayout';
 
 // ─── Design Tokens ───────────────────────────────────────────────────────────
 const C = {
@@ -46,23 +51,27 @@ export const RegisterShopScreen: React.FC<RegisterShopScreenProps> = ({
   const [showConfirm, setShowConfirm] = useState(false);
   const [agree, setAgree] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<AuthError>(null);
   const { width } = useWindowDimensions();
   const isWide = Platform.OS === 'web' && width >= 768;
+  const t = useT();
+  const uiLanguage = useLanguageStore((st) => st.uiLanguage);
+  const setUiLanguage = useLanguageStore((st) => st.setUiLanguage);
+  const errorText = authErrorText(t, error);
 
   const handleRegister = () => {
-    if (!shopName.trim()) { setError('กรุณากรอกชื่อร้าน'); return; }
-    if (!phone.trim()) { setError('กรุณากรอกเบอร์โทร'); return; }
-    if (!password || password.length < 4) { setError('รหัสผ่านอย่างน้อย 4 ตัว'); return; }
-    if (password !== confirmPw) { setError('รหัสผ่านไม่ตรงกัน'); return; }
-    if (!agree) { setError('กรุณายอมรับข้อตกลง'); return; }
-    setError('');
+    if (!shopName.trim()) { setError({ key: 'auth.register.errShopName' }); return; }
+    if (!phone.trim()) { setError({ key: 'auth.register.errPhone' }); return; }
+    if (!password || password.length < 4) { setError({ key: 'auth.register.errPwMin' }); return; }
+    if (password !== confirmPw) { setError({ key: 'auth.errPwMismatch' }); return; }
+    if (!agree) { setError({ key: 'auth.register.errAgree' }); return; }
+    setError(null);
     setLoading(true);
     try {
       register({ phone: phone.trim(), name: shopName.trim(), password, shopName: shopName.trim() });
       onRegisterSuccess();
-    } catch (e: any) {
-      setError(e?.message || 'สมัครไม่สำเร็จ');
+    } catch (e) {
+      setError(caughtAuthError(e, 'auth.register.errFailed'));
     } finally { setLoading(false); }
   };
 
@@ -78,16 +87,16 @@ export const RegisterShopScreen: React.FC<RegisterShopScreenProps> = ({
         </View>
         <Text style={s.brandName}>POS Mobile</Text>
         <Text style={s.brandDesc}>
-          ระบบขายหน้าร้านที่ใช้งานง่าย{'\n'}จัดการร้านของคุณได้ทุกที่
+          {t('auth.brandDesc')}
         </Text>
         <View style={s.chipRow}>
           <View style={s.chip}>
             <Ionicons name="cart-outline" size={12} color={C.mintDark} />
-            <Text style={[s.chipText, { color: C.mintDark }]}>ขายเร็ว</Text>
+            <Text style={[s.chipText, { color: C.mintDark }]}>{t('auth.chipFastSale')}</Text>
           </View>
           <View style={s.chip}>
             <Ionicons name="receipt-outline" size={12} color={C.amberDark} />
-            <Text style={[s.chipText, { color: C.amberDark }]}>ออกบิลง่าย</Text>
+            <Text style={[s.chipText, { color: C.amberDark }]}>{t('auth.chipEasyBill')}</Text>
           </View>
         </View>
       </View>
@@ -101,6 +110,15 @@ export const RegisterShopScreen: React.FC<RegisterShopScreenProps> = ({
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
     >
+      {/* Language switcher */}
+      <View style={s.langRow}>
+        <LanguageToggle
+          value={uiLanguage}
+          onChange={setUiLanguage}
+          accessibilityLabel={t('settings.uiLanguage')}
+        />
+      </View>
+
       {!isWide && (
         <View style={s.mobileLogo}>
           <View style={s.logoBadgeSmall}>
@@ -110,67 +128,67 @@ export const RegisterShopScreen: React.FC<RegisterShopScreenProps> = ({
         </View>
       )}
 
-      <Text style={s.h1}>สร้างร้านค้าใหม่</Text>
-      <Text style={s.subtitle}>กรอกข้อมูลเพื่อเริ่มใช้งาน POS Mobile</Text>
+      <Text style={s.h1}>{t('auth.register.title')}</Text>
+      <Text style={s.subtitle}>{t('auth.register.subtitle')}</Text>
 
       {/* Shop name */}
-      <Text style={s.label}>ชื่อร้าน</Text>
+      <Text style={s.label}>{t('auth.register.shopName')}</Text>
       <View style={s.inputWrap}>
         <Ionicons name="storefront-outline" size={16} color={C.textMuted} style={{ marginRight: 8 }} />
-        <TextInput style={s.input} placeholder="ชื่อร้านค้าของคุณ" placeholderTextColor={C.textMuted} value={shopName} onChangeText={(t) => { setShopName(t); setError(''); }} />
+        <TextInput style={s.input} placeholder={t('auth.register.shopNamePlaceholder')} placeholderTextColor={C.textMuted} value={shopName} onChangeText={(v) => { setShopName(v); setError(null); }} />
       </View>
 
       {/* Phone */}
-      <Text style={s.label}>เบอร์โทรศัพท์</Text>
+      <Text style={s.label}>{t('auth.phone')}</Text>
       <View style={s.inputWrap}>
         <Ionicons name="call-outline" size={16} color={C.textMuted} style={{ marginRight: 8 }} />
-        <TextInput style={s.input} placeholder="08X-XXX-XXXX" placeholderTextColor={C.textMuted} value={phone} onChangeText={(t) => { setPhone(t); setError(''); }} keyboardType="phone-pad" />
+        <TextInput style={s.input} placeholder="08X-XXX-XXXX" placeholderTextColor={C.textMuted} value={phone} onChangeText={(v) => { setPhone(v); setError(null); }} keyboardType="phone-pad" />
       </View>
 
       {/* Email */}
-      <Text style={s.label}>อีเมล</Text>
+      <Text style={s.label}>{t('auth.register.email')}</Text>
       <View style={s.inputWrap}>
         <Ionicons name="mail-outline" size={16} color={C.textMuted} style={{ marginRight: 8 }} />
         <TextInput style={s.input} placeholder="name@example.com" placeholderTextColor={C.textMuted} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
       </View>
 
       {/* Password */}
-      <Text style={s.label}>รหัสผ่าน</Text>
+      <Text style={s.label}>{t('auth.password')}</Text>
       <View style={s.inputWrap}>
         <Ionicons name="lock-closed-outline" size={16} color={C.textMuted} style={{ marginRight: 8 }} />
-        <TextInput style={s.input} placeholder="********" placeholderTextColor={C.textMuted} secureTextEntry={!showPw} value={password} onChangeText={(t) => { setPassword(t); setError(''); }} />
+        <TextInput style={s.input} placeholder="********" placeholderTextColor={C.textMuted} secureTextEntry={!showPw} value={password} onChangeText={(v) => { setPassword(v); setError(null); }} />
         <TouchableOpacity onPress={() => setShowPw(!showPw)}>
           <Ionicons name={showPw ? 'eye-off-outline' : 'eye-outline'} size={18} color={C.textMuted} />
         </TouchableOpacity>
       </View>
 
       {/* Confirm password */}
-      <Text style={s.label}>ยืนยันรหัสผ่าน</Text>
+      <Text style={s.label}>{t('auth.confirmPassword')}</Text>
       <View style={s.inputWrap}>
         <Ionicons name="lock-closed-outline" size={16} color={C.textMuted} style={{ marginRight: 8 }} />
-        <TextInput style={s.input} placeholder="********" placeholderTextColor={C.textMuted} secureTextEntry={!showConfirm} value={confirmPw} onChangeText={(t) => { setConfirmPw(t); setError(''); }} />
+        <TextInput style={s.input} placeholder="********" placeholderTextColor={C.textMuted} secureTextEntry={!showConfirm} value={confirmPw} onChangeText={(v) => { setConfirmPw(v); setError(null); }} />
         <TouchableOpacity onPress={() => setShowConfirm(!showConfirm)}>
           <Ionicons name={showConfirm ? 'eye-off-outline' : 'eye-outline'} size={18} color={C.textMuted} />
         </TouchableOpacity>
       </View>
 
-      {error ? <Text style={s.error}>{error}</Text> : null}
+      {errorText ? <Text style={s.error}>{errorText}</Text> : null}
 
       {/* Agree */}
       <TouchableOpacity style={s.agreeRow} onPress={() => setAgree(!agree)}>
         <Ionicons name={agree ? 'checkbox' : 'square-outline'} size={20} color={agree ? C.primary : C.text} />
-        <Text style={s.agreeText}>ยอมรับข้อตกลงการใช้งาน</Text>
+        <Text style={s.agreeText}>{t('auth.register.agree')}</Text>
       </TouchableOpacity>
 
       {/* Submit */}
       <TouchableOpacity style={s.btnPrimary} onPress={handleRegister} activeOpacity={0.85}>
-        <Text style={s.btnPrimaryText}>{loading ? 'กำลังสร้าง...' : 'สร้างร้านค้า'}</Text>
+        <Text style={s.btnPrimaryText}>{loading ? t('auth.register.creating') : t('auth.register.submit')}</Text>
       </TouchableOpacity>
 
       {/* Back to login */}
       <Text style={s.footerText}>
-        มีร้านค้าอยู่แล้ว?{' '}
-        <Text style={s.linkMint} onPress={onBack}>เข้าสู่ระบบ</Text>
+        {t('auth.register.haveShop')}{' '}
+        <Text style={s.linkMint} onPress={onBack}>{t('auth.login')}</Text>
       </Text>
     </ScrollView>
   );
@@ -216,6 +234,7 @@ const s = StyleSheet.create({
   formSide: { flex: 1.1, backgroundColor: C.bg },
   formScroll: { flexGrow: 1, justifyContent: 'center', padding: 32, maxWidth: 440, alignSelf: 'center', width: '100%' },
 
+  langRow: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: Spacing.lg },
   mobileLogo: { alignItems: 'center', marginBottom: 24 },
   logoBadgeSmall: {
     width: 48, height: 48, borderRadius: 12, backgroundColor: C.primary,

@@ -9,7 +9,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
-import { AuthLayout } from './AuthLayout';
+import { AuthLayout, type AuthError, authErrorText, caughtAuthError } from './AuthLayout';
+import { useT } from '../../i18n/useT';
+import type { UiKey } from '../../i18n/types';
 import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
 import { Spacing, BorderRadius } from '../../constants/spacing';
@@ -29,9 +31,11 @@ export const OTPLoginScreen: React.FC<OTPLoginScreenProps> = ({
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<AuthError>(null);
   const [countdown, setCountdown] = useState(0);
   const inputRefs = useRef<TextInput[]>([]);
+  const t = useT();
+  const errorText = authErrorText(t, error);
 
   useEffect(() => {
     let timer: ReturnType<typeof setInterval>;
@@ -43,17 +47,17 @@ export const OTPLoginScreen: React.FC<OTPLoginScreenProps> = ({
 
   const handleRequestOTP = async () => {
     if (!phone.trim() || phone.trim().length < 9) {
-      setError('กรุณากรอกเบอร์โทรศัพท์ให้ถูกต้อง');
+      setError({ key: 'auth.otp.errPhone' });
       return;
     }
-    setError('');
+    setError(null);
     setLoading(true);
     try {
       await onRequestOTP(phone.trim());
       setStep('otp');
       setCountdown(60);
-    } catch (e: any) {
-      setError(e?.message || 'ไม่สามารถส่ง OTP ได้');
+    } catch (e) {
+      setError(caughtAuthError(e, 'auth.otp.errSendFailed'));
     } finally {
       setLoading(false);
     }
@@ -75,13 +79,13 @@ export const OTPLoginScreen: React.FC<OTPLoginScreenProps> = ({
 
   const handleVerify = async (code?: string) => {
     const otpCode = code || otp.join('');
-    if (otpCode.length < 6) { setError('กรุณากรอกรหัส OTP 6 หลัก'); return; }
-    setError('');
+    if (otpCode.length < 6) { setError({ key: 'auth.otp.errCode' }); return; }
+    setError(null);
     setLoading(true);
     try {
       await onVerifyOTP(phone.trim(), otpCode);
-    } catch (e: any) {
-      setError(e?.message || 'รหัส OTP ไม่ถูกต้อง');
+    } catch (e) {
+      setError(caughtAuthError(e, 'auth.otp.errInvalid'));
       setOtp(['', '', '', '', '', '']);
       inputRefs.current[0]?.focus();
     } finally {
@@ -91,18 +95,18 @@ export const OTPLoginScreen: React.FC<OTPLoginScreenProps> = ({
 
   return (
     <AuthLayout
-      title={step === 'phone' ? 'เข้าสู่ระบบด้วย OTP' : 'ยืนยันรหัส OTP'}
-      subtitle={step === 'phone' ? 'ระบบจะส่งรหัส OTP ไปยังเบอร์โทรที่กรอก' : `ส่งรหัส 6 หลักไปยัง ${phone}`}
+      title={step === 'phone' ? t('auth.otp.titlePhone') : t('auth.otp.titleVerify')}
+      subtitle={step === 'phone' ? t('auth.otp.subtitlePhone') : t('auth.otp.sentTo', { phone })}
     >
       {/* Step indicator */}
       <View style={s.steps}>
-        {['กรอกเบอร์', 'ยืนยัน OTP'].map((label, i) => (
+        {(['auth.otp.stepPhone', 'auth.otp.stepVerify'] as UiKey[]).map((labelKey, i) => (
           <React.Fragment key={i}>
             <View style={s.stepItem}>
               <View style={[s.stepDot, (step === 'otp' ? i <= 1 : i === 0) && s.stepDotActive]}>
                 <Text style={[s.stepNum, (step === 'otp' ? i <= 1 : i === 0) && s.stepNumActive]}>{i + 1}</Text>
               </View>
-              <Text style={s.stepLabel}>{label}</Text>
+              <Text style={s.stepLabel}>{t(labelKey)}</Text>
             </View>
             {i < 1 && <View style={[s.stepLine, step === 'otp' && s.stepLineActive]} />}
           </React.Fragment>
@@ -112,16 +116,16 @@ export const OTPLoginScreen: React.FC<OTPLoginScreenProps> = ({
       {step === 'phone' ? (
         <>
           <Input
-            label="เบอร์โทรศัพท์"
-            placeholder="เช่น 0812345678"
+            label={t('auth.phone')}
+            placeholder={t('auth.phonePlaceholder')}
             value={phone}
-            onChangeText={(t) => { setPhone(t); setError(''); }}
+            onChangeText={(v) => { setPhone(v); setError(null); }}
             leftIcon="call-outline"
             keyboardType="phone-pad"
             maxLength={10}
-            error={error}
+            error={errorText}
           />
-          <Button title="ส่งรหัส OTP" onPress={handleRequestOTP} loading={loading} fullWidth size="lg" style={{ marginTop: Spacing.lg }} />
+          <Button title={t('auth.otp.send')} onPress={handleRequestOTP} loading={loading} fullWidth size="lg" style={{ marginTop: Spacing.lg }} />
         </>
       ) : (
         <>
@@ -140,14 +144,14 @@ export const OTPLoginScreen: React.FC<OTPLoginScreenProps> = ({
               />
             ))}
           </View>
-          {error ? <Text style={s.error}>{error}</Text> : null}
-          <Button title="ยืนยัน OTP" onPress={() => handleVerify()} loading={loading} fullWidth size="lg" />
+          {errorText ? <Text style={s.error}>{errorText}</Text> : null}
+          <Button title={t('auth.otp.verify')} onPress={() => handleVerify()} loading={loading} fullWidth size="lg" />
           <View style={s.resendRow}>
-            <Text style={s.resendText}>ไม่ได้รับรหัส? </Text>
+            <Text style={s.resendText}>{t('auth.otp.notReceived')}</Text>
             {countdown > 0 ? (
-              <Text style={s.countdown}>ส่งอีกครั้งใน {countdown}s</Text>
+              <Text style={s.countdown}>{t('auth.otp.resendIn', { seconds: countdown })}</Text>
             ) : (
-              <TouchableOpacity onPress={handleRequestOTP}><Text style={s.resendLink}>ส่งอีกครั้ง</Text></TouchableOpacity>
+              <TouchableOpacity onPress={handleRequestOTP}><Text style={s.resendLink}>{t('auth.otp.resend')}</Text></TouchableOpacity>
             )}
           </View>
         </>
@@ -156,7 +160,7 @@ export const OTPLoginScreen: React.FC<OTPLoginScreenProps> = ({
       {/* Back */}
       <TouchableOpacity onPress={step === 'otp' ? () => setStep('phone') : onBack} style={s.backRow}>
         <Ionicons name="arrow-back-outline" size={16} color={Colors.textSecondary} />
-        <Text style={s.backText}>{step === 'otp' ? 'เปลี่ยนเบอร์' : 'กลับหน้า Login'}</Text>
+        <Text style={s.backText}>{step === 'otp' ? t('auth.otp.changePhone') : t('auth.backToLogin')}</Text>
       </TouchableOpacity>
     </AuthLayout>
   );

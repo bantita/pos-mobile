@@ -10,6 +10,7 @@ import { OTPLoginScreen } from '../screens/auth/OTPLoginScreen';
 import { ForgotPasswordScreen } from '../screens/auth/ForgotPasswordScreen';
 import { RegisterShopScreen } from '../screens/auth/RegisterShopScreen';
 import { useAuthStore } from '../store/authStore';
+import { t } from '../i18n/useT';
 
 export type AuthStackParamList = {
   Welcome: undefined;
@@ -43,7 +44,7 @@ export const AuthNavigator: React.FC<AuthNavigatorProps> = ({ onAuthSuccess }) =
             onLogin={async (credential, password) => {
               // ตรวจ credential จริงผ่าน authStore — login คืน false เมื่อไม่ถูกต้อง
               const ok = useAuthStore.getState().login(credential, password);
-              if (!ok) throw new Error('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+              if (!ok) throw new Error(t('auth.errInvalidCredentials'));
               onAuthSuccess();
             }}
             onOTPLogin={() => props.navigation.navigate('OTPLogin')}
@@ -61,12 +62,12 @@ export const AuthNavigator: React.FC<AuthNavigatorProps> = ({ onAuthSuccess }) =
               const otp = useAuthStore.getState().requestOTP(phone);
               // แสดงรหัสให้ผู้ทดสอบเห็น (mock เท่านั้น — จริงจะส่งทาง SMS)
               if (typeof window !== 'undefined' && window.alert) {
-                window.alert(`รหัส OTP (ทดสอบ): ${otp}`);
+                window.alert(t('auth.otp.devAlert', { otp }));
               }
             }}
             onVerifyOTP={async (phone, otp) => {
               const ok = useAuthStore.getState().verifyOTP(phone, otp);
-              if (!ok) throw new Error('รหัส OTP ไม่ถูกต้อง');
+              if (!ok) throw new Error(t('auth.otp.errInvalid'));
               onAuthSuccess();
             }}
             onBack={() => props.navigation.goBack()}

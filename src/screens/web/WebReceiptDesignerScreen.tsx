@@ -27,6 +27,8 @@ import {
   ElementAlign,
   LineStyle,
 } from '../../store/receiptStore';
+import { LanguageToggle } from '../../components/ui/LanguageToggle';
+import { useT } from '../../i18n/useT';
 
 // ─── ป้ายกำกับภาษาไทย ──────────────────────────────────────────────────────────
 
@@ -127,6 +129,8 @@ export const WebReceiptDesignerScreen: React.FC = () => {
   const resizeElement = useReceiptStore((s) => s.resizeElement);
   const removeElement = useReceiptStore((s) => s.removeElement);
   const duplicateElement = useReceiptStore((s) => s.duplicateElement);
+  const setConfig = useReceiptStore((s) => s.setConfig);
+  const t = useT();
 
   const template: ReceiptTemplate = config.template ?? DEFAULT_TEMPLATE;
   const paper = template.paper;
@@ -381,6 +385,19 @@ export const WebReceiptDesignerScreen: React.FC = () => {
               <Text style={[s.segText, zoomMode === z && s.segTextActive]}>{z}x</Text>
             </TouchableOpacity>
           ))}
+        </View>
+
+        {/* receipt language — มีผลทันที (preview ตาม config) */}
+        <View style={s.toolGroup}>
+          <View>
+            <Text style={s.toolLabel}>{t('settings.receiptLanguage')}</Text>
+            <Text style={s.toolHint}>{t('settings.receiptLanguageHint')}</Text>
+          </View>
+          <LanguageToggle
+            value={config.receiptLanguage ?? 'th'}
+            onChange={(receiptLanguage) => setConfig({ receiptLanguage })}
+            accessibilityLabel={t('settings.receiptLanguage')}
+          />
         </View>
 
         <View style={{ flex: 1 }} />
@@ -651,6 +668,7 @@ const s = StyleSheet.create({
   },
   toolGroup: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   toolLabel: { fontSize: 12, color: WebColors.textSecondary },
+  toolHint: { fontSize: 11, color: WebColors.textDisabled },
   segBtn: {
     paddingHorizontal: 10, height: 32, alignItems: 'center', justifyContent: 'center',
     borderRadius: 6, borderWidth: 1, borderColor: WebColors.cardBorder, backgroundColor: WebColors.white,

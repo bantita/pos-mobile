@@ -10,42 +10,44 @@ import { useAuthStore } from '../../store/authStore';
 import { canAccess } from '../../constants/rolePermissions';
 import { getFeaturesByStoreType } from '../../utils/storeFeatures';
 import { getStoreType, getStoreConfig } from '../../store/storeConfigStore';
+import { useT } from '../../i18n/useT';
+import type { UiKey } from '../../i18n/types';
 
 // ─── Report sub-items ─────────────────────────────────────────────────────────
-const REPORT_SUB_ITEMS = [
-  { route: 'report_sales_main',       label: 'รายงานการขาย'              },
-  { route: 'report_sales_summary',    label: 'สรุปการขาย'                },
-  { route: 'report_tax_all',          label: 'ภาษีขายรวมทุกร้าน'         },
-  { route: 'report_tax_by_shop',      label: 'ภาษีขายแยกร้านค้า'         },
-  { route: 'report_pay_summary',      label: 'สรุปยอดรับจ่ายแยกร้าน'     },
-  { route: 'report_sales_by_pos',     label: 'ยอดขายแยกตามเครื่อง'       },
-  { route: 'report_sales_by_cashier', label: 'ยอดขายแยกตามผู้ขาย'        },
-  { route: 'report_sales_by_product', label: 'ยอดขายแยกตามสินค้า'        },
-  { route: 'report_transfer',         label: 'รายการโอนเงิน'             },
-  { route: 'report_bill_payment',     label: 'รายการชำระบิล'             },
-  { route: 'report_void_sales',       label: 'ยกเลิกการขาย'              },
-  { route: 'report_products',         label: 'รายงานสินค้า'              },
-  { route: 'report_inventory',        label: 'รายงานคลังสินค้า'          },
-  { route: 'report_profit',           label: 'รายงานกำไร'                },
-  { route: 'report_enterprise',       label: 'จัดการข้อมูล (Enterprise)' },
+const REPORT_SUB_ITEMS: { route: string; labelKey: UiKey }[] = [
+  { route: 'report_sales_main',       labelKey: 'nav.report.salesMain'              },
+  { route: 'report_sales_summary',    labelKey: 'nav.report.salesSummary'                },
+  { route: 'report_tax_all',          labelKey: 'nav.report.taxAll'         },
+  { route: 'report_tax_by_shop',      labelKey: 'nav.report.taxByShop'         },
+  { route: 'report_pay_summary',      labelKey: 'nav.report.paySummary'     },
+  { route: 'report_sales_by_pos',     labelKey: 'nav.report.salesByPos'       },
+  { route: 'report_sales_by_cashier', labelKey: 'nav.report.salesByCashier'        },
+  { route: 'report_sales_by_product', labelKey: 'nav.report.salesByProduct'        },
+  { route: 'report_transfer',         labelKey: 'nav.report.transfer'             },
+  { route: 'report_bill_payment',     labelKey: 'nav.report.billPayment'             },
+  { route: 'report_void_sales',       labelKey: 'nav.report.voidSales'              },
+  { route: 'report_products',         labelKey: 'nav.report.products'              },
+  { route: 'report_inventory',        labelKey: 'nav.report.inventory'          },
+  { route: 'report_profit',           labelKey: 'nav.report.profit'                },
+  { route: 'report_enterprise',       labelKey: 'nav.report.enterprise' },
 ];
 
-const NAV_ITEMS = [
-  { route: 'dashboard',   icon: 'home-outline',           label: 'หน้าหลัก'  },
-  { route: 'pos',         icon: 'cart-outline',            label: 'ขายสินค้า' },
-  { route: 'salehistory', icon: 'receipt-outline',         label: 'ประวัติขาย' },
-  { route: 'products',    icon: 'cube-outline',            label: 'สินค้า'    },
-  { route: 'pricing',     icon: 'cash-outline',            label: 'กำหนดราคา' },
-  { route: 'suppliers',   icon: 'business-outline',        label: 'ผู้จำหน่าย' },
-  { route: 'brands',      icon: 'ribbon-outline',          label: 'แบรนด์' },
-  { route: 'reports',     icon: 'bar-chart-outline',       label: 'รายงาน' },
-  { route: 'crm',         icon: 'people-circle-outline',   label: 'CRM' },
-  { route: 'promotions',  icon: 'pricetag-outline',        label: 'โปรโมชั่น' },
-  { route: 'team',        icon: 'people-outline',          label: 'จัดการทีม' },
-  { route: 'auditlog',    icon: 'document-text-outline',   label: 'Audit Log' },
-  { route: 'settings',    icon: 'settings-outline',        label: 'ตั้งค่า'   },
-  { route: 'receipt-designer', icon: 'create-outline',     label: 'แก้ไขรูปแบบบิล' },
-  { route: 'superadmin',  icon: 'shield-checkmark-outline', label: 'Super Admin', adminOnly: true },
+const NAV_ITEMS: { route: string; icon: string; labelKey: UiKey; adminOnly?: boolean }[] = [
+  { route: 'dashboard',   icon: 'home-outline',           labelKey: 'nav.dashboard'  },
+  { route: 'pos',         icon: 'cart-outline',            labelKey: 'nav.pos' },
+  { route: 'salehistory', icon: 'receipt-outline',         labelKey: 'nav.saleHistory' },
+  { route: 'products',    icon: 'cube-outline',            labelKey: 'nav.products'    },
+  { route: 'pricing',     icon: 'cash-outline',            labelKey: 'nav.pricing' },
+  { route: 'suppliers',   icon: 'business-outline',        labelKey: 'nav.suppliers' },
+  { route: 'brands',      icon: 'ribbon-outline',          labelKey: 'nav.brands' },
+  { route: 'reports',     icon: 'bar-chart-outline',       labelKey: 'nav.reports' },
+  { route: 'crm',         icon: 'people-circle-outline',   labelKey: 'nav.crm' },
+  { route: 'promotions',  icon: 'pricetag-outline',        labelKey: 'nav.promotions' },
+  { route: 'team',        icon: 'people-outline',          labelKey: 'nav.team' },
+  { route: 'auditlog',    icon: 'document-text-outline',   labelKey: 'nav.auditLog' },
+  { route: 'settings',    icon: 'settings-outline',        labelKey: 'nav.settings'   },
+  { route: 'receipt-designer', icon: 'create-outline',     labelKey: 'nav.receiptDesigner' },
+  { route: 'superadmin',  icon: 'shield-checkmark-outline', labelKey: 'nav.superAdmin', adminOnly: true },
 ];
 
 const SIDEBAR_W  = 56;
@@ -70,10 +72,11 @@ export const WebSidebar: React.FC<Props> = ({
     activeRoute === 'reports' || activeRoute.startsWith('report_')
   );
 
+  const t = useT();
   const { user, logout } = useAuthStore();
   const shopLogo = user?.shopLogo;
   const shopName = user?.shopName ?? '';
-  const userName = user?.name     ?? 'ผู้ใช้ทดลอง';
+  const userName = user?.name     ?? t('nav.demoUser');
 
   const isReportActive = activeRoute === 'reports' || activeRoute.startsWith('report_');
 
@@ -179,7 +182,7 @@ export const WebSidebar: React.FC<Props> = ({
           const active = activeRoute === item.route || (item.route === 'reports' && isReportActive);
 
           return renderNavRow(
-            item.route, item.icon, item.label, active,
+            item.route, item.icon, t(item.labelKey), active,
             () => onNavigate(item.route),
           );
         })}
@@ -193,7 +196,7 @@ export const WebSidebar: React.FC<Props> = ({
         onPress={() => logout()}
       >
         <Ionicons name="log-out-outline" size={20} color={WebColors.sidebarIcon} />
-        {showLabel && <Text style={s.logoutLabel}>ออกจากระบบ</Text>}
+        {showLabel && <Text style={s.logoutLabel}>{t('nav.logout')}</Text>}
       </TouchableOpacity>
 
     </View>

@@ -11,6 +11,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/authStore';
 import { useStoreConfigStore } from '../../store/storeConfigStore';
+import { useLanguageStore } from '../../store/languageStore';
+import { LanguageToggle } from '../../components/ui/LanguageToggle';
+import { Spacing } from '../../constants/spacing';
+import { useT } from '../../i18n/useT';
+import type { Language } from '../../i18n/types';
+import { type AuthError, authErrorText, caughtAuthError } from './AuthLayout';
 
 const C = {
   primary: '#FF8A75',
@@ -46,18 +52,27 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [showPw, setShowPw] = useState(false);
   const [remember, setRemember] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<AuthError>(null);
   const { width } = useWindowDimensions();
   const isWide = Platform.OS === 'web' && width >= 768;
   const shopLogo = useStoreConfigStore.getState().shopLogo;
   const logoSource = shopLogo ? { uri: shopLogo } : require('@/assets/logo.png');
+  const t = useT();
+  const uiLanguage = useLanguageStore((st) => st.uiLanguage);
+  const setUiLanguage = useLanguageStore((st) => st.setUiLanguage);
+  const errorText = authErrorText(t, error);
+
+  const handleLanguageChange = (l: Language) => {
+    setUiLanguage(l);
+    setError(null);
+  };
 
   const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) { setError('กรุณากรอกข้อมูลให้ครบ'); return; }
-    setError('');
+    if (!email.trim() || !password.trim()) { setError({ key: 'auth.errRequired' }); return; }
+    setError(null);
     setLoading(true);
     try { await onLogin?.(email.trim(), password); }
-    catch (e: any) { setError(e?.message || 'เข้าสู่ระบบไม่สำเร็จ'); }
+    catch (e) { setError(caughtAuthError(e, 'auth.errLoginFailed')); }
     finally { setLoading(false); }
   };
 
@@ -73,16 +88,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         <Image source={logoSource} style={s.brandLogo} resizeMode="contain" />
         <Text style={s.brandName}>Xcellence ERP</Text>
         <Text style={s.brandDesc}>
-          ระบบขายหน้าร้านที่ใช้งานง่าย{'\n'}จัดการร้านของคุณได้ทุกที่
+          {t('auth.brandDesc')}
         </Text>
         <View style={s.chipRow}>
           <View style={s.chip}>
             <Ionicons name="cart-outline" size={14} color={C.mintDark} />
-            <Text style={[s.chipText, { color: C.mintDark }]}>ขายเร็ว</Text>
+            <Text style={[s.chipText, { color: C.mintDark }]}>{t('auth.chipFastSale')}</Text>
           </View>
           <View style={s.chip}>
             <Ionicons name="receipt-outline" size={14} color={C.amberDark} />
-            <Text style={[s.chipText, { color: C.amberDark }]}>ออกบิลง่าย</Text>
+            <Text style={[s.chipText, { color: C.amberDark }]}>{t('auth.chipEasyBill')}</Text>
           </View>
         </View>
       </View>
@@ -96,6 +111,15 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
     >
+      {/* Language switcher */}
+      <View style={s.langRow}>
+        <LanguageToggle
+          value={uiLanguage}
+          onChange={handleLanguageChange}
+          accessibilityLabel={t('settings.uiLanguage')}
+        />
+      </View>
+
       {/* Mobile logo */}
       {!isWide && (
         <View style={s.mobileLogo}>
@@ -103,50 +127,50 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         </View>
       )}
 
-      <Text style={s.h1}>เข้าสู่ระบบ</Text>
-      <Text style={s.subtitle}>กรอกข้อมูลเพื่อเข้าสู่ระบบ POS Mobile</Text>
+      <Text style={s.h1}>{t('auth.login')}</Text>
+      <Text style={s.subtitle}>{t('auth.loginSubtitle')}</Text>
 
       {/* Email */}
-      <Text style={s.label}>ชื่อผู้ใช้</Text>
+      <Text style={s.label}>{t('auth.username')}</Text>
       <View style={s.inputWrap}>
         <Ionicons name="person-outline" size={18} color={C.textMuted} style={{ marginRight: 10 }} />
         <TextInput
           style={s.input}
-          placeholder="เช่น admin, manager, cashier"
+          placeholder={t('auth.usernamePlaceholder')}
           placeholderTextColor={C.textMuted}
           value={email}
-          onChangeText={(t) => { setEmail(t); setError(''); }}
+          onChangeText={(v) => { setEmail(v); setError(null); }}
           autoCapitalize="none"
         />
       </View>
 
       {/* Password */}
-      <Text style={s.label}>รหัสผ่าน</Text>
+      <Text style={s.label}>{t('auth.password')}</Text>
       <View style={s.inputWrap}>
         <Ionicons name="lock-closed-outline" size={18} color={C.textMuted} style={{ marginRight: 10 }} />
         <TextInput
           style={s.input}
-          placeholder="รหัสผ่าน"
+          placeholder={t('auth.password')}
           placeholderTextColor={C.textMuted}
           secureTextEntry={!showPw}
           value={password}
-          onChangeText={(t) => { setPassword(t); setError(''); }}
+          onChangeText={(v) => { setPassword(v); setError(null); }}
         />
         <TouchableOpacity onPress={() => setShowPw(!showPw)}>
           <Ionicons name={showPw ? 'eye-off-outline' : 'eye-outline'} size={20} color={C.textMuted} />
         </TouchableOpacity>
       </View>
 
-      {error ? <Text style={s.error}>{error}</Text> : null}
+      {errorText ? <Text style={s.error}>{errorText}</Text> : null}
 
       {/* Primary button */}
       <TouchableOpacity style={s.btnPrimary} onPress={handleLogin} activeOpacity={0.85}>
-        <Text style={s.btnPrimaryText}>{loading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}</Text>
+        <Text style={s.btnPrimaryText}>{loading ? t('auth.loggingIn') : t('auth.login')}</Text>
       </TouchableOpacity>
 
       {/* Demo accounts */}
       <View style={s.demoBox}>
-        <Text style={s.demoTitle}>บัญชี Demo (กดเพื่อเติมอัตโนมัติ)</Text>
+        <Text style={s.demoTitle}>{t('auth.demoTitle')}</Text>
         {[
           { label: 'admin', role: 'Owner', cred: 'admin', pass: '1234' },
           { label: 'manager', role: 'Manager', cred: 'manager', pass: '1234' },
@@ -157,13 +181,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             <Text style={s.demoRole}>{d.role}</Text>
           </TouchableOpacity>
         ))}
-        <Text style={s.demoHint}>รหัสผ่านทุก account: 1234</Text>
+        <Text style={s.demoHint}>{t('auth.demoHint')}</Text>
       </View>
 
       {/* Footer */}
       <Text style={s.footerText}>
-        ยังไม่มีบัญชี?{' '}
-        <Text style={s.linkMint} onPress={onRegister}>สมัครร้านค้า →</Text>
+        {t('auth.noAccount')}{' '}
+        <Text style={s.linkMint} onPress={onRegister}>{t('auth.registerLink')}</Text>
       </Text>
     </ScrollView>
   );
@@ -206,6 +230,9 @@ const s = StyleSheet.create({
   // Form side
   formSide: { flex: 1.1, backgroundColor: C.bg },
   formScroll: { flexGrow: 1, justifyContent: 'center', padding: 40, maxWidth: 480, alignSelf: 'center', width: '100%' },
+
+  // Language switcher (right-aligned, top of form column)
+  langRow: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: Spacing.lg },
 
   // Mobile logo
   mobileLogo: { alignItems: 'center', marginBottom: 28 },

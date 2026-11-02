@@ -13,6 +13,10 @@ import { Typography, FontSize } from '../../constants/typography';
 import { Spacing, BorderRadius } from '../../constants/spacing';
 import { usePermission } from '../../hooks/usePermission';
 import { usePermissionStore, Role, Module } from '../../store/permissionStore';
+import { useLanguageStore } from '../../store/languageStore';
+import { useReceiptStore } from '../../store/receiptStore';
+import { LanguageToggle } from '../../components/ui/LanguageToggle';
+import { useT } from '../../i18n/useT';
 
 const ROLE_COLORS: Record<Role, string> = {
   owner: Colors.category1,
@@ -62,6 +66,11 @@ export const SettingsHubScreen: React.FC<SettingsHubScreenProps> = ({ navigation
     setCurrentRole, currentRole, menuVisibility,
     hasPermission, auditLog,
   } = usePermissionStore();
+  const t = useT();
+  const uiLanguage = useLanguageStore((st) => st.uiLanguage);
+  const setUiLanguage = useLanguageStore((st) => st.setUiLanguage);
+  const receiptLanguage = useReceiptStore((st) => st.config.receiptLanguage ?? 'th');
+  const setReceiptConfig = useReceiptStore((st) => st.setConfig);
 
   const isMenuEnabled = (module: Module) =>
     menuVisibility.find((m) => m.module === module)?.enabled ?? true;
@@ -324,6 +333,39 @@ export const SettingsHubScreen: React.FC<SettingsHubScreenProps> = ({ navigation
             </View>
           </View>
         ))}
+
+        {/* Language — ภาษา UI (ต่อเครื่อง) + ภาษาใบเสร็จ (แยกกัน) */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={[styles.sectionIconBox, { backgroundColor: Colors.info + '15' }]}>
+              <Ionicons name="language-outline" size={16} color={Colors.info} />
+            </View>
+            <Text style={styles.sectionTitle}>{t('settings.language')}</Text>
+          </View>
+          <View style={styles.menuCard}>
+            <View style={[styles.menuItem, styles.menuItemBorder]}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.menuLabel}>{t('settings.uiLanguage')}</Text>
+              </View>
+              <LanguageToggle
+                value={uiLanguage}
+                onChange={setUiLanguage}
+                accessibilityLabel={t('settings.uiLanguage')}
+              />
+            </View>
+            <View style={styles.menuItem}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.menuLabel}>{t('settings.receiptLanguage')}</Text>
+                <Text style={styles.menuSub}>{t('settings.receiptLanguageHint')}</Text>
+              </View>
+              <LanguageToggle
+                value={receiptLanguage}
+                onChange={(l) => setReceiptConfig({ receiptLanguage: l })}
+                accessibilityLabel={t('settings.receiptLanguage')}
+              />
+            </View>
+          </View>
+        </View>
 
         {/* Footer */}
         <View style={styles.footer}>

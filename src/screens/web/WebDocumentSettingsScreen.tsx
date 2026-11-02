@@ -9,6 +9,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { WebColors } from '../../constants/webColors';
 import { Space, Radius, Font } from '../../design-system/tokens';
 import { useReceiptStore } from '../../store/receiptStore';
+import { LanguageToggle } from '../../components/ui/LanguageToggle';
+import { useT } from '../../i18n/useT';
+import type { Language } from '../../i18n/types';
 
 export const WebDocumentSettingsScreen: React.FC = () => {
   const config = useReceiptStore((s) => s.config);
@@ -25,11 +28,13 @@ export const WebDocumentSettingsScreen: React.FC = () => {
   const [shopTaxId, setShopTaxId] = useState(config.shopTaxId);
   const [footerText, setFooterText] = useState(config.footerText);
   const [taxInvoiceEnabled, setTaxInvoiceEnabled] = useState(config.taxInvoiceEnabled ?? true);
+  const [receiptLanguage, setReceiptLanguage] = useState<Language>(config.receiptLanguage ?? 'th');
+  const t = useT();
 
   useEffect(() => {
     try {
-      const t = setTimeout(() => setLoading(false), 200);
-      return () => clearTimeout(t);
+      const timer = setTimeout(() => setLoading(false), 200);
+      return () => clearTimeout(timer);
     } catch (e) {
       setError('ไม่สามารถโหลดข้อมูลตั้งค่าเอกสารได้');
       setLoading(false);
@@ -45,6 +50,7 @@ export const WebDocumentSettingsScreen: React.FC = () => {
         shopTaxId: shopTaxId.trim(),
         footerText: footerText.trim(),
         taxInvoiceEnabled,
+        receiptLanguage,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
@@ -115,6 +121,19 @@ export const WebDocumentSettingsScreen: React.FC = () => {
             onValueChange={setTaxInvoiceEnabled}
             trackColor={{ true: WebColors.primary, false: WebColors.gray300 }}
             thumbColor={WebColors.white}
+          />
+        </View>
+
+        {/* ── ภาษาใบเสร็จ (แยกจากภาษา UI) ── */}
+        <View style={st.toggleRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={st.label}>{t('settings.receiptLanguage')}</Text>
+            <Text style={st.hint}>{t('settings.receiptLanguageHint')}</Text>
+          </View>
+          <LanguageToggle
+            value={receiptLanguage}
+            onChange={setReceiptLanguage}
+            accessibilityLabel={t('settings.receiptLanguage')}
           />
         </View>
 

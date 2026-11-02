@@ -12,6 +12,27 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
 import { Spacing, BorderRadius, Shadow } from '../../constants/spacing';
+import { LanguageToggle } from '../../components/ui/LanguageToggle';
+import { useT, type TFunction } from '../../i18n/useT';
+import { useLanguageStore } from '../../store/languageStore';
+import type { UiKey } from '../../i18n/types';
+
+/**
+ * ข้อผิดพลาดของหน้า auth — validation เก็บเป็น key (สลับภาษาได้ทันที),
+ * error ที่ throw มาแปลแล้วตอน throw จึงเก็บเป็นข้อความ
+ */
+export type AuthError = { key: UiKey } | { text: string } | null;
+
+export function authErrorText(t: TFunction, error: AuthError): string {
+  if (!error) return '';
+  return 'key' in error ? t(error.key) : error.text;
+}
+
+/** แปลง error ที่ catch ได้ → AuthError (ไม่มีข้อความ → ใช้ fallbackKey) */
+export function caughtAuthError(e: unknown, fallbackKey: UiKey): AuthError {
+  const message = e instanceof Error ? e.message : undefined;
+  return message ? { text: message } : { key: fallbackKey };
+}
 
 interface AuthLayoutProps {
   children: React.ReactNode;
@@ -25,6 +46,9 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
 }) => {
   const { width } = useWindowDimensions();
   const isWide = width >= 900;
+  const t = useT();
+  const uiLanguage = useLanguageStore((st) => st.uiLanguage);
+  const setUiLanguage = useLanguageStore((st) => st.setUiLanguage);
 
   const BrandPanel = () => (
     <View style={s.brandPanel}>
@@ -36,7 +60,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
         />
         <Text style={s.brandName}>Xcellence ERP</Text>
         <Text style={s.brandTagline}>
-          ระบบจัดการร้านค้าครบวงจร{'\n'}POS · CRM · Inventory · Reports
+          {t('auth.brandTagline')}
         </Text>
       </View>
       <Text style={s.brandFooter}>© 2024 Xcellence Group</Text>
@@ -59,6 +83,13 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
         </View>
       )}
       <View style={[s.formCard, { maxWidth }]}>
+        <View style={s.langRow}>
+          <LanguageToggle
+            value={uiLanguage}
+            onChange={setUiLanguage}
+            accessibilityLabel={t('settings.uiLanguage')}
+          />
+        </View>
         <Text style={s.formTitle}>{title}</Text>
         {subtitle && <Text style={s.formSubtitle}>{subtitle}</Text>}
         {children}
@@ -119,6 +150,7 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border,
     ...Shadow.sm,
   },
+  langRow: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: Spacing.md },
   formTitle: { ...Typography.h3, color: Colors.text, marginBottom: 2 },
   formSubtitle: { ...Typography.body2, color: Colors.textSecondary, marginBottom: Spacing.xl },
 });

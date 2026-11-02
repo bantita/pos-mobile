@@ -9,7 +9,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
-import { AuthLayout } from './AuthLayout';
+import { AuthLayout, type AuthError, authErrorText } from './AuthLayout';
+import { useT } from '../../i18n/useT';
+import type { UiKey } from '../../i18n/types';
 import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
 import { Spacing, BorderRadius } from '../../constants/spacing';
@@ -32,33 +34,35 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<AuthError>(null);
   const [countdown, setCountdown] = useState(0);
   const inputRefs = useRef<TextInput[]>([]);
+  const t = useT();
+  const errorText = authErrorText(t, error);
 
   const handleSendOTP = async () => {
-    if (!phone.trim() || phone.trim().length < 9) { setError('กรุณากรอกเบอร์โทรให้ถูกต้อง'); return; }
-    setError('');
+    if (!phone.trim() || phone.trim().length < 9) { setError({ key: 'auth.forgot.errPhone' }); return; }
+    setError(null);
     setLoading(true);
     setTimeout(() => { setLoading(false); setStep('otp'); setCountdown(60); }, 1000);
   };
 
   const handleVerifyOTP = () => {
     const code = otp.join('');
-    if (code.length < 6) { setError('กรุณากรอก OTP 6 หลัก'); return; }
-    setError('');
+    if (code.length < 6) { setError({ key: 'auth.forgot.errOtp' }); return; }
+    setError(null);
     setStep('new-password');
   };
 
   const handleReset = () => {
-    if (!newPassword || newPassword.length < 4) { setError('รหัสผ่านต้องมีอย่างน้อย 4 ตัว'); return; }
-    if (newPassword !== confirmPassword) { setError('รหัสผ่านไม่ตรงกัน'); return; }
+    if (!newPassword || newPassword.length < 4) { setError({ key: 'auth.forgot.errPwMin' }); return; }
+    if (newPassword !== confirmPassword) { setError({ key: 'auth.errPwMismatch' }); return; }
     // อัปเดตรหัสผ่านจริงที่ store — ถ้าไม่พบบัญชีที่ตรงเบอร์ ให้แจ้งผู้ใช้
     if (onReset && !onReset(phone.trim(), newPassword)) {
-      setError('ไม่พบบัญชีที่ผูกกับเบอร์นี้');
+      setError({ key: 'auth.forgot.errNoAccount' });
       return;
     }
-    setError('');
+    setError(null);
     setStep('success');
   };
 
@@ -69,28 +73,28 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({
     if (value && index < 5) inputRefs.current[index + 1]?.focus();
   };
 
-  const titles: Record<Step, { title: string; subtitle: string }> = {
-    phone: { title: 'ลืมรหัสผ่าน', subtitle: 'กรอกเบอร์โทรเพื่อรับ OTP สำหรับรีเซ็ต' },
-    otp: { title: 'ยืนยัน OTP', subtitle: `ส่งรหัส 6 หลักไปยัง ${phone}` },
-    'new-password': { title: 'ตั้งรหัสผ่านใหม่', subtitle: 'กรอกรหัสผ่านใหม่ที่ต้องการ' },
-    success: { title: 'สำเร็จ!', subtitle: 'รีเซ็ตรหัสผ่านเรียบร้อยแล้ว' },
+  const titles: Record<Step, { title: UiKey; subtitle: UiKey }> = {
+    phone: { title: 'auth.forgot.title', subtitle: 'auth.forgot.subtitle' },
+    otp: { title: 'auth.otp.verify', subtitle: 'auth.otp.sentTo' },
+    'new-password': { title: 'auth.forgot.newPasswordTitle', subtitle: 'auth.forgot.newPasswordSubtitle' },
+    success: { title: 'auth.forgot.successTitle', subtitle: 'auth.forgot.successSubtitle' },
   };
 
   return (
-    <AuthLayout title={titles[step].title} subtitle={titles[step].subtitle}>
+    <AuthLayout title={t(titles[step].title)} subtitle={t(titles[step].subtitle, { phone })}>
       {step === 'phone' && (
         <>
           <Input
-            label="เบอร์โทรศัพท์"
-            placeholder="เช่น 0812345678"
+            label={t('auth.phone')}
+            placeholder={t('auth.phonePlaceholder')}
             value={phone}
-            onChangeText={(t) => { setPhone(t); setError(''); }}
+            onChangeText={(v) => { setPhone(v); setError(null); }}
             leftIcon="call-outline"
             keyboardType="phone-pad"
             maxLength={10}
-            error={error}
+            error={errorText}
           />
-          <Button title="ส่งรหัส OTP" onPress={handleSendOTP} loading={loading} fullWidth size="lg" style={{ marginTop: Spacing.lg }} />
+          <Button title={t('auth.otp.send')} onPress={handleSendOTP} loading={loading} fullWidth size="lg" style={{ marginTop: Spacing.lg }} />
         </>
       )}
 
@@ -109,31 +113,31 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({
               />
             ))}
           </View>
-          {error ? <Text style={s.error}>{error}</Text> : null}
-          <Button title="ยืนยัน" onPress={handleVerifyOTP} fullWidth size="lg" />
+          {errorText ? <Text style={s.error}>{errorText}</Text> : null}
+          <Button title={t('common.confirm')} onPress={handleVerifyOTP} fullWidth size="lg" />
         </>
       )}
 
       {step === 'new-password' && (
         <>
-          <Input label="รหัสผ่านใหม่" placeholder="อย่างน้อย 4 ตัว" value={newPassword} onChangeText={setNewPassword} isPassword leftIcon="lock-closed-outline" />
-          <Input label="ยืนยันรหัสผ่าน" placeholder="กรอกอีกครั้ง" value={confirmPassword} onChangeText={setConfirmPassword} isPassword leftIcon="lock-closed-outline" error={error} />
-          <Button title="ตั้งรหัสผ่านใหม่" onPress={handleReset} fullWidth size="lg" style={{ marginTop: Spacing.lg }} />
+          <Input label={t('auth.forgot.newPassword')} placeholder={t('auth.forgot.newPasswordPlaceholder')} value={newPassword} onChangeText={setNewPassword} isPassword leftIcon="lock-closed-outline" />
+          <Input label={t('auth.confirmPassword')} placeholder={t('auth.forgot.confirmPlaceholder')} value={confirmPassword} onChangeText={setConfirmPassword} isPassword leftIcon="lock-closed-outline" error={errorText} />
+          <Button title={t('auth.forgot.newPasswordTitle')} onPress={handleReset} fullWidth size="lg" style={{ marginTop: Spacing.lg }} />
         </>
       )}
 
       {step === 'success' && (
         <View style={s.successBox}>
           <Ionicons name="checkmark-circle" size={56} color={Colors.success} />
-          <Text style={s.successText}>เปลี่ยนรหัสผ่านสำเร็จ</Text>
-          <Button title="กลับหน้า Login" onPress={onResetSuccess} fullWidth size="lg" style={{ marginTop: Spacing.lg }} />
+          <Text style={s.successText}>{t('auth.forgot.success')}</Text>
+          <Button title={t('auth.backToLogin')} onPress={onResetSuccess} fullWidth size="lg" style={{ marginTop: Spacing.lg }} />
         </View>
       )}
 
       {step !== 'success' && (
         <TouchableOpacity onPress={onBack} style={s.backRow}>
           <Ionicons name="arrow-back-outline" size={16} color={Colors.textSecondary} />
-          <Text style={s.backText}>กลับหน้า Login</Text>
+          <Text style={s.backText}>{t('auth.backToLogin')}</Text>
         </TouchableOpacity>
       )}
     </AuthLayout>
