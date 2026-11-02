@@ -17,7 +17,8 @@ import { useReceiptStore } from '../../store/receiptStore';
 import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
 import { Spacing, BorderRadius } from '../../constants/spacing';
-import { formatCurrency, formatDateTime } from '../../utils/format';
+import { useT, useReceiptT } from '../../i18n';
+import { buildTaxInvoiceHtml } from '../../utils/taxInvoiceHtml';
 
 interface TaxInvoiceScreenProps {
   saleNo: string;
@@ -28,6 +29,9 @@ interface TaxInvoiceScreenProps {
 export const TaxInvoiceScreen: React.FC<TaxInvoiceScreenProps> = ({
   saleNo, onBack, onCancelInvoice,
 }) => {
+  const t = useT();
+  // เอกสาร (กระดาษ/HTML ที่พิมพ์) ใช้ "ภาษาใบเสร็จ"; ฟอร์มและปุ่มใช้ภาษา UI
+  const { rt, receiptLang, fmt } = useReceiptT();
   const sale = useSaleHistoryStore((s) => s.getSaleByNo)(saleNo);
   const storeConfig = useStoreConfigStore();
   const receiptConfig = useReceiptStore((s) => s.config);
@@ -48,15 +52,15 @@ export const TaxInvoiceScreen: React.FC<TaxInvoiceScreenProps> = ({
           <TouchableOpacity onPress={onBack} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={24} color={Colors.white} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>ใบกำกับภาษีเต็มรูป</Text>
+          <Text style={styles.headerTitle}>{t('receiptScreen.taxInvoice.title')}</Text>
           <View style={{ width: 32 }} />
         </View>
         <View style={styles.emptyWrap}>
           <Ionicons name="document-outline" size={64} color={Colors.gray400} />
-          <Text style={styles.emptyText}>ไม่พบข้อมูลการขาย</Text>
+          <Text style={styles.emptyText}>{t('receiptScreen.taxInvoice.notFound')}</Text>
           <TouchableOpacity style={styles.emptyBtn} onPress={onBack}>
             <Ionicons name="arrow-back" size={18} color={Colors.primary} />
-            <Text style={styles.emptyBtnText}>ย้อนกลับ</Text>
+            <Text style={styles.emptyBtnText}>{t('common.back')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -68,56 +72,18 @@ export const TaxInvoiceScreen: React.FC<TaxInvoiceScreenProps> = ({
   const base = grandTotal / 1.07;
   const vat = grandTotal - base;
 
-  const buildHTML = (): string => {
-    const rows = sale.items
-      .map((item) => `<tr>
-        <td>${item.product.name}</td>
-        <td style="text-align:center">${item.qty}</td>
-        <td style="text-align:right">฿${formatCurrency(item.unitPrice)}</td>
-        <td style="text-align:right">฿${formatCurrency(item.subtotal)}</td>
-      </tr>`)
-      .join('');
-
-    return `<!doctype html><html><head><meta charset="utf-8"><title>ใบกำกับภาษีเต็มรูป</title>
-<style>
-  * { font-family: 'Sarabun', -apple-system, sans-serif; }
-  body { width: 560px; margin: 0 auto; padding: 24px; color: #111; }
-  h2 { text-align: center; margin: 4px 0; font-size: 20px; }
-  .sub { text-align: center; font-size: 13px; color: #555; }
-  .block { margin: 10px 0; font-size: 13px; }
-  .block b { display: inline-block; min-width: 120px; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px; }
-  th, td { border: 1px solid #ccc; padding: 6px 8px; }
-  th { background: #f5f5f5; text-align: left; }
-  .totals { width: 260px; margin-left: auto; margin-top: 12px; font-size: 13px; }
-  .totals td { border: none; padding: 3px 0; }
-  .total { font-weight: 800; font-size: 15px; }
-  .line { border-top: 1px dashed #999; margin: 10px 0; }
-</style></head><body>
-  <h2>ใบกำกับภาษีเต็มรูป</h2>
-  <div class="sub">เลขที่ ${invoiceNo} · วันที่ ${formatDateTime(new Date(sale.createdAt))}</div>
-  <div class="line"></div>
-  <div class="block"><b>ผู้ขาย</b> ${sellerName}</div>
-  <div class="block"><b>ที่อยู่</b> ${sellerAddress}</div>
-  <div class="block"><b>เลขผู้เสียภาษี</b> ${sellerTaxId}</div>
-  <div class="line"></div>
-  <div class="block"><b>ผู้ซื้อ</b> ${buyerName || '-'}</div>
-  <div class="block"><b>เลขผู้เสียภาษี</b> ${buyerTaxId || '-'}</div>
-  <div class="block"><b>ที่อยู่</b> ${buyerAddress || '-'}</div>
-  <table>
-    <thead><tr><th>รายการ</th><th style="text-align:center">จำนวน</th><th style="text-align:right">ราคา/หน่วย</th><th style="text-align:right">รวม</th></tr></thead>
-    <tbody>${rows}</tbody>
-  </table>
-  <table class="totals">
-    <tr><td>มูลค่าสินค้า (ก่อน VAT)</td><td style="text-align:right">฿${formatCurrency(base)}</td></tr>
-    <tr><td>ภาษีมูลค่าเพิ่ม 7%</td><td style="text-align:right">฿${formatCurrency(vat)}</td></tr>
-    <tr class="total"><td>ยอดรวมสุทธิ</td><td style="text-align:right">฿${formatCurrency(grandTotal)}</td></tr>
-  </table>
-</body></html>`;
-  };
-
   const handlePrint = async () => {
-    const html = buildHTML();
+    const html = buildTaxInvoiceHtml(
+      {
+        invoiceNo,
+        issuedAt: sale.createdAt,
+        seller: { name: sellerName, address: sellerAddress, taxId: sellerTaxId },
+        buyer: { name: buyerName, taxId: buyerTaxId, address: buyerAddress },
+        items: sale.items.map((i) => ({ name: i.product.name, qty: i.qty, unitPrice: i.unitPrice, amount: i.subtotal })),
+        totals: { base, vat, grand: grandTotal },
+      },
+      receiptLang,
+    );
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const win = window.open('', '_blank');
       if (win) {
@@ -132,7 +98,7 @@ export const TaxInvoiceScreen: React.FC<TaxInvoiceScreenProps> = ({
       const { uri } = await Print.printToFileAsync({ html, base64: false });
       const isAvailable = await Sharing.isAvailableAsync();
       if (isAvailable) {
-        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: `ใบกำกับภาษี ${invoiceNo}`, UTI: 'com.adobe.pdf' });
+        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: t('receiptScreen.taxInvoice.shareTitle', { no: invoiceNo }), UTI: 'com.adobe.pdf' });
       } else {
         await Print.printAsync({ html });
       }
@@ -148,7 +114,7 @@ export const TaxInvoiceScreen: React.FC<TaxInvoiceScreenProps> = ({
         <TouchableOpacity onPress={onBack} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={Colors.white} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>ใบกำกับภาษีเต็มรูป</Text>
+        <Text style={styles.headerTitle}>{t('receiptScreen.taxInvoice.title')}</Text>
         <View style={{ width: 32 }} />
       </View>
 
@@ -156,46 +122,46 @@ export const TaxInvoiceScreen: React.FC<TaxInvoiceScreenProps> = ({
         {/* Invoice info */}
         <View style={styles.card}>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>เลขที่ใบกำกับภาษี</Text>
+            <Text style={styles.infoLabel}>{rt('receipt.caption.taxInvoiceNo')}</Text>
             <Text style={styles.infoValue}>{invoiceNo}</Text>
           </View>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>วันที่</Text>
-            <Text style={styles.infoValue}>{formatDateTime(new Date(sale.createdAt))}</Text>
+            <Text style={styles.infoLabel}>{rt('receipt.caption.date')}</Text>
+            <Text style={styles.infoValue}>{fmt.dateTime(sale.createdAt)}</Text>
           </View>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>อ้างอิงบิล</Text>
+            <Text style={styles.infoLabel}>{rt('receipt.taxInvoice.refBill')}</Text>
             <Text style={styles.infoValue}>{saleNo}</Text>
           </View>
         </View>
 
         {/* Seller */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>ข้อมูลผู้ขาย</Text>
+          <Text style={styles.sectionTitle}>{rt('receipt.taxInvoice.sellerInfo')}</Text>
           <Text style={styles.sellerLine}>{sellerName}</Text>
           <Text style={styles.sellerSub}>{sellerAddress}</Text>
-          <Text style={styles.sellerSub}>เลขประจำตัวผู้เสียภาษี: {sellerTaxId}</Text>
+          <Text style={styles.sellerSub}>{rt('receipt.caption.taxId')}: {sellerTaxId}</Text>
         </View>
 
         {/* Buyer (editable) */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>ข้อมูลผู้ซื้อ</Text>
+          <Text style={styles.sectionTitle}>{t('receiptScreen.taxInvoice.buyerInfo')}</Text>
           <Input
-            label="ชื่อผู้ซื้อ"
-            placeholder="ชื่อลูกค้า / บริษัท"
+            label={t('receiptScreen.taxInvoice.buyerName')}
+            placeholder={t('receiptScreen.taxInvoice.buyerNamePlaceholder')}
             value={buyerName}
             onChangeText={setBuyerName}
           />
           <Input
-            label="เลขประจำตัวผู้เสียภาษี"
-            placeholder="เลข 13 หลัก"
+            label={t('receiptScreen.taxInvoice.buyerTaxId')}
+            placeholder={t('receiptScreen.taxInvoice.buyerTaxIdPlaceholder')}
             value={buyerTaxId}
             onChangeText={setBuyerTaxId}
             keyboardType="number-pad"
           />
           <Input
-            label="ที่อยู่"
-            placeholder="ที่อยู่สำหรับออกใบกำกับภาษี"
+            label={t('receiptScreen.taxInvoice.buyerAddress')}
+            placeholder={t('receiptScreen.taxInvoice.buyerAddressPlaceholder')}
             value={buyerAddress}
             onChangeText={setBuyerAddress}
             multiline
@@ -206,14 +172,14 @@ export const TaxInvoiceScreen: React.FC<TaxInvoiceScreenProps> = ({
 
         {/* Items */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>รายการสินค้า</Text>
+          <Text style={styles.sectionTitle}>{rt('receipt.paper.items')}</Text>
           {sale.items.map((item, i) => (
             <View key={i} style={styles.itemRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.itemName} numberOfLines={1}>{item.product.name}</Text>
-                <Text style={styles.itemDetail}>{item.qty} × ฿{formatCurrency(item.unitPrice)}</Text>
+                <Text style={styles.itemDetail}>{item.qty} × {fmt.money(item.unitPrice)}</Text>
               </View>
-              <Text style={styles.itemAmount}>฿{formatCurrency(item.subtotal)}</Text>
+              <Text style={styles.itemAmount}>{fmt.money(item.subtotal)}</Text>
             </View>
           ))}
         </View>
@@ -221,20 +187,20 @@ export const TaxInvoiceScreen: React.FC<TaxInvoiceScreenProps> = ({
         {/* VAT breakdown */}
         <View style={styles.card}>
           <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>มูลค่าสินค้า (ก่อน VAT)</Text>
-            <Text style={styles.totalValue}>฿{formatCurrency(base)}</Text>
+            <Text style={styles.totalLabel}>{rt('receipt.taxInvoice.beforeVat')}</Text>
+            <Text style={styles.totalValue}>{fmt.money(base)}</Text>
           </View>
           <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>ภาษีมูลค่าเพิ่ม 7%</Text>
-            <Text style={styles.totalValue}>฿{formatCurrency(vat)}</Text>
+            <Text style={styles.totalLabel}>{rt('receipt.vat', { rate: 7 })}</Text>
+            <Text style={styles.totalValue}>{fmt.money(vat)}</Text>
           </View>
           <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>VAT จากบิล</Text>
-            <Text style={styles.totalValue}>฿{formatCurrency(sale.vatAmount)}</Text>
+            <Text style={styles.totalLabel}>{rt('receipt.taxInvoice.vatFromBill')}</Text>
+            <Text style={styles.totalValue}>{fmt.money(sale.vatAmount)}</Text>
           </View>
           <View style={styles.grandTotalBox}>
-            <Text style={styles.grandTotalLabel}>ยอดรวมสุทธิ</Text>
-            <Text style={styles.grandTotalValue}>฿{formatCurrency(grandTotal)}</Text>
+            <Text style={styles.grandTotalLabel}>{rt('receipt.taxInvoice.grandTotal')}</Text>
+            <Text style={styles.grandTotalValue}>{fmt.money(grandTotal)}</Text>
           </View>
         </View>
 
@@ -242,17 +208,17 @@ export const TaxInvoiceScreen: React.FC<TaxInvoiceScreenProps> = ({
         <View style={styles.actions}>
           <TouchableOpacity style={styles.printBtn} onPress={handlePrint} activeOpacity={0.85}>
             <Ionicons name="print-outline" size={20} color={Colors.white} />
-            <Text style={styles.printBtnText}>พิมพ์ใบกำกับภาษี</Text>
+            <Text style={styles.printBtnText}>{t('receiptScreen.taxInvoice.print')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.outlineBtn} onPress={onBack} activeOpacity={0.85}>
             <Ionicons name="arrow-back" size={20} color={Colors.primary} />
-            <Text style={styles.outlineBtnText}>ย้อนกลับ</Text>
+            <Text style={styles.outlineBtnText}>{t('common.back')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.cancelBtn} onPress={onCancelInvoice} activeOpacity={0.85}>
             <Ionicons name="close-circle-outline" size={20} color={Colors.danger} />
-            <Text style={styles.cancelBtnText}>ยกเลิกใบกำกับภาษี</Text>
+            <Text style={styles.cancelBtnText}>{t('receiptScreen.taxInvoice.cancel')}</Text>
           </TouchableOpacity>
         </View>
 

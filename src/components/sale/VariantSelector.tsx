@@ -16,7 +16,7 @@ import { Spacing, BorderRadius, ComponentSize } from '../../constants/spacing';
 import { ProductMaster, ProductVariant } from '../../types/product';
 import { Product } from '../../types/sale';
 import { toCartProduct } from '../../utils/cartProduct';
-import { formatCurrency } from '../../utils/format';
+import { useT, useFormat } from '../../i18n';
 import { resolveCartPrice } from '../../utils/priceResolver';
 
 interface VariantSelectorProps {
@@ -41,6 +41,8 @@ const findMatchingVariant = (
 export const VariantSelector: React.FC<VariantSelectorProps> = ({
   visible, master, branchId, onSelect, onClose,
 }) => {
+  const t = useT();
+  const f = useFormat();
   const [selected, setSelected] = useState<Record<string, string>>({});
 
   // รีเซ็ตค่าที่เลือกทุกครั้งที่เปลี่ยนสินค้า/เปิดใหม่
@@ -85,7 +87,7 @@ export const VariantSelector: React.FC<VariantSelectorProps> = ({
               <Ionicons name="options-outline" size={20} color={Colors.primary} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.title}>เลือกตัวเลือกสินค้า</Text>
+              <Text style={styles.title}>{t('pos.variant.title')}</Text>
               <Text style={styles.subtitle}>{master.name}</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
@@ -97,7 +99,7 @@ export const VariantSelector: React.FC<VariantSelectorProps> = ({
           {options.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons name="cube-outline" size={48} color={Colors.gray300} />
-              <Text style={styles.emptyText}>ไม่มีข้อมูลตัวเลือก</Text>
+              <Text style={styles.emptyText}>{t('pos.variant.noOptions')}</Text>
             </View>
           ) : (
             options.map((opt) => (
@@ -145,13 +147,13 @@ export const VariantSelector: React.FC<VariantSelectorProps> = ({
           {allChosen && !matchedVariant && (
             <View style={styles.warnBox}>
               <Ionicons name="alert-circle-outline" size={18} color={Colors.danger} />
-              <Text style={styles.warnText}>ไม่มีสินค้าตามตัวเลือกที่เลือก</Text>
+              <Text style={styles.warnText}>{t('pos.variant.noMatch')}</Text>
             </View>
           )}
           {matchedVariant && (
             <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>ราคา</Text>
-              <Text style={styles.priceValue}>฿{formatCurrency(previewPrice)}</Text>
+              <Text style={styles.priceLabel}>{t('pos.variant.price')}</Text>
+              <Text style={styles.priceValue}>{f.money(previewPrice)}</Text>
             </View>
           )}
 
@@ -162,10 +164,10 @@ export const VariantSelector: React.FC<VariantSelectorProps> = ({
             disabled={!matchedVariant}
             activeOpacity={0.85}
           >
-            <Text style={styles.confirmText}>เพิ่มลงบิล</Text>
+            <Text style={styles.confirmText}>{t('pos.variant.addToBill')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
-            <Text style={styles.cancelText}>ยกเลิก</Text>
+            <Text style={styles.cancelText}>{t('common.cancel')}</Text>
           </TouchableOpacity>
         </View>
       </View>

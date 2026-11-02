@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useCartStore } from '../../store/cartStore';
 import { useSaleModeStore } from '../../store/saleModeStore';
-import { Product, OrderType, OrderDetails, ORDER_TYPE_LABELS, ORDER_TYPE_ICONS } from '../../types/sale';
+import { Product, OrderType, OrderDetails, ORDER_TYPE_ICONS } from '../../types/sale';
 import { useNavigation } from '@react-navigation/native';
 import { useKioskStore } from '../../store/kioskStore';
 import { SaleModePicker } from '../../components/sale/SaleModePicker';
@@ -22,7 +22,7 @@ import { ServiceStaffPopup } from '../../components/sale/ServiceStaffPopup';
 import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
 import { Spacing, BorderRadius } from '../../constants/spacing';
-import { formatCurrency } from '../../utils/format';
+import { useT, useFormat, ORDER_TYPE_KEYS } from '../../i18n';
 import { findProductByBarcode } from '../../data/mockProducts';
 import { ProductMaster } from '../../types/product';
 import { MOCK_TECHNICIANS } from '../../data/mockStaff';
@@ -35,7 +35,9 @@ import { VariantSelector } from '../../components/sale/VariantSelector';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ─── Mock Products (Product type สำหรับ cart) ─────────────────────────────────
+// ชื่อหมวด = ข้อมูล (ตรงกับ product.category) — CATEGORIES[0] คือ sentinel "ทั้งหมด" แสดงผ่าน t('pos.allCategories')
 const CATEGORIES = ['ทั้งหมด', 'เครื่องดื่ม', 'อาหาร', 'ขนม', 'ของใช้'];
+const ALL_CATEGORY = CATEGORIES[0];
 
 // ─── Props ─────────────────────────────────────────────────────────────────────
 interface POSSaleScreenProps {
@@ -58,6 +60,8 @@ interface UOMSelectorProps {
 }
 
 const UOMSelector: React.FC<UOMSelectorProps> = ({ visible, masterProduct, branchId, onSelect, onClose }) => {
+  const t = useT();
+  const f = useFormat();
   if (!masterProduct) return null;
   return (
     <Modal visible={visible} animationType="slide" transparent>
@@ -65,7 +69,7 @@ const UOMSelector: React.FC<UOMSelectorProps> = ({ visible, masterProduct, branc
         <View style={uomStyles.sheet}>
           <View style={uomStyles.handle} />
           <Text style={uomStyles.title}>{masterProduct.name}</Text>
-          <Text style={uomStyles.subtitle}>เลือกหน่วยที่ต้องการขาย</Text>
+          <Text style={uomStyles.subtitle}>{t('pos.mobile.uomSubtitle')}</Text>
           {masterProduct.uoms.map((uom) => {
             const cartProduct = toCartProduct(masterProduct, uom, branchId);
             return (
@@ -82,7 +86,7 @@ const UOMSelector: React.FC<UOMSelectorProps> = ({ visible, masterProduct, branc
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={uomStyles.ratioText}>
-                    {uom.ratio === 1 ? 'หน่วยฐาน' : `1 ${uom.unit} = ${uom.ratio} ${masterProduct.unit}`}
+                    {uom.ratio === 1 ? t('pos.mobile.uomBase') : `1 ${uom.unit} = ${uom.ratio} ${masterProduct.unit}`}
                   </Text>
                   <View style={uomStyles.barcodeRow}>
                     {uom.barcodes.slice(0, 2).map((bc) => (
@@ -97,7 +101,7 @@ const UOMSelector: React.FC<UOMSelectorProps> = ({ visible, masterProduct, branc
                   </View>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={uomStyles.price}>฿{formatCurrency(cartProduct.price)}</Text>
+                  <Text style={uomStyles.price}>{f.money(cartProduct.price)}</Text>
                   {uom.isDefault && (
                     <View style={uomStyles.defaultBadge}>
                       <Ionicons name="star" size={9} color={Colors.white} />
@@ -109,7 +113,7 @@ const UOMSelector: React.FC<UOMSelectorProps> = ({ visible, masterProduct, branc
             );
           })}
           <TouchableOpacity style={uomStyles.cancelBtn} onPress={onClose}>
-            <Text style={uomStyles.cancelText}>ยกเลิก</Text>
+            <Text style={uomStyles.cancelText}>{t('common.cancel')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -153,13 +157,15 @@ interface ScanFeedbackProps {
   price?: number;
 }
 const ScanFeedback: React.FC<ScanFeedbackProps> = ({ status, productName, price }) => {
+  const t = useT();
+  const f = useFormat();
   if (status === 'idle') return null;
   return (
     <View style={[sfStyles.overlay, status === 'found' ? sfStyles.found : sfStyles.notFound]}>
       <Ionicons name={status === 'found' ? 'checkmark-circle' : 'close-circle'} size={40} color={Colors.white} />
-      <Text style={sfStyles.text}>{status === 'found' ? productName : 'ไม่พบสินค้า'}</Text>
+      <Text style={sfStyles.text}>{status === 'found' ? productName : t('pos.noProducts')}</Text>
       {status === 'found' && price !== undefined && (
-        <Text style={sfStyles.price}>฿{formatCurrency(price)}</Text>
+        <Text style={sfStyles.price}>{f.money(price)}</Text>
       )}
     </View>
   );
@@ -184,6 +190,7 @@ interface OrderTypeModalProps {
 }
 
 const OrderTypeModal: React.FC<OrderTypeModalProps> = ({ visible, orderType, orderDetails, onApply, onClose }) => {
+  const t = useT();
   const [selected, setSelected] = useState<OrderType>(orderType);
   const [details, setDetails] = useState<OrderDetails>(orderDetails);
 
@@ -211,26 +218,26 @@ const OrderTypeModal: React.FC<OrderTypeModalProps> = ({ visible, orderType, ord
       <View style={otStyles.overlay}>
         <View style={otStyles.sheet}>
           <View style={otStyles.handle} />
-          <Text style={otStyles.title}>ประเภทการสั่งซื้อ</Text>
+          <Text style={otStyles.title}>{t('pos.mobile.orderTypeTitle')}</Text>
 
           {/* ตัวเลือกประเภท */}
           <View style={otStyles.typeGrid}>
-            {ORDER_TYPES.map((t) => {
-              const active = selected === t;
+            {ORDER_TYPES.map((ot) => {
+              const active = selected === ot;
               return (
                 <TouchableOpacity
-                  key={t}
+                  key={ot}
                   style={[otStyles.typeCard, active && otStyles.typeCardActive]}
-                  onPress={() => setSelected(t)}
+                  onPress={() => setSelected(ot)}
                   activeOpacity={0.8}
                 >
                   <Ionicons
-                    name={ORDER_TYPE_ICONS[t] as any}
+                    name={ORDER_TYPE_ICONS[ot] as any}
                     size={22}
                     color={active ? Colors.white : Colors.primary}
                   />
                   <Text style={[otStyles.typeText, active && { color: Colors.white }]}>
-                    {ORDER_TYPE_LABELS[t]}
+                    {t(ORDER_TYPE_KEYS[ot])}
                   </Text>
                 </TouchableOpacity>
               );
@@ -240,10 +247,10 @@ const OrderTypeModal: React.FC<OrderTypeModalProps> = ({ visible, orderType, ord
           {/* ฟิลด์เฉพาะประเภท */}
           {selected === 'preorder' && (
             <View style={otStyles.fieldGroup}>
-              <Text style={otStyles.fieldLabel}>วันที่นัดรับ *</Text>
+              <Text style={otStyles.fieldLabel}>{t('pos.mobile.readyDateLabel')}</Text>
               <TextInput
                 style={otStyles.input}
-                placeholder="เช่น 2024-07-01"
+                placeholder={t('pos.mobile.readyDatePlaceholder')}
                 placeholderTextColor={Colors.gray400}
                 value={details.readyDate ?? ''}
                 onChangeText={(v) => updateField('readyDate', v)}
@@ -254,10 +261,10 @@ const OrderTypeModal: React.FC<OrderTypeModalProps> = ({ visible, orderType, ord
           {selected === 'delivery' && (
             <>
               <View style={otStyles.fieldGroup}>
-                <Text style={otStyles.fieldLabel}>ที่อยู่จัดส่ง *</Text>
+                <Text style={otStyles.fieldLabel}>{t('pos.mobile.addressLabel')}</Text>
                 <TextInput
                   style={[otStyles.input, otStyles.inputMultiline]}
-                  placeholder="บ้านเลขที่ / ถนน / แขวง / เขต"
+                  placeholder={t('pos.mobile.addressPlaceholder')}
                   placeholderTextColor={Colors.gray400}
                   value={details.address ?? ''}
                   onChangeText={(v) => updateField('address', v)}
@@ -265,10 +272,10 @@ const OrderTypeModal: React.FC<OrderTypeModalProps> = ({ visible, orderType, ord
                 />
               </View>
               <View style={otStyles.fieldGroup}>
-                <Text style={otStyles.fieldLabel}>เบอร์ติดต่อ</Text>
+                <Text style={otStyles.fieldLabel}>{t('pos.mobile.phoneLabel')}</Text>
                 <TextInput
                   style={otStyles.input}
-                  placeholder="เบอร์โทรผู้รับ"
+                  placeholder={t('pos.mobile.phonePlaceholder')}
                   placeholderTextColor={Colors.gray400}
                   value={details.phone ?? ''}
                   onChangeText={(v) => updateField('phone', v)}
@@ -276,10 +283,10 @@ const OrderTypeModal: React.FC<OrderTypeModalProps> = ({ visible, orderType, ord
                 />
               </View>
               <View style={otStyles.fieldGroup}>
-                <Text style={otStyles.fieldLabel}>หมายเหตุ</Text>
+                <Text style={otStyles.fieldLabel}>{t('pos.mobile.noteLabel')}</Text>
                 <TextInput
                   style={otStyles.input}
-                  placeholder="หมายเหตุการจัดส่ง"
+                  placeholder={t('pos.mobile.notePlaceholder')}
                   placeholderTextColor={Colors.gray400}
                   value={details.note ?? ''}
                   onChangeText={(v) => updateField('note', v)}
@@ -291,20 +298,20 @@ const OrderTypeModal: React.FC<OrderTypeModalProps> = ({ visible, orderType, ord
           {selected === 'dinein' && (
             <>
               <View style={otStyles.fieldGroup}>
-                <Text style={otStyles.fieldLabel}>เลขโต๊ะ *</Text>
+                <Text style={otStyles.fieldLabel}>{t('pos.mobile.tableLabel')}</Text>
                 <TextInput
                   style={otStyles.input}
-                  placeholder="เช่น A12"
+                  placeholder={t('pos.mobile.tablePlaceholder')}
                   placeholderTextColor={Colors.gray400}
                   value={details.tableNo ?? ''}
                   onChangeText={(v) => updateField('tableNo', v)}
                 />
               </View>
               <View style={otStyles.fieldGroup}>
-                <Text style={otStyles.fieldLabel}>โซน</Text>
+                <Text style={otStyles.fieldLabel}>{t('pos.mobile.zoneLabel')}</Text>
                 <TextInput
                   style={otStyles.input}
-                  placeholder="เช่น ชั้น 2 / ริมหน้าต่าง"
+                  placeholder={t('pos.mobile.zonePlaceholder')}
                   placeholderTextColor={Colors.gray400}
                   value={details.zone ?? ''}
                   onChangeText={(v) => updateField('zone', v)}
@@ -323,10 +330,10 @@ const OrderTypeModal: React.FC<OrderTypeModalProps> = ({ visible, orderType, ord
             disabled={!isValid}
             activeOpacity={0.85}
           >
-            <Text style={otStyles.applyText}>ยืนยัน</Text>
+            <Text style={otStyles.applyText}>{t('common.confirm')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={otStyles.cancelBtn} onPress={onClose}>
-            <Text style={otStyles.cancelText}>ยกเลิก</Text>
+            <Text style={otStyles.cancelText}>{t('common.cancel')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -369,8 +376,10 @@ const otStyles = StyleSheet.create({
 export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
   onOpenCart, onOpenScanner, onOpenHoldBill,
   onOpenCustomerDisplay, onCancelBill,
-  cashierName = 'พนักงาน', posName = 'POS 1',
+  cashierName = '', posName = 'POS 1',
 }) => {
+  const t = useT();
+  const f = useFormat();
   const navigation = useNavigation();
   const { addItem, getItemCount, getGrandTotal, orderType, orderDetails, setOrderType, setOrderDetails } = useCartStore();
   const { mode, gridColumns, autoOpenCamera, beepOnScan } = useSaleModeStore();
@@ -381,7 +390,7 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
   const [showOrderTypeModal, setShowOrderTypeModal] = useState(false);
 
   // UI State
-  const [selectedCategory, setSelectedCategory] = useState('ทั้งหมด');
+  const [selectedCategory, setSelectedCategory] = useState(ALL_CATEGORY);
   const [searchText, setSearchText] = useState('');
   const [showModeSettings, setShowModeSettings] = useState(false);
   const [activeTab, setActiveTab] = useState<'grid' | 'scan'>(
@@ -419,7 +428,7 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
 
   // ── Filtered products ──
   const filteredProducts = allCartProducts.filter((p) => {
-    const matchCat = selectedCategory === 'ทั้งหมด' || p.category === selectedCategory;
+    const matchCat = selectedCategory === ALL_CATEGORY || p.category === selectedCategory;
     const matchSearch = !searchText ||
       p.name.toLowerCase().includes(searchText.toLowerCase()) ||
       p.barcode.includes(searchText) ||
@@ -533,13 +542,13 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
           )}
           {isService && (
             <View style={styles.serviceBadge}>
-              <Text style={styles.serviceBadgeText}>บริการ</Text>
+              <Text style={styles.serviceBadgeText}>{t('pos.mobile.service')}</Text>
             </View>
           )}
         </View>
         {displayStock === 0 ? (
           <View style={styles.outOfStockOverlay}>
-            <Text style={styles.outOfStockText}>หมด</Text>
+            <Text style={styles.outOfStockText}>{t('pos.outBadge')}</Text>
           </View>
         ) : displayStock <= 5 && !isService ? (
           <View style={styles.lowStockBadge}>
@@ -550,7 +559,7 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
           {item.name}
         </Text>
         <Text style={[styles.productPrice, gridColumns === 4 && styles.productPriceSm]}>
-          ฿{formatCurrency(item.price)}
+          {f.money(item.price)}
         </Text>
       </TouchableOpacity>
     );
@@ -567,7 +576,7 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
           ))}
           <View style={styles.scanLine} />
         </View>
-        <Text style={styles.scanHint}>จ่อกล้องที่บาร์โค้ด หรือกรอกด้านล่าง</Text>
+        <Text style={styles.scanHint}>{t('pos.mobile.scanHint')}</Text>
         <ScanFeedback status={scanStatus} productName={scanResult?.name} price={scanResult?.price} />
       </View>
 
@@ -576,7 +585,7 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
         <View style={styles.manualInputRow}>
           <TextInput
             style={styles.manualInput}
-            placeholder="กรอกบาร์โค้ด..."
+            placeholder={t('pos.mobile.barcodePlaceholder')}
             placeholderTextColor={Colors.gray400}
             value={manualBarcode}
             onChangeText={setManualBarcode}
@@ -600,10 +609,10 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
             />
             <View style={{ flex: 1 }}>
               <Text style={[styles.lastScanName, { color: scanStatus === 'found' ? Colors.success : Colors.danger }]}>
-                {scanStatus === 'found' ? scanResult.name : 'ไม่พบสินค้าในระบบ'}
+                {scanStatus === 'found' ? scanResult.name : t('pos.mobile.notInSystem')}
               </Text>
               {scanStatus === 'found' && (
-                <Text style={styles.lastScanPrice}>฿{formatCurrency(scanResult.price)} · เพิ่มลงบิลแล้ว</Text>
+                <Text style={styles.lastScanPrice}>{t('pos.mobile.addedToBill', { price: f.money(scanResult.price) })}</Text>
               )}
             </View>
           </View>
@@ -621,7 +630,7 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
           <Ionicons name="search-outline" size={16} color={Colors.gray400} />
           <TextInput
             style={styles.searchInput}
-            placeholder="ค้นหาสินค้า..."
+            placeholder={t('pos.mobile.searchPlaceholder')}
             placeholderTextColor={Colors.gray400}
             value={searchText}
             onChangeText={setSearchText}
@@ -647,7 +656,7 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
             onPress={() => setSelectedCategory(item)}
           >
             <Text style={[styles.catChipText, selectedCategory === item && styles.catChipTextActive]}>
-              {item}
+              {item === ALL_CATEGORY ? t('pos.allCategories') : item}
             </Text>
           </TouchableOpacity>
         )}
@@ -666,7 +675,7 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Ionicons name="search-outline" size={48} color={Colors.gray300} />
-            <Text style={styles.emptyText}>ไม่พบสินค้า</Text>
+            <Text style={styles.emptyText}>{t('pos.noProducts')}</Text>
           </View>
         }
       />
@@ -679,7 +688,7 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
       <View style={styles.topBar}>
         <View>
           <Text style={styles.posName}>{posName}</Text>
-          <Text style={styles.cashierName}>{cashierName}</Text>
+          <Text style={styles.cashierName}>{cashierName || t('pos.mobile.staffFallback')}</Text>
         </View>
 
         {/* ตัวเลือกประเภทการสั่งซื้อ */}
@@ -689,7 +698,7 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
           activeOpacity={0.8}
         >
           <Ionicons name={ORDER_TYPE_ICONS[orderType] as any} size={14} color={Colors.primary} />
-          <Text style={styles.orderTypeChipText}>{ORDER_TYPE_LABELS[orderType]}</Text>
+          <Text style={styles.orderTypeChipText}>{t(ORDER_TYPE_KEYS[orderType])}</Text>
           <Ionicons name="chevron-down" size={12} color={Colors.primary} />
         </TouchableOpacity>
 
@@ -701,14 +710,14 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
               onPress={() => setActiveTab('grid')}
             >
               <Ionicons name="grid-outline" size={15} color={activeTab === 'grid' ? Colors.primary : Colors.white} />
-              <Text style={[styles.tabSwitcherText, activeTab === 'grid' && { color: Colors.primary }]}>ปุ่ม</Text>
+              <Text style={[styles.tabSwitcherText, activeTab === 'grid' && { color: Colors.primary }]}>{t('pos.mobile.tabGrid')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.tabSwitcherBtn, activeTab === 'scan' && styles.tabSwitcherBtnActive]}
               onPress={() => setActiveTab('scan')}
             >
               <Ionicons name="barcode-outline" size={15} color={activeTab === 'scan' ? Colors.primary : Colors.white} />
-              <Text style={[styles.tabSwitcherText, activeTab === 'scan' && { color: Colors.primary }]}>สแกน</Text>
+              <Text style={[styles.tabSwitcherText, activeTab === 'scan' && { color: Colors.primary }]}>{t('pos.mobile.tabScan')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -743,14 +752,14 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
             delayLongPress={600}
           >
             <Ionicons name="tv-outline" size={20} color={Colors.white} />
-            <Text style={styles.iconBtnLabel}>จอ 2</Text>
+            <Text style={styles.iconBtnLabel}>{t('pos.cart.display2')}</Text>
           </TouchableOpacity>          <TouchableOpacity style={styles.iconBtn} onPress={onOpenHoldBill}>
             <Ionicons name="pause-circle-outline" size={20} color={Colors.white} />
-            <Text style={styles.iconBtnLabel}>พัก</Text>
+            <Text style={styles.iconBtnLabel}>{t('pos.mobile.holdShort')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.iconBtn} onPress={onCancelBill}>
             <Ionicons name="close-circle-outline" size={20} color={Colors.dangerLight} />
-            <Text style={[styles.iconBtnLabel, { color: Colors.dangerLight }]}>ยกเลิก</Text>
+            <Text style={[styles.iconBtnLabel, { color: Colors.dangerLight }]}>{t('common.cancel')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -777,10 +786,10 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
           <View style={styles.cartBadge}>
             <Text style={styles.cartBadgeText}>{itemCount}</Text>
           </View>
-          <Text style={styles.cartLabel}>รายการในบิล</Text>
+          <Text style={styles.cartLabel}>{t('pos.mobile.itemsInBill')}</Text>
         </View>
         <View style={styles.cartRight}>
-          <Text style={styles.cartTotal}>฿{formatCurrency(grandTotal)}</Text>
+          <Text style={styles.cartTotal}>{f.money(grandTotal)}</Text>
           <Ionicons name="chevron-forward" size={20} color={Colors.white} />
         </View>
       </TouchableOpacity>
@@ -826,7 +835,7 @@ export const POSSaleScreen: React.FC<POSSaleScreenProps> = ({
         visible={showOrderTypeModal}
         orderType={orderType}
         orderDetails={orderDetails}
-        onApply={(t, d) => { setOrderType(t); setOrderDetails(d); }}
+        onApply={(ot, d) => { setOrderType(ot); setOrderDetails(d); }}
         onClose={() => setShowOrderTypeModal(false)}
       />
 

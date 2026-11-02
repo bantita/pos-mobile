@@ -1,7 +1,40 @@
 import type { LocaleShape } from '../../types';
 import type { receiptScreen as thReceiptScreen } from '../th/receiptScreen';
-
 export const receiptScreen: LocaleShape<typeof thReceiptScreen> = {
   print: 'Print',
   share: 'Share',
+  reprint: '🔄 Reprint',
+  paid: '✅ Payment successful',
+  paidDone: 'Payment complete',
+  printing: 'Printing...',
+  printReceipt: 'Print receipt',
+  issueTaxInvoice: 'Issue full tax invoice',
+  nextSale: 'Next sale',
+  choosePrinter: 'Choose a printer',
+  sharePdf: 'Share PDF',
+  printDoneTitle: 'Printed',
+  printDoneMsg: 'Receipt printed via {printer}',
+  taxInvoice: {
+    title: 'Full tax invoice',
+    notFound: 'Sale not found',
+    buyerInfo: 'Buyer information',
+    buyerName: 'Buyer name',
+    buyerNamePlaceholder: 'Customer / company name',
+    buyerTaxId: 'Tax ID',
+    buyerTaxIdPlaceholder: '13-digit number',
+    buyerAddress: 'Address',
+    buyerAddressPlaceholder: 'Address for the tax invoice',
+    print: 'Print tax invoice',
+    cancel: 'Cancel tax invoice',
+    shareTitle: 'Tax invoice {no}',
+  },
+  cancel: {
+    title: 'Cancel document',
+    billNo: 'Bill no.',
+    docType: 'Document type',
+    reasonLabel: 'Cancellation reason',
+    reasonPlaceholder: 'Enter the reason for cancelling this document',
+    errReason: 'Please enter a cancellation reason',
+    confirm: 'Confirm cancellation',
+  },
 };

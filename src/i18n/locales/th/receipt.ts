@@ -78,5 +78,21 @@ export const receipt = {
     taxId: 'เลขผู้เสียภาษี',
     beforeVat: 'มูลค่าสินค้า (ก่อน VAT)',
     grandTotal: 'ยอดรวมสุทธิ',
+    refBill: 'อ้างอิงบิล',
+    sellerInfo: 'ข้อมูลผู้ขาย',
+    vatFromBill: 'VAT จากบิล',
+  },
+  /** กระดาษใบเสร็จจำลองบนมือถือ (ReceiptScreen / TaxInvoiceScreen) */
+  paper: {
+    taxIdLine: 'เลขที่ผู้เสียภาษี: {taxId}',
+    receiptNo: 'เลขที่ใบเสร็จ',
+    posName: 'จุดขาย',
+    items: 'รายการสินค้า',
+    subtotal: 'รวมสินค้า',
+    discountPercent: 'ส่วนลด ({percent}%)',
+    vatIncluded: 'VAT {rate}% (รวมแล้ว)',
+    netTotal: 'ยอดรวมสุทธิ',
+    payment: 'ชำระเงิน',
+    copy: 'สำเนา',
   },
 } as const;

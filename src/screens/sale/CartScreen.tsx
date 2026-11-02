@@ -14,7 +14,7 @@ import { CartItem } from '../../types/sale';
 import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
 import { Spacing, BorderRadius } from '../../constants/spacing';
-import { formatCurrency } from '../../utils/format';
+import { useT, useFormat } from '../../i18n';
 
 interface CartScreenProps {
   onBack: () => void;
@@ -31,6 +31,8 @@ export const CartScreen: React.FC<CartScreenProps> = ({
   onCancelBill,
   onCustomerDisplay,
 }) => {
+  const t = useT();
+  const f = useFormat();
   const {
     items, discount, removeItem, updateQty,
     clearCart, getSubtotal, getDiscountTotal,
@@ -43,9 +45,9 @@ export const CartScreen: React.FC<CartScreenProps> = ({
   const grandTotal = getGrandTotal();
 
   const handleClearCart = () => {
-    Alert.alert('ล้างรายการ', 'ต้องการล้างรายการสินค้าทั้งหมดในบิลนี้?', [
-      { text: 'ยกเลิก', style: 'cancel' },
-      { text: 'ล้าง', style: 'destructive', onPress: clearCart },
+    Alert.alert(t('pos.mobile.clearTitle'), t('pos.mobile.clearMsg'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('pos.mobile.clearBtn'), style: 'destructive', onPress: clearCart },
     ]);
   };
 
@@ -65,10 +67,10 @@ export const CartScreen: React.FC<CartScreenProps> = ({
             👤 {item.technicianName}
           </Text>
         )}
-        <Text style={styles.itemPrice}>฿{formatCurrency(item.unitPrice)} / {item.product.unit}</Text>
+        <Text style={styles.itemPrice}>{f.money(item.unitPrice)} / {item.product.unit}</Text>
         {item.discountAmount > 0 && (
           <Text style={styles.itemDiscount}>
-            ส่วนลด: -฿{formatCurrency(item.discountAmount)}
+            {t('pos.mobile.itemDiscount', { amount: f.money(item.discountAmount) })}
           </Text>
         )}
       </View>
@@ -88,7 +90,7 @@ export const CartScreen: React.FC<CartScreenProps> = ({
             <Ionicons name="add" size={16} color={Colors.primary} />
           </TouchableOpacity>
         </View>
-        <Text style={styles.itemSubtotal}>฿{formatCurrency(item.subtotal)}</Text>
+        <Text style={styles.itemSubtotal}>{f.money(item.subtotal)}</Text>
       </View>
       <TouchableOpacity
         onPress={() => removeItem(item.product.id)}
@@ -107,7 +109,7 @@ export const CartScreen: React.FC<CartScreenProps> = ({
         <TouchableOpacity onPress={onBack} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={Colors.white} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>รายการในบิล ({items.length} รายการ)</Text>
+        <Text style={styles.headerTitle}>{t('pos.mobile.cartTitle', { count: items.length })}</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity onPress={onCustomerDisplay} style={styles.headerIconBtn}>
             <Ionicons name="tv-outline" size={20} color={Colors.white} />
@@ -124,8 +126,8 @@ export const CartScreen: React.FC<CartScreenProps> = ({
       {items.length === 0 ? (
         <View style={styles.emptyCart}>
           <Ionicons name="cart-outline" size={72} color={Colors.gray300} />
-          <Text style={styles.emptyTitle}>ยังไม่มีสินค้าในบิล</Text>
-          <Text style={styles.emptySubtitle}>กดกลับเพื่อเพิ่มสินค้า</Text>
+          <Text style={styles.emptyTitle}>{t('pos.mobile.emptyTitle')}</Text>
+          <Text style={styles.emptySubtitle}>{t('pos.mobile.emptySub')}</Text>
         </View>
       ) : (
         <FlatList
@@ -142,28 +144,28 @@ export const CartScreen: React.FC<CartScreenProps> = ({
         <View style={styles.summary}>
           <View style={styles.summaryRows}>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>รวมสินค้า</Text>
-              <Text style={styles.summaryValue}>฿{formatCurrency(subtotal)}</Text>
+              <Text style={styles.summaryLabel}>{t('pos.mobile.subtotal')}</Text>
+              <Text style={styles.summaryValue}>{f.money(subtotal)}</Text>
             </View>
             {discountTotal > 0 && (
               <View style={styles.summaryRow}>
                 <View style={styles.discountLabel}>
-                  <Text style={styles.summaryLabel}>ส่วนลดท้ายบิล</Text>
+                  <Text style={styles.summaryLabel}>{t('pos.disc.billTitle')}</Text>
                   <TouchableOpacity onPress={onDiscount}>
-                    <Text style={styles.editDiscount}>แก้ไข</Text>
+                    <Text style={styles.editDiscount}>{t('pos.mobile.edit')}</Text>
                   </TouchableOpacity>
                 </View>
-                <Text style={styles.discountValue}>-฿{formatCurrency(discountTotal)}</Text>
+                <Text style={styles.discountValue}>-{f.money(discountTotal)}</Text>
               </View>
             )}
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>VAT 7%</Text>
-              <Text style={styles.summaryValue}>฿{formatCurrency(vatAmount)}</Text>
+              <Text style={styles.summaryLabel}>{t('pos.cart.vat', { rate: 7 })}</Text>
+              <Text style={styles.summaryValue}>{f.money(vatAmount)}</Text>
             </View>
             <View style={styles.divider} />
             <View style={styles.summaryRow}>
-              <Text style={styles.totalLabel}>ยอดรวมสุทธิ</Text>
-              <Text style={styles.totalValue}>฿{formatCurrency(grandTotal)}</Text>
+              <Text style={styles.totalLabel}>{t('pos.mobile.netTotal')}</Text>
+              <Text style={styles.totalValue}>{f.money(grandTotal)}</Text>
             </View>
           </View>
 
@@ -172,16 +174,16 @@ export const CartScreen: React.FC<CartScreenProps> = ({
             {discountTotal === 0 && (
               <TouchableOpacity style={styles.discountBtn} onPress={onDiscount}>
                 <Ionicons name="pricetag-outline" size={18} color={Colors.primary} />
-                <Text style={styles.discountBtnText}>เพิ่มส่วนลด</Text>
+                <Text style={styles.discountBtnText}>{t('pos.mobile.addDiscount')}</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity style={styles.cancelBillBtn} onPress={onCancelBill}>
               <Ionicons name="close-circle-outline" size={18} color={Colors.danger} />
-              <Text style={styles.cancelBillBtnText}>ยกเลิกบิล</Text>
+              <Text style={styles.cancelBillBtnText}>{t('pos.inv.cancelBill')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.checkoutBtn} onPress={onCheckout} activeOpacity={0.85}>
               <Ionicons name="card-outline" size={20} color={Colors.white} />
-              <Text style={styles.checkoutBtnText}>ชำระเงิน ฿{formatCurrency(grandTotal)}</Text>
+              <Text style={styles.checkoutBtnText}>{t('pos.mobile.checkout', { amount: f.money(grandTotal) })}</Text>
             </TouchableOpacity>
           </View>
         </View>

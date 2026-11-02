@@ -10,11 +10,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useCartStore } from '../../store/cartStore';
-import { Payment, PaymentMethod, PAYMENT_LABELS, ORDER_TYPE_LABELS, ORDER_TYPE_ICONS } from '../../types/sale';
+import { Payment, ORDER_TYPE_ICONS } from '../../types/sale';
 import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
 import { Spacing, BorderRadius } from '../../constants/spacing';
-import { formatCurrency, formatDateTime } from '../../utils/format';
+import { useT, useReceiptT, payMethodLabel, ORDER_TYPE_KEYS, type UiKey } from '../../i18n';
+import { translate } from '../../i18n/translate';
+import { receiptCashier } from '../../utils/receiptTemplate';
 
 interface ReceiptScreenProps {
   saleNo: string;
@@ -30,11 +32,12 @@ interface ReceiptScreenProps {
   posName?: string;
 }
 
-const PRINTER_OPTIONS = [
+/** ตัวเลือกเครื่องพิมพ์ — ชื่อสินค้า/โปรโตคอลเป็นภาษาอังกฤษตายตัว, ที่เหลือใช้ labelKey */
+const PRINTER_OPTIONS: { key: string; label?: string; labelKey?: UiKey; icon: string }[] = [
   { key: 'bluetooth', label: 'Bluetooth Printer', icon: 'bluetooth-outline' },
   { key: 'wifi', label: 'WiFi Printer', icon: 'wifi-outline' },
   { key: 'airprint', label: 'AirPrint', icon: 'print-outline' },
-  { key: 'share', label: 'แชร์ PDF', icon: 'share-outline' },
+  { key: 'share', labelKey: 'receiptScreen.sharePdf', icon: 'share-outline' },
 ];
 
 export const ReceiptScreen: React.FC<ReceiptScreenProps> = ({
@@ -47,9 +50,12 @@ export const ReceiptScreen: React.FC<ReceiptScreenProps> = ({
   shopName = 'ร้านค้าตัวอย่าง',
   shopAddress = '123 ถนนสุขุมวิท กรุงเทพฯ',
   shopTaxId = '0105563123456',
-  cashierName = 'พนักงาน',
+  cashierName = '',
   posName = 'POS 1',
 }) => {
+  const t = useT();
+  // กระดาษใบเสร็จใช้ "ภาษาใบเสร็จ" (แยกจากภาษา UI)
+  const { rt, receiptLang: rl, fmt } = useReceiptT();
   const { items, discount, getSubtotal, getDiscountTotal, getVatAmount, getGrandTotal, clearCart, orderType, orderDetails } = useCartStore();
   const [showPrinterModal, setShowPrinterModal] = useState(false);
   const [printing, setPrinting] = useState(false);
@@ -74,7 +80,7 @@ export const ReceiptScreen: React.FC<ReceiptScreenProps> = ({
         // Audit log: บันทึกการ Reprint
         console.log(`[AUDIT] REPRINT - SaleNo: ${saleNo}, By: ${cashierName}, Printer: ${printerType}`);
       }
-      Alert.alert('พิมพ์สำเร็จ', `พิมพ์ใบเสร็จผ่าน ${printerType} เรียบร้อย`);
+      Alert.alert(t('receiptScreen.printDoneTitle'), t('receiptScreen.printDoneMsg', { printer: printerType }));
       onPrintDone?.();
     }, 1500);
   };
@@ -90,7 +96,7 @@ export const ReceiptScreen: React.FC<ReceiptScreenProps> = ({
       <View style={styles.header}>
         <View style={{ width: 40 }} />
         <Text style={styles.headerTitle}>
-          {isReprint ? '🔄 พิมพ์ซ้ำ' : '✅ ชำระเงินสำเร็จ'}
+          {isReprint ? t('receiptScreen.reprint') : t('receiptScreen.paid')}
         </Text>
         <TouchableOpacity onPress={() => setShowPrinterModal(true)} style={styles.printIconBtn}>
           <Ionicons name="print-outline" size={22} color={Colors.white} />
@@ -104,7 +110,7 @@ export const ReceiptScreen: React.FC<ReceiptScreenProps> = ({
             <View style={styles.successIcon}>
               <Ionicons name="checkmark-circle" size={56} color={Colors.success} />
             </View>
-            <Text style={styles.successTitle}>ชำระเงินเรียบร้อย</Text>
+            <Text style={styles.successTitle}>{t('receiptScreen.paidDone')}</Text>
           </View>
         )}
 
@@ -114,7 +120,7 @@ export const ReceiptScreen: React.FC<ReceiptScreenProps> = ({
           <View style={styles.receiptHeader}>
             <Text style={styles.shopName}>{shopName}</Text>
             <Text style={styles.shopAddress}>{shopAddress}</Text>
-            <Text style={styles.shopTax}>เลขที่ผู้เสียภาษี: {shopTaxId}</Text>
+            <Text style={styles.shopTax}>{rt('receipt.paper.taxIdLine', { taxId: shopTaxId })}</Text>
           </View>
 
           <View style={styles.dottedLine} />
@@ -122,10 +128,10 @@ export const ReceiptScreen: React.FC<ReceiptScreenProps> = ({
           {/* Receipt Info */}
           <View style={styles.receiptInfo}>
             {[
-              { label: 'เลขที่ใบเสร็จ', value: saleNo },
-              { label: 'วันที่', value: formatDateTime(now) },
-              { label: 'แคชเชียร์', value: cashierName },
-              { label: 'จุดขาย', value: posName },
+              { label: rt('receipt.paper.receiptNo'), value: saleNo },
+              { label: rt('receipt.caption.date'), value: fmt.dateTime(now) },
+              { label: rt('receipt.caption.cashier'), value: receiptCashier(cashierName, rl) },
+              { label: rt('receipt.paper.posName'), value: posName },
             ].map((row, i) => (
               <View key={i} style={styles.infoRow}>
                 <Text style={styles.infoLabel}>{row.label}</Text>
@@ -141,21 +147,21 @@ export const ReceiptScreen: React.FC<ReceiptScreenProps> = ({
               <View style={styles.orderTypeSection}>
                 <View style={styles.orderTypeBadge}>
                   <Ionicons name={ORDER_TYPE_ICONS[orderType] as any} size={13} color={Colors.primary} />
-                  <Text style={styles.orderTypeBadgeText}>{ORDER_TYPE_LABELS[orderType]}</Text>
+                  <Text style={styles.orderTypeBadgeText}>{translate(rl, ORDER_TYPE_KEYS[orderType])}</Text>
                 </View>
                 {orderType === 'preorder' && orderDetails?.readyDate ? (
-                  <Text style={styles.orderTypeDetail}>วันที่นัดรับ: {orderDetails.readyDate}</Text>
+                  <Text style={styles.orderTypeDetail}>{rt('receipt.orderDetail.readyDate')}: {orderDetails.readyDate}</Text>
                 ) : null}
                 {orderType === 'delivery' ? (
                   <>
-                    {orderDetails?.address ? <Text style={styles.orderTypeDetail}>จัดส่ง: {orderDetails.address}</Text> : null}
-                    {orderDetails?.phone ? <Text style={styles.orderTypeDetail}>เบอร์ติดต่อ: {orderDetails.phone}</Text> : null}
-                    {orderDetails?.note ? <Text style={styles.orderTypeDetail}>หมายเหตุ: {orderDetails.note}</Text> : null}
+                    {orderDetails?.address ? <Text style={styles.orderTypeDetail}>{rt('receipt.orderDetail.address')}: {orderDetails.address}</Text> : null}
+                    {orderDetails?.phone ? <Text style={styles.orderTypeDetail}>{rt('receipt.orderDetail.phone')}: {orderDetails.phone}</Text> : null}
+                    {orderDetails?.note ? <Text style={styles.orderTypeDetail}>{rt('receipt.orderDetail.note')}: {orderDetails.note}</Text> : null}
                   </>
                 ) : null}
                 {orderType === 'dinein' ? (
                   <Text style={styles.orderTypeDetail}>
-                    โต๊ะ: {orderDetails?.tableNo ?? '-'}{orderDetails?.zone ? ` · โซน ${orderDetails.zone}` : ''}
+                    {rt('receipt.orderDetail.table')}: {orderDetails?.tableNo ?? '-'}{orderDetails?.zone ? ` · ${rt('receipt.orderDetail.zone')} ${orderDetails.zone}` : ''}
                   </Text>
                 ) : null}
               </View>
@@ -166,17 +172,17 @@ export const ReceiptScreen: React.FC<ReceiptScreenProps> = ({
 
           {/* Items */}
           <View style={styles.itemsSection}>
-            <Text style={styles.itemsHeader}>รายการสินค้า</Text>
+            <Text style={styles.itemsHeader}>{rt('receipt.paper.items')}</Text>
             {items.map((item, i) => (
               <View key={i} style={styles.receiptItem}>
                 <View style={styles.receiptItemTop}>
                   <Text style={styles.receiptItemName} numberOfLines={1}>{item.product.name}</Text>
-                  <Text style={styles.receiptItemSubtotal}>฿{formatCurrency(item.subtotal)}</Text>
+                  <Text style={styles.receiptItemSubtotal}>{fmt.money(item.subtotal)}</Text>
                 </View>
                 <View style={styles.receiptItemBottom}>
                   <Text style={styles.receiptItemDetail}>
-                    {item.qty} × ฿{formatCurrency(item.unitPrice)}
-                    {item.discountAmount > 0 ? ` (-฿${formatCurrency(item.discountAmount)})` : ''}
+                    {item.qty} × {fmt.money(item.unitPrice)}
+                    {item.discountAmount > 0 ? ` (-${fmt.money(item.discountAmount)})` : ''}
                   </Text>
                 </View>
               </View>
@@ -188,48 +194,50 @@ export const ReceiptScreen: React.FC<ReceiptScreenProps> = ({
           {/* Totals */}
           <View style={styles.totalsSection}>
             <View style={styles.totalRow}>
-              <Text style={styles.totalRowLabel}>รวมสินค้า</Text>
-              <Text style={styles.totalRowValue}>฿{formatCurrency(subtotal)}</Text>
+              <Text style={styles.totalRowLabel}>{rt('receipt.paper.subtotal')}</Text>
+              <Text style={styles.totalRowValue}>{fmt.money(subtotal)}</Text>
             </View>
             {discountTotal > 0 && (
               <View style={styles.totalRow}>
                 <Text style={styles.totalRowLabel}>
-                  ส่วนลด{discount?.type === 'percent' ? ` (${discount.value}%)` : ''}
+                  {discount?.type === 'percent'
+                    ? rt('receipt.paper.discountPercent', { percent: discount.value })
+                    : rt('receipt.discount')}
                 </Text>
                 <Text style={[styles.totalRowValue, { color: Colors.danger }]}>
-                  -฿{formatCurrency(discountTotal)}
+                  -{fmt.money(discountTotal)}
                 </Text>
               </View>
             )}
             <View style={styles.totalRow}>
-              <Text style={styles.totalRowLabel}>VAT 7% (รวมแล้ว)</Text>
-              <Text style={styles.totalRowValue}>฿{formatCurrency(vatAmount)}</Text>
+              <Text style={styles.totalRowLabel}>{rt('receipt.paper.vatIncluded', { rate: 7 })}</Text>
+              <Text style={styles.totalRowValue}>{fmt.money(vatAmount)}</Text>
             </View>
           </View>
 
           <View style={styles.grandTotalBox}>
-            <Text style={styles.grandTotalLabel}>ยอดรวมสุทธิ</Text>
-            <Text style={styles.grandTotalValue}>฿{formatCurrency(grandTotal)}</Text>
+            <Text style={styles.grandTotalLabel}>{rt('receipt.paper.netTotal')}</Text>
+            <Text style={styles.grandTotalValue}>{fmt.money(grandTotal)}</Text>
           </View>
 
           <View style={styles.dottedLine} />
 
           {/* Payments */}
           <View style={styles.paymentsSection}>
-            <Text style={styles.paymentHeader}>ชำระเงิน</Text>
+            <Text style={styles.paymentHeader}>{rt('receipt.paper.payment')}</Text>
             {payments.map((p, i) => (
               <View key={i} style={styles.paymentRow}>
-                <Text style={styles.paymentMethod}>{PAYMENT_LABELS[p.method]}</Text>
+                <Text style={styles.paymentMethod}>{payMethodLabel(p.method, rl)}</Text>
                 {p.reference ? (
                   <Text style={styles.paymentRef}>{p.reference}</Text>
                 ) : null}
-                <Text style={styles.paymentAmount}>฿{formatCurrency(p.amount)}</Text>
+                <Text style={styles.paymentAmount}>{fmt.money(p.amount)}</Text>
               </View>
             ))}
             {cashPayment && changeAmount > 0 && (
               <View style={[styles.paymentRow, styles.changeRow]}>
-                <Text style={styles.changeLabel}>เงินทอน</Text>
-                <Text style={styles.changeValue}>฿{formatCurrency(changeAmount)}</Text>
+                <Text style={styles.changeLabel}>{rt('receipt.change')}</Text>
+                <Text style={styles.changeValue}>{fmt.money(changeAmount)}</Text>
               </View>
             )}
           </View>
@@ -238,12 +246,12 @@ export const ReceiptScreen: React.FC<ReceiptScreenProps> = ({
 
           {/* Footer */}
           <View style={styles.receiptFooter}>
-            <Text style={styles.thankYou}>ขอบคุณที่ใช้บริการ</Text>
-            <Text style={styles.footerSub}>กรุณาเก็บใบเสร็จไว้เป็นหลักฐาน</Text>
+            <Text style={styles.thankYou}>{rt('receipt.thankYou')}</Text>
+            <Text style={styles.footerSub}>{rt('receipt.keepReceipt')}</Text>
             {isReprint && (
               <View style={styles.reprintBadge}>
                 <Ionicons name="refresh-outline" size={12} color={Colors.warning} />
-                <Text style={styles.reprintText}>สำเนา</Text>
+                <Text style={styles.reprintText}>{rt('receipt.paper.copy')}</Text>
               </View>
             )}
           </View>
@@ -258,19 +266,19 @@ export const ReceiptScreen: React.FC<ReceiptScreenProps> = ({
             activeOpacity={0.85}
           >
             <Ionicons name={printing ? 'hourglass-outline' : 'print-outline'} size={20} color={Colors.primary} />
-            <Text style={styles.printBtnText}>{printing ? 'กำลังพิมพ์...' : 'พิมพ์ใบเสร็จ'}</Text>
+            <Text style={styles.printBtnText}>{printing ? t('receiptScreen.printing') : t('receiptScreen.printReceipt')}</Text>
           </TouchableOpacity>
 
           {onTaxInvoice && (
             <TouchableOpacity style={styles.taxInvoiceBtn} onPress={onTaxInvoice} activeOpacity={0.85}>
               <Ionicons name="document-text-outline" size={20} color={Colors.primary} />
-              <Text style={styles.taxInvoiceBtnText}>ออกใบกำกับภาษีเต็มรูป</Text>
+              <Text style={styles.taxInvoiceBtnText}>{t('receiptScreen.issueTaxInvoice')}</Text>
             </TouchableOpacity>
           )}
 
           <TouchableOpacity style={styles.newSaleBtn} onPress={handleNewSale} activeOpacity={0.85}>
             <Ionicons name="add-circle-outline" size={20} color={Colors.white} />
-            <Text style={styles.newSaleBtnText}>ขายรายการถัดไป</Text>
+            <Text style={styles.newSaleBtnText}>{t('receiptScreen.nextSale')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -282,25 +290,28 @@ export const ReceiptScreen: React.FC<ReceiptScreenProps> = ({
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>เลือกเครื่องพิมพ์</Text>
+            <Text style={styles.modalTitle}>{t('receiptScreen.choosePrinter')}</Text>
 
-            {PRINTER_OPTIONS.map((p) => (
-              <TouchableOpacity
-                key={p.key}
-                style={styles.printerOption}
-                onPress={() => handlePrint(p.label)}
-                activeOpacity={0.8}
-              >
-                <View style={styles.printerIcon}>
-                  <Ionicons name={p.icon as any} size={22} color={Colors.primary} />
-                </View>
-                <Text style={styles.printerLabel}>{p.label}</Text>
-                <Ionicons name="chevron-forward" size={18} color={Colors.gray300} />
-              </TouchableOpacity>
-            ))}
+            {PRINTER_OPTIONS.map((p) => {
+              const label = p.labelKey ? t(p.labelKey) : p.label ?? p.key;
+              return (
+                <TouchableOpacity
+                  key={p.key}
+                  style={styles.printerOption}
+                  onPress={() => handlePrint(label)}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.printerIcon}>
+                    <Ionicons name={p.icon as any} size={22} color={Colors.primary} />
+                  </View>
+                  <Text style={styles.printerLabel}>{label}</Text>
+                  <Ionicons name="chevron-forward" size={18} color={Colors.gray300} />
+                </TouchableOpacity>
+              );
+            })}
 
             <TouchableOpacity style={styles.cancelPrint} onPress={() => setShowPrinterModal(false)}>
-              <Text style={styles.cancelPrintText}>ยกเลิก</Text>
+              <Text style={styles.cancelPrintText}>{t('common.cancel')}</Text>
             </TouchableOpacity>
           </View>
         </View>

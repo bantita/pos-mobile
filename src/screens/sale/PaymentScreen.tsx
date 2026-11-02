@@ -33,27 +33,30 @@ import { ENV } from '../../config/env';
 import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
 import { Spacing, BorderRadius } from '../../constants/spacing';
-import { formatCurrency } from '../../utils/format';
+import { useT, useFormat, useUiLanguage, payMethodLabel } from '../../i18n';
+import { translate } from '../../i18n/translate';
 
 interface PaymentScreenProps {
   onBack: () => void;
   onPaid: (payments: Payment[], saleNo: string) => void;
 }
 
-// ช่องทางชำระเงินทั้งหมด
+// ช่องทางชำระเงินทั้งหมด — ป้ายแสดงผ่าน payMethodLabel(key, uiLang) (ewallet ใช้ payment.ewalletOther)
 const PAYMENT_METHODS: {
   key: PaymentMethod;
-  label: string;
   icon: string;
   color: string;
   bgColor: string;
 }[] = [
-  { key: 'cash',     label: 'เงินสด',        icon: 'cash-outline',           color: Colors.success, bgColor: Colors.successLight },
-  { key: 'credit',   label: 'บัตรเครดิต',    icon: 'card-outline',           color: Colors.category1, bgColor: Colors.primaryLight },
-  { key: 'qr',       label: 'QR Code',        icon: 'qr-code-outline',        color: Colors.info, bgColor: Colors.infoLight },
-  { key: 'transfer', label: 'โอนเงิน',        icon: 'phone-portrait-outline', color: Colors.warning, bgColor: Colors.warningLight },
-  { key: 'ewallet',  label: 'E-Wallet / อื่นๆ', icon: 'wallet-outline',        color: Colors.primary, bgColor: Colors.primaryLight },
+  { key: 'cash',     icon: 'cash-outline',           color: Colors.success, bgColor: Colors.successLight },
+  { key: 'credit',   icon: 'card-outline',           color: Colors.category1, bgColor: Colors.primaryLight },
+  { key: 'qr',       icon: 'qr-code-outline',        color: Colors.info, bgColor: Colors.infoLight },
+  { key: 'transfer', icon: 'phone-portrait-outline', color: Colors.warning, bgColor: Colors.warningLight },
+  { key: 'ewallet',  icon: 'wallet-outline',         color: Colors.primary, bgColor: Colors.primaryLight },
 ];
+
+/** ชื่อแคชเชียร์ที่บันทึกลงข้อมูล (persisted) — คงเป็นภาษาไทยเสมอ */
+const CASHIER_DATA_NAME = translate('th', 'pos.cashierFallback');
 
 const QUICK_CASH = [20, 50, 100, 500, 1000];
 
@@ -68,6 +71,9 @@ const MemberTypePill: React.FC<{ name: string; color: string }> = ({ name, color
 };
 
 export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) => {
+  const t = useT();
+  const f = useFormat();
+  const uiLang = useUiLanguage();
   const { getGrandTotal, getSubtotal, getDiscountTotal, getVatAmount, items, discount, orderType, orderDetails } = useCartStore();
   const grandTotalBase = getGrandTotal();
 
@@ -76,12 +82,12 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
   // ถ้าไม่เป็นแบบนั้น → ใช้ป้ายกลาง "ภาษีมูลค่าเพิ่ม (VAT)"
   const vatLabel = useMemo(() => {
     const taxed = items.filter((i) => (i.product.vatRate || 0) > 0);
-    if (taxed.length === 0) return 'ภาษีมูลค่าเพิ่ม (VAT)';
+    if (taxed.length === 0) return t('payment.mobile.vatGeneric');
     const allInclusive = taxed.every((i) => i.product.vatIncluded);
     const rates = Array.from(new Set(taxed.map((i) => i.product.vatRate)));
-    if (allInclusive && rates.length === 1) return `VAT ${rates[0]}% (รวมแล้ว)`;
-    return 'ภาษีมูลค่าเพิ่ม (VAT)';
-  }, [items]);
+    if (allInclusive && rates.length === 1) return t('payment.mobile.vatIncluded', { rate: rates[0] ?? 0 });
+    return t('payment.mobile.vatGeneric');
+  }, [items, t]);
 
   // ── Service Charge ──
   const { serviceCharge } = useStoreConfigStore();
@@ -130,8 +136,9 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
       businessDateTime: new Date().toISOString(),
       storeCode: 'STORE-001',
       couponCode: appliedCouponCode || undefined,
+      lang: uiLang,
     });
-  }, [items, selectedMember, memberType, appliedCouponCode, getActivePromotions, getSubtotal]);
+  }, [items, selectedMember, memberType, appliedCouponCode, getActivePromotions, getSubtotal, uiLang]);
 
   // ส่วนลดรวมจากโปรทั้งหมด (รายการ + บิล) แทนที่การคิดคูปองใบเดียวแบบเดิม
   const promotionDiscount = engineResult.totalDiscount;
@@ -153,7 +160,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
       setAppliedCouponCode('');
       setCouponDiscount(0);
       setCouponPromoName('');
-      setCouponError(result.error || 'คูปองไม่ถูกต้อง');
+      setCouponError(result.error || t('payment.couponInvalid'));
     }
   };
 
@@ -232,9 +239,9 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
 
     // ── CRM: Earn points + apply coupon ──
     if (selectedMember) {
-      earnPoints(selectedMember.id, grandTotal, saleNo, 'แคชเชียร์');
+      earnPoints(selectedMember.id, grandTotal, saleNo, CASHIER_DATA_NAME);
       if (pointDiscount > 0) {
-        redeemPoints(selectedMember.id, parseInt(pointsToUse) || 0, saleNo, 'แคชเชียร์');
+        redeemPoints(selectedMember.id, parseInt(pointsToUse) || 0, saleNo, CASHIER_DATA_NAME);
       }
       // ── Auto-upgrade level (multi-tier: ข้ามระดับได้ถ้ายอดซื้อสูงพอ) ──
       const { getMemberById, updateMember } = useMemberStore.getState();
@@ -298,7 +305,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
       memberTypeId: memberType?.id,
       memberTypeName: memberType?.name,
       pointsEarned,
-      cashierName: 'แคชเชียร์',
+      cashierName: CASHIER_DATA_NAME,
       posName: 'POS 1',
       status: 'completed',
       orderType,
@@ -363,6 +370,9 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
   useEffect(() => clearAutoConfirmTimer, []);
 
   const selectedMethodInfo = PAYMENT_METHODS.find((m) => m.key === selectedMethod)!;
+  /** ป้ายปุ่มช่องทางชำระ — ewallet ใช้ถ้อยคำยาว "E-Wallet / อื่นๆ" */
+  const methodButtonLabel = (key: PaymentMethod) =>
+    key === 'ewallet' ? t('payment.ewalletOther') : payMethodLabel(key, uiLang);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -373,7 +383,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
           <TouchableOpacity onPress={onBack} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={24} color={Colors.white} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>ชำระเงิน</Text>
+          <Text style={styles.headerTitle}>{t('payment.title')}</Text>
           <TouchableOpacity
             style={[styles.splitBtn, showSplitMode && styles.splitBtnActive]}
             onPress={() => { setShowSplitMode(!showSplitMode); setPayments([]); }}
@@ -387,24 +397,24 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
 
           {/* Grand Total */}
           <View style={styles.totalBanner}>
-            <Text style={styles.totalLabel}>ยอดที่ต้องชำระ</Text>
-            <Text style={styles.totalAmount}>฿{formatCurrency(grandTotal)}</Text>
+            <Text style={styles.totalLabel}>{t('payment.amountDue')}</Text>
+            <Text style={styles.totalAmount}>{f.money(grandTotal)}</Text>
             {showSplitMode && remaining < grandTotal && (
-              <Text style={styles.remainingText}>คงเหลือ ฿{formatCurrency(remaining)}</Text>
+              <Text style={styles.remainingText}>{t('payment.mobile.remainingAmount', { amount: f.money(remaining) })}</Text>
             )}
           </View>
 
           {/* Bill Summary (collapsible) */}
           <View style={styles.summaryBox}>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>รวมสินค้า ({items.length} รายการ)</Text>
-              <Text style={styles.summaryValue}>฿{formatCurrency(getSubtotal())}</Text>
+              <Text style={styles.summaryLabel}>{t('payment.mobile.itemsSubtotal', { count: items.length })}</Text>
+              <Text style={styles.summaryValue}>{f.money(getSubtotal())}</Text>
             </View>
             {getDiscountTotal() > 0 && (
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>ส่วนลด</Text>
+                <Text style={styles.summaryLabel}>{t('payment.mobile.discount')}</Text>
                 <Text style={[styles.summaryValue, { color: Colors.danger }]}>
-                  -฿{formatCurrency(getDiscountTotal())}
+                  -{f.money(getDiscountTotal())}
                 </Text>
               </View>
             )}
@@ -412,7 +422,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
             {appliedPromotions.map((promo) => (
               <View style={styles.summaryRow} key={promo.promotionId}>
                 <Text style={[styles.summaryLabel, { color: Colors.category1 }]} numberOfLines={1}>
-                  {promo.freeGifts && promo.freeGifts.length > 0 ? 'ของแถม' : 'โปรฯ'} · {promo.promotionName}
+                  {promo.freeGifts && promo.freeGifts.length > 0 ? t('payment.mobile.freeGift') : t('payment.mobile.promo')} · {promo.promotionName}
                 </Text>
                 {promo.freeGifts && promo.freeGifts.length > 0 ? (
                   <Text style={[styles.summaryValue, { color: Colors.category1 }]}>
@@ -420,7 +430,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
                   </Text>
                 ) : (
                   <Text style={[styles.summaryValue, { color: Colors.category1 }]}>
-                    -฿{formatCurrency(promo.value)}
+                    -{f.money(promo.value)}
                   </Text>
                 )}
               </View>
@@ -428,32 +438,32 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
             {scAmount > 0 && (
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Service Charge</Text>
-                <Text style={styles.summaryValue}>฿{formatCurrency(scAmount)}</Text>
+                <Text style={styles.summaryValue}>{f.money(scAmount)}</Text>
               </View>
             )}
             {pointDiscount > 0 && (
               <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: Colors.warning }]}>แลกคะแนน ({pointsToUse} pts)</Text>
+                <Text style={[styles.summaryLabel, { color: Colors.warning }]}>{t('payment.mobile.pointsRedeemed', { points: pointsToUse })}</Text>
                 <Text style={[styles.summaryValue, { color: Colors.warning }]}>
-                  -฿{formatCurrency(pointDiscount)}
+                  -{f.money(pointDiscount)}
                 </Text>
               </View>
             )}
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>{vatLabel}</Text>
-              <Text style={styles.summaryValue}>฿{formatCurrency(getVatAmount())}</Text>
+              <Text style={styles.summaryValue}>{f.money(getVatAmount())}</Text>
             </View>
           </View>
 
           {/* ── Member Selection ── */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>สมาชิก</Text>
+            <Text style={styles.sectionTitle}>{t('payment.mobile.member')}</Text>
             {selectedMember ? (
               <View style={styles.memberBadgeRow}>
                 <Ionicons name="person-circle" size={22} color={Colors.primary} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.memberName}>{selectedMember.name}</Text>
-                  <Text style={styles.memberSub}>{selectedMember.phone} · {selectedMember.pointBalance} คะแนน</Text>
+                  <Text style={styles.memberSub}>{t('payment.mobile.memberSub', { phone: selectedMember.phone, points: f.number(selectedMember.pointBalance) })}</Text>
                 </View>
                 <View style={[styles.levelBadgeMobile, {
                   backgroundColor: selectedMember.level === 'platinum' ? Colors.category1
@@ -469,20 +479,20 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
             ) : (
               <TouchableOpacity style={styles.memberSelectButton} onPress={() => { setShowMemberModal(true); setMemberSearch(''); }}>
                 <Ionicons name="people-outline" size={18} color={Colors.primary} />
-                <Text style={styles.memberSelectText}>เลือกสมาชิก</Text>
+                <Text style={styles.memberSelectText}>{t('pos.member.select')}</Text>
               </TouchableOpacity>
             )}
           </View>
 
           {/* ── Coupon Input ── */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>คูปอง</Text>
+            <Text style={styles.sectionTitle}>{t('payment.mobile.coupon')}</Text>
             <View style={styles.couponInputRow}>
               <TextInput
                 style={styles.couponInput}
                 value={couponCode}
                 onChangeText={(v) => { setCouponCode(v); setCouponError(''); }}
-                placeholder="รหัสคูปอง"
+                placeholder={t('pos.cart.couponPlaceholder')}
                 placeholderTextColor={Colors.gray300}
               />
               <TouchableOpacity
@@ -490,7 +500,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
                 onPress={handleValidateCoupon}
                 disabled={!couponCode.trim()}
               >
-                <Text style={styles.couponApplyText}>ใช้คูปอง</Text>
+                <Text style={styles.couponApplyText}>{t('pos.cart.couponApply')}</Text>
               </TouchableOpacity>
             </View>
             {couponError ? (
@@ -503,7 +513,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
               <View style={[styles.couponFeedback, { backgroundColor: Colors.successLight }]}>
                 <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
                 <Text style={[styles.couponFeedbackText, { color: Colors.success }]}>
-                  ใช้คูปองแล้ว ({couponPromoName})
+                  {t('payment.mobile.couponApplied', { name: couponPromoName })}
                 </Text>
                 <TouchableOpacity onPress={() => { setCouponDiscount(0); setCouponCode(''); setCouponPromoName(''); setAppliedCouponCode(''); }}>
                   <Ionicons name="close-circle" size={16} color={Colors.gray400} />
@@ -515,17 +525,17 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
           {/* ── Point Redemption ── */}
           {selectedMember && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>ใช้คะแนน</Text>
+              <Text style={styles.sectionTitle}>{t('payment.mobile.usePoints')}</Text>
               {pointDiscount === 0 ? (
                 <TouchableOpacity style={styles.pointRedeemButton} onPress={() => { setShowPointRedeem(true); setPointsToUse(''); }}>
                   <Ionicons name="star-outline" size={18} color="#F59E0B" />
-                  <Text style={styles.pointRedeemText}>ใช้คะแนน ({selectedMember.pointBalance} คะแนน)</Text>
+                  <Text style={styles.pointRedeemText}>{t('payment.mobile.usePointsBtn', { points: f.number(selectedMember.pointBalance) })}</Text>
                 </TouchableOpacity>
               ) : (
                 <View style={[styles.couponFeedback, { backgroundColor: Colors.warningLight }]}>
                   <Ionicons name="star" size={14} color="#F59E0B" />
                   <Text style={[styles.couponFeedbackText, { color: Colors.warning }]}>
-                    ใช้ {pointsToUse} คะแนน = ลด ฿{formatCurrency(pointDiscount)}
+                    {t('pos.cart.pointsApplied', { points: pointsToUse, amount: f.number(pointDiscount, 2) })}
                   </Text>
                   <TouchableOpacity onPress={() => { setPointDiscount(0); setPointsToUse(''); }}>
                     <Ionicons name="close-circle" size={16} color={Colors.gray400} />
@@ -537,7 +547,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
 
           {/* Payment Method Selector */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>ช่องทางชำระเงิน</Text>
+            <Text style={styles.sectionTitle}>{t('payment.mobile.methodsTitle')}</Text>
             <View style={styles.methodGrid}>
               {PAYMENT_METHODS.map((m) => (
                 <TouchableOpacity
@@ -558,7 +568,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
                     <Ionicons name={m.icon as any} size={22} color={selectedMethod === m.key ? Colors.white : Colors.gray500} />
                   </View>
                   <Text style={[styles.methodLabel, selectedMethod === m.key && { color: m.color, fontWeight: '700' }]}>
-                    {m.label}
+                    {methodButtonLabel(m.key)}
                   </Text>
                   {selectedMethod === m.key && (
                     <View style={[styles.selectedDot, { backgroundColor: m.color }]} />
@@ -571,7 +581,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
           {/* Amount Input */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>
-              {selectedMethod === 'cash' ? 'รับเงิน' : 'จำนวนเงิน'}
+              {selectedMethod === 'cash' ? t('payment.mobile.receiveCash') : t('payment.mobile.amount')}
             </Text>
 
             <View style={[styles.amountInputRow, { borderColor: selectedMethodInfo.color }]}>
@@ -581,7 +591,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
                 value={inputAmount}
                 onChangeText={setInputAmount}
                 keyboardType="decimal-pad"
-                placeholder={`฿${formatCurrency(remaining)}`}
+                placeholder={f.money(remaining)}
                 placeholderTextColor={Colors.gray300}
               />
               {!showSplitMode && (
@@ -589,7 +599,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
                   style={[styles.exactBtn, { backgroundColor: selectedMethodInfo.color }]}
                   onPress={() => setInputAmount(String(remaining.toFixed(2)))}
                 >
-                  <Text style={styles.exactBtnText}>พอดี</Text>
+                  <Text style={styles.exactBtnText}>{t('payment.mobile.exact')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -613,10 +623,10 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
             {selectedMethod !== 'cash' && (
               <TextInput
                 placeholder={
-                  selectedMethod === 'credit' ? 'เลขอ้างอิงบัตร / Approval Code'
-                  : selectedMethod === 'transfer' ? 'เลขที่รายการโอน'
-                  : selectedMethod === 'ewallet' ? 'รหัสอ้างอิง / ชื่อ E-Wallet'
-                  : 'เลขอ้างอิง'
+                  selectedMethod === 'credit' ? t('payment.mobile.refCard')
+                  : selectedMethod === 'transfer' ? t('payment.mobile.refTransfer')
+                  : selectedMethod === 'ewallet' ? t('payment.mobile.refEwallet')
+                  : t('payment.mobile.refOther')
                 }
                 placeholderTextColor={Colors.gray400}
                 value={reference}
@@ -629,8 +639,8 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
             {selectedMethod === 'cash' && numInput > 0 && cashChange > 0 && (
               <View style={styles.changeBox}>
                 <Ionicons name="arrow-undo-outline" size={18} color={Colors.success} />
-                <Text style={styles.changeLabel}>เงินทอน</Text>
-                <Text style={styles.changeAmount}>฿{formatCurrency(cashChange)}</Text>
+                <Text style={styles.changeLabel}>{t('payment.change')}</Text>
+                <Text style={styles.changeAmount}>{f.money(cashChange)}</Text>
               </View>
             )}
 
@@ -643,7 +653,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
               >
                 <Ionicons name="add-circle-outline" size={18} color={numInput > 0 ? Colors.primary : Colors.gray400} />
                 <Text style={[styles.addSplitText, numInput <= 0 && { color: Colors.gray400 }]}>
-                  เพิ่มการชำระ ฿{numInput > 0 ? formatCurrency(numInput) : '0.00'}
+                  {t('payment.mobile.addPayment', { amount: f.money(numInput > 0 ? numInput : 0) })}
                 </Text>
               </TouchableOpacity>
             )}
@@ -652,7 +662,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
           {/* Split Payments List */}
           {showSplitMode && payments.length > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>รายการที่ชำระแล้ว</Text>
+              <Text style={styles.sectionTitle}>{t('payment.mobile.paidList')}</Text>
               {payments.map((p, i) => {
                 const info = PAYMENT_METHODS.find((m) => m.key === p.method)!;
                 return (
@@ -660,9 +670,9 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
                     <View style={[styles.splitIcon, { backgroundColor: info.bgColor }]}>
                       <Ionicons name={info.icon as any} size={16} color={info.color} />
                     </View>
-                    <Text style={styles.splitMethodText}>{info.label}</Text>
+                    <Text style={styles.splitMethodText}>{payMethodLabel(p.method, uiLang)}</Text>
                     {p.reference ? <Text style={styles.splitRef}>({p.reference})</Text> : null}
-                    <Text style={styles.splitAmount}>฿{formatCurrency(p.amount)}</Text>
+                    <Text style={styles.splitAmount}>{f.money(p.amount)}</Text>
                     <TouchableOpacity onPress={() => removePayment(i)} style={styles.removeSplit}>
                       <Ionicons name="close-circle" size={18} color={Colors.danger} />
                     </TouchableOpacity>
@@ -670,13 +680,13 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
                 );
               })}
               <View style={styles.splitTotal}>
-                <Text style={styles.splitTotalLabel}>รวมที่ชำระ</Text>
-                <Text style={styles.splitTotalValue}>฿{formatCurrency(totalPaid)}</Text>
+                <Text style={styles.splitTotalLabel}>{t('payment.mobile.totalPaid')}</Text>
+                <Text style={styles.splitTotalValue}>{f.money(totalPaid)}</Text>
               </View>
               {remaining > 0 && (
                 <View style={[styles.splitTotal, { backgroundColor: Colors.warningLight }]}>
-                  <Text style={[styles.splitTotalLabel, { color: Colors.warning }]}>คงเหลือ</Text>
-                  <Text style={[styles.splitTotalValue, { color: Colors.warning }]}>฿{formatCurrency(remaining)}</Text>
+                  <Text style={[styles.splitTotalLabel, { color: Colors.warning }]}>{t('payment.mobile.remaining')}</Text>
+                  <Text style={[styles.splitTotalValue, { color: Colors.warning }]}>{f.money(remaining)}</Text>
                 </View>
               )}
             </View>
@@ -689,10 +699,10 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
         <View style={styles.footer}>
           {selectedMethod === 'cash' && !showSplitMode && numInput > 0 && numInput >= grandTotal && (
             <View style={styles.changePreview}>
-              <Text style={styles.changePreviewLabel}>รับ ฿{formatCurrency(numInput)}</Text>
+              <Text style={styles.changePreviewLabel}>{t('payment.mobile.receive', { amount: f.money(numInput) })}</Text>
               <View style={styles.changePreviewRight}>
-                <Text style={styles.changePreviewLabel}>ทอน</Text>
-                <Text style={styles.changePreviewAmount}>฿{formatCurrency(numInput - grandTotal)}</Text>
+                <Text style={styles.changePreviewLabel}>{t('payment.mobile.changeShort')}</Text>
+                <Text style={styles.changePreviewAmount}>{f.money(numInput - grandTotal)}</Text>
               </View>
             </View>
           )}
@@ -717,8 +727,8 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
             activeOpacity={0.85}
           >
             <Ionicons name="checkmark-circle" size={24} color={Colors.white} />
-            <Text style={styles.confirmBtnText}>ยืนยันการชำระเงิน</Text>
-            <Text style={styles.confirmBtnAmount}>฿{formatCurrency(grandTotal)}</Text>
+            <Text style={styles.confirmBtnText}>{t('payment.mobile.confirmPayment')}</Text>
+            <Text style={styles.confirmBtnAmount}>{f.money(grandTotal)}</Text>
           </TouchableOpacity>
         </View>
 
@@ -726,14 +736,14 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
         <Modal visible={showQRModal} animationType="fade" transparent onRequestClose={closeQRModal}>
           <View style={styles.qrOverlay}>
             <View style={styles.qrSheet}>
-              <Text style={styles.qrTitle}>สแกน QR Code ชำระเงิน</Text>
-              <Text style={styles.qrAmount}>฿{formatCurrency(qrAmount)}</Text>
+              <Text style={styles.qrTitle}>{t('payment.mobile.qrTitle')}</Text>
+              <Text style={styles.qrAmount}>{f.money(qrAmount)}</Text>
 
               {qrStatus === 'success' ? (
                 // สถานะชำระสำเร็จ (mock auto-confirm)
                 <View style={styles.qrBox}>
                   <Ionicons name="checkmark-circle" size={120} color={Colors.success} />
-                  <Text style={styles.qrSuccessText}>ชำระสำเร็จ</Text>
+                  <Text style={styles.qrSuccessText}>{t('payment.mobile.qrSuccess')}</Text>
                 </View>
               ) : (
                 <>
@@ -746,12 +756,12 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
                         backgroundColor={Colors.white}
                       />
                     </View>
-                    <Text style={styles.qrMerchant}>พร้อมเพย์ {effectivePromptPayId}</Text>
-                    <Text style={styles.qrHint}>สแกนด้วยแอปธนาคารเพื่อชำระ ฿{formatCurrency(qrAmount)}</Text>
+                    <Text style={styles.qrMerchant}>{t('payment.mobile.promptPay', { id: effectivePromptPayId })}</Text>
+                    <Text style={styles.qrHint}>{t('payment.mobile.qrHint', { amount: f.money(qrAmount) })}</Text>
                     {FEATURE_FLAGS.MOCK_PAYMENT_AUTOCONFIRM && (
                       <View style={styles.qrWaitingRow}>
                         <ActivityIndicator size="small" color={Colors.primary} />
-                        <Text style={styles.qrWaitingText}>กำลังรอการชำระเงิน...</Text>
+                        <Text style={styles.qrWaitingText}>{t('payment.mobile.qrWaiting')}</Text>
                       </View>
                     )}
                   </View>
@@ -764,10 +774,10 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
                       confirmQRPayment();
                     }}
                   >
-                    <Text style={styles.qrConfirmText}>ลูกค้าสแกนแล้ว — ยืนยัน</Text>
+                    <Text style={styles.qrConfirmText}>{t('payment.mobile.qrConfirm')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={closeQRModal}>
-                    <Text style={styles.qrCancel}>ยกเลิก</Text>
+                    <Text style={styles.qrCancel}>{t('common.cancel')}</Text>
                   </TouchableOpacity>
                 </>
               )}
@@ -779,12 +789,12 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
         <Modal visible={showMemberModal} animationType="slide" transparent>
           <View style={styles.qrOverlay}>
             <View style={[styles.qrSheet, { width: '90%', maxHeight: '70%' }]}>
-              <Text style={styles.qrTitle}>เลือกสมาชิก</Text>
+              <Text style={styles.qrTitle}>{t('pos.member.select')}</Text>
               <TextInput
                 style={styles.memberSearchInput}
                 value={memberSearch}
                 onChangeText={setMemberSearch}
-                placeholder="ค้นหาชื่อ / เบอร์โทร / เลขสมาชิก"
+                placeholder={t('pos.member.searchPlaceholder')}
                 placeholderTextColor={Colors.gray300}
                 autoFocus
               />
@@ -794,7 +804,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
                 style={{ maxHeight: 300, width: '100%' }}
                 showsVerticalScrollIndicator={false}
                 ListEmptyComponent={
-                  <Text style={{ textAlign: 'center', color: Colors.gray400, padding: 20 }}>ไม่พบสมาชิก</Text>
+                  <Text style={{ textAlign: 'center', color: Colors.gray400, padding: 20 }}>{t('pos.member.notFound')}</Text>
                 }
                 renderItem={({ item: mem }: { item: Member }) => (
                   <TouchableOpacity
@@ -817,7 +827,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
                 )}
               />
               <TouchableOpacity style={styles.qrConfirmBtn} onPress={() => setShowMemberModal(false)}>
-                <Text style={styles.qrConfirmText}>ปิด</Text>
+                <Text style={styles.qrConfirmText}>{t('common.close')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -827,26 +837,26 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
         <Modal visible={showPointRedeem} animationType="fade" transparent>
           <View style={styles.qrOverlay}>
             <View style={[styles.qrSheet, { width: '85%' }]}>
-              <Text style={styles.qrTitle}>ใช้คะแนนแลกส่วนลด</Text>
+              <Text style={styles.qrTitle}>{t('pos.points.title')}</Text>
               {selectedMember && (
                 <>
                   <Text style={{ ...Typography.body2, color: Colors.textSecondary }}>
-                    คะแนนคงเหลือ: {selectedMember.pointBalance} คะแนน
+                    {t('pos.points.balance', { points: f.number(selectedMember.pointBalance) })}
                   </Text>
                   <Text style={{ ...Typography.caption, color: Colors.gray400, marginTop: -4 }}>
-                    อัตราแลก: 1 คะแนน = {pointConfig.redeemRate} บาท | ขั้นต่ำ {pointConfig.minRedeemPoints} คะแนน
+                    {t('pos.points.rate', { rate: pointConfig.redeemRate, min: pointConfig.minRedeemPoints })}
                   </Text>
                   <TextInput
                     style={styles.memberSearchInput}
                     value={pointsToUse}
                     onChangeText={setPointsToUse}
-                    placeholder={`จำนวนคะแนน (สูงสุด ${selectedMember.pointBalance})`}
+                    placeholder={t('pos.points.placeholder', { max: selectedMember.pointBalance })}
                     placeholderTextColor={Colors.gray300}
                     keyboardType="number-pad"
                   />
                   {parseInt(pointsToUse) > 0 && (
                     <Text style={{ ...Typography.body2, color: Colors.warning, fontWeight: '700' }}>
-                      = ส่วนลด ฿{formatCurrency((parseInt(pointsToUse) || 0) * pointConfig.redeemRate)}
+                      {t('pos.points.calc', { amount: f.number((parseInt(pointsToUse) || 0) * pointConfig.redeemRate, 2) })}
                     </Text>
                   )}
                 </>
@@ -856,10 +866,10 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({ onBack, onPaid }) 
                 disabled={!(parseInt(pointsToUse) > 0) || (parseInt(pointsToUse) > (selectedMember?.pointBalance ?? 0)) || (parseInt(pointsToUse) < pointConfig.minRedeemPoints)}
                 onPress={handleApplyPoints}
               >
-                <Text style={styles.qrConfirmText}>ยืนยัน</Text>
+                <Text style={styles.qrConfirmText}>{t('common.confirm')}</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => setShowPointRedeem(false)}>
-                <Text style={styles.qrCancel}>ยกเลิก</Text>
+                <Text style={styles.qrCancel}>{t('common.cancel')}</Text>
               </TouchableOpacity>
             </View>
           </View>

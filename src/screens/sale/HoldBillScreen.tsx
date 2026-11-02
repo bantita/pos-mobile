@@ -14,7 +14,7 @@ import { HoldBill } from '../../types/sale';
 import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
 import { Spacing, BorderRadius } from '../../constants/spacing';
-import { formatCurrency, formatDateTime } from '../../utils/format';
+import { useT, useFormat } from '../../i18n';
 
 interface HoldBillScreenProps {
   onBack: () => void;
@@ -22,13 +22,15 @@ interface HoldBillScreenProps {
 }
 
 export const HoldBillScreen: React.FC<HoldBillScreenProps> = ({ onBack, onRecalled }) => {
+  const t = useT();
+  const f = useFormat();
   const { items, holdBills, holdBill, recallBill, deleteHoldBill, getGrandTotal } = useCartStore();
   const [showHoldModal, setShowHoldModal] = useState(false);
   const [customerRef, setCustomerRef] = useState('');
   const [remark, setRemark] = useState('');
 
   const handleHold = () => {
-    if (items.length === 0) { Alert.alert('ไม่มีสินค้าในบิล'); return; }
+    if (items.length === 0) { Alert.alert(t('pos.hold.noItems')); return; }
     holdBill(customerRef, remark);
     setShowHoldModal(false);
     setCustomerRef('');
@@ -37,9 +39,9 @@ export const HoldBillScreen: React.FC<HoldBillScreenProps> = ({ onBack, onRecall
 
   const handleRecall = (id: string) => {
     if (items.length > 0) {
-      Alert.alert('มีบิลค้างอยู่', 'บิลปัจจุบันจะถูกแทนที่ด้วยบิลที่เรียกคืน', [
-        { text: 'ยกเลิก', style: 'cancel' },
-        { text: 'เรียกคืน', onPress: () => { recallBill(id); onRecalled(); } },
+      Alert.alert(t('pos.hold.replaceTitle'), t('pos.hold.replaceMsg'), [
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('pos.hold.recall'), onPress: () => { recallBill(id); onRecalled(); } },
       ]);
     } else {
       recallBill(id);
@@ -48,9 +50,9 @@ export const HoldBillScreen: React.FC<HoldBillScreenProps> = ({ onBack, onRecall
   };
 
   const handleDelete = (id: string) => {
-    Alert.alert('ลบบิลพัก', 'ต้องการลบบิลพักนี้?', [
-      { text: 'ยกเลิก', style: 'cancel' },
-      { text: 'ลบ', style: 'destructive', onPress: () => deleteHoldBill(id) },
+    Alert.alert(t('pos.hold.deleteTitle'), t('pos.hold.deleteMsg'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('pos.hold.delete'), style: 'destructive', onPress: () => deleteHoldBill(id) },
     ]);
   };
 
@@ -65,17 +67,17 @@ export const HoldBillScreen: React.FC<HoldBillScreenProps> = ({ onBack, onRecall
             <Ionicons name="receipt-outline" size={20} color={Colors.primary} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.billRef}>{item.customerRef || 'ไม่ระบุชื่อ'}</Text>
-            <Text style={styles.billTime}>{formatDateTime(item.heldAt)}</Text>
+            <Text style={styles.billRef}>{item.customerRef || t('pos.hold.noName')}</Text>
+            <Text style={styles.billTime}>{f.dateTime(item.heldAt)}</Text>
           </View>
           <View style={styles.billAmountBox}>
-            <Text style={styles.billAmount}>฿{formatCurrency(total)}</Text>
-            <Text style={styles.billItems}>{itemCount} รายการ</Text>
+            <Text style={styles.billAmount}>{f.money(total)}</Text>
+            <Text style={styles.billItems}>{t('pos.hold.itemCount', { count: itemCount })}</Text>
           </View>
         </View>
 
         {item.remark ? (
-          <Text style={styles.billRemark}>หมายเหตุ: {item.remark}</Text>
+          <Text style={styles.billRemark}>{t('pos.hold.remark', { remark: item.remark })}</Text>
         ) : null}
 
         <View style={styles.billItemPreview}>
@@ -85,7 +87,7 @@ export const HoldBillScreen: React.FC<HoldBillScreenProps> = ({ onBack, onRecall
             </Text>
           ))}
           {item.items.length > 3 && (
-            <Text style={styles.billItemMore}>และอีก {item.items.length - 3} รายการ...</Text>
+            <Text style={styles.billItemMore}>{t('pos.hold.more', { count: item.items.length - 3 })}</Text>
           )}
         </View>
 
@@ -96,7 +98,7 @@ export const HoldBillScreen: React.FC<HoldBillScreenProps> = ({ onBack, onRecall
             activeOpacity={0.85}
           >
             <Ionicons name="refresh-outline" size={16} color={Colors.white} />
-            <Text style={styles.recallBtnText}>เรียกบิลคืน</Text>
+            <Text style={styles.recallBtnText}>{t('pos.hold.recallBill')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(item.id)}>
             <Ionicons name="trash-outline" size={16} color={Colors.danger} />
@@ -113,11 +115,11 @@ export const HoldBillScreen: React.FC<HoldBillScreenProps> = ({ onBack, onRecall
         <TouchableOpacity onPress={onBack} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={Colors.white} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>บิลพัก ({holdBills.length})</Text>
+        <Text style={styles.headerTitle}>{t('pos.hold.title', { count: holdBills.length })}</Text>
         {items.length > 0 && (
           <TouchableOpacity style={styles.holdBtn} onPress={() => setShowHoldModal(true)}>
             <Ionicons name="pause-circle-outline" size={18} color={Colors.white} />
-            <Text style={styles.holdBtnText}>พักบิลนี้</Text>
+            <Text style={styles.holdBtnText}>{t('pos.hold.holdThis')}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -127,7 +129,7 @@ export const HoldBillScreen: React.FC<HoldBillScreenProps> = ({ onBack, onRecall
         <View style={styles.currentBill}>
           <Ionicons name="cart-outline" size={18} color={Colors.primary} />
           <Text style={styles.currentBillText}>
-            บิลปัจจุบัน: {items.length} รายการ · ฿{formatCurrency(getGrandTotal())}
+            {t('pos.hold.current', { count: items.length, amount: f.money(getGrandTotal()) })}
           </Text>
         </View>
       )}
@@ -136,8 +138,8 @@ export const HoldBillScreen: React.FC<HoldBillScreenProps> = ({ onBack, onRecall
       {holdBills.length === 0 ? (
         <View style={styles.empty}>
           <Ionicons name="pause-circle-outline" size={72} color={Colors.gray300} />
-          <Text style={styles.emptyTitle}>ไม่มีบิลพัก</Text>
-          <Text style={styles.emptySubtitle}>กด "พักบิลนี้" เพื่อบันทึกบิลปัจจุบัน</Text>
+          <Text style={styles.emptyTitle}>{t('pos.hold.empty')}</Text>
+          <Text style={styles.emptySubtitle}>{t('pos.hold.emptyHint')}</Text>
         </View>
       ) : (
         <FlatList
@@ -154,21 +156,21 @@ export const HoldBillScreen: React.FC<HoldBillScreenProps> = ({ onBack, onRecall
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>พักบิล</Text>
-            <Text style={styles.modalSub}>บันทึกบิลปัจจุบันไว้ก่อน เพื่อเปิดบิลใหม่</Text>
+            <Text style={styles.modalTitle}>{t('pos.hold.btn')}</Text>
+            <Text style={styles.modalSub}>{t('pos.hold.modalSub')}</Text>
 
-            <Text style={styles.fieldLabel}>ชื่อลูกค้า / อ้างอิง (ไม่บังคับ)</Text>
+            <Text style={styles.fieldLabel}>{t('pos.hold.refLabel')}</Text>
             <TextInput
               style={styles.textField}
-              placeholder="เช่น คุณสมชาย, โต๊ะ 3"
+              placeholder={t('pos.hold.refPlaceholder')}
               placeholderTextColor={Colors.gray400}
               value={customerRef}
               onChangeText={setCustomerRef}
             />
-            <Text style={styles.fieldLabel}>หมายเหตุ (ไม่บังคับ)</Text>
+            <Text style={styles.fieldLabel}>{t('pos.hold.remarkLabel')}</Text>
             <TextInput
               style={[styles.textField, { height: 80, textAlignVertical: 'top' }]}
-              placeholder="เช่น รอเครื่องดื่มเพิ่ม"
+              placeholder={t('pos.hold.remarkPlaceholder')}
               placeholderTextColor={Colors.gray400}
               value={remark}
               onChangeText={setRemark}
@@ -180,11 +182,11 @@ export const HoldBillScreen: React.FC<HoldBillScreenProps> = ({ onBack, onRecall
                 style={styles.cancelModalBtn}
                 onPress={() => setShowHoldModal(false)}
               >
-                <Text style={styles.cancelModalText}>ยกเลิก</Text>
+                <Text style={styles.cancelModalText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.confirmHoldBtn} onPress={handleHold} activeOpacity={0.85}>
                 <Ionicons name="pause-circle" size={18} color={Colors.white} />
-                <Text style={styles.confirmHoldText}>พักบิล</Text>
+                <Text style={styles.confirmHoldText}>{t('pos.hold.btn')}</Text>
               </TouchableOpacity>
             </View>
           </View>
