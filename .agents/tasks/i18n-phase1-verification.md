@@ -14,7 +14,7 @@ Branch `feat/i18n-phase1` in worktree `d:\pos-mobile\.worktrees\i18n`, based on 
 
 ## 1. Files changed
 
-`git -C d:\pos-mobile\.worktrees\i18n diff --stat main...HEAD`: **71 files changed, 4126 insertions(+), 1019 deletions(-)**.
+`git -C d:\pos-mobile\.worktrees\i18n diff --stat main...HEAD`: **73 files changed** (including the two committed docs under `.agents/tasks/`).
 
 The working tree is clean for `src/`. This doc and `i18n-phase2-inventory.md` are committed separately (`docs:` commit after `4afb747`). The workflow artifacts under `.agents/tasks/i18n-phase1/` are untracked; the merge step commits them.
 
@@ -50,9 +50,11 @@ These are leaf keys in the th source of truth. The en files have exactly the sam
 | `pos` | 232 | web POS + mobile sale/cart/hold (`pos.mobile.*`, `pos.hold.*`), order types, variants |
 | `payment` | 65 | pay methods, web payment modal, mobile PaymentScreen (`payment.mobile.*`), member-type discount |
 | `receipt` | 77 | **printed/paper text only** (receipt language): captions, totals, tax invoice, top-up slip, `receipt.paper.*` |
-| `receiptScreen` | 32 | UI chrome of the receipt / tax-invoice / cancel-document screens |
+| `receiptScreen` | 30 | UI chrome of the receipt / tax-invoice / cancel-document screens |
 | `settings` | 4 | language selectors and the receipt-language hint |
-| **Total** | **556** | |
+| **Total** | **554** | |
+
+Unused-key scan (integration pass): every key is referenced except six `common.*` seeds that the plan asked for up front (`loading`, `error`, `errorTitle`, `noData`, `retry`, `search`) and are kept for phase 2. The two dead FEAT-001 placeholders `receiptScreen.print` / `receiptScreen.share` were removed.
 
 ## 3. Architecture summary
 
@@ -79,10 +81,12 @@ The remaining work is listed in `.agents/tasks/i18n-phase2-inventory.md` (217 fi
 
 ## 5. Lint and test results vs baseline
 
-| Check | Baseline (`baseline.md`) | Now (after FEAT-005) |
+| Check | Baseline (`baseline.md`) | Now (after cross-FEAT integration fix) |
 |---|---|---|
 | `npm run lint` (`tsc --noEmit`) | 13 errors in 6 files | **13 errors**, same 6 files (BranchSelector ×3, DatePicker ×4, PermissionMatrixScreen ×1, RoleManageScreen ×2, WebUserStaffScreen ×2, errorTracking ×1). **0 in touched files.** |
 | `npm test` (`vitest run`) | 214 pass + 3 suite-load failures | **301 pass**, 0 failing tests. The 3 suite-load failures are the same known ones: `src/engine/__tests__/engine.test.ts`, `src/services/sync/SyncService.test.ts` and `src/store/__tests__/branchPermissionStore.test.ts`, which fail on react-native `Libraries/Image/Image` resolution. |
+
+Cross-FEAT integration pass (re-run after the fix commit): lint 13 errors in the same 6 baseline files, 0 in touched files; tests 301 passed, 26 test files passed, only the 3 known suite-load failures. Fixes: the WebPOSScreen wallet top-up slip helper `tr` now takes `ReceiptKey` (it was the generic `TranslationKey`), so a UI key can't leak onto the printed slip, and the two unused `receiptScreen` keys were dropped. Remaining Thai in the phase-1 files falls into the categories listed in §3 and in the FEAT notes: comments, mock/shop data, `logAction`, persisted actor strings and the `฿` glyph. It also covers the parts that are phase 2 by design: the other SettingsHub rows, the WebDocumentSettings fields, the designer chrome and the rest of WebSimpleScreens. `git diff --name-only main...HEAD` touches no forbidden file.
 
 The 87 new tests: FEAT-001 added 45 (labels 15, translate 10, format 9, parity 4, languageStore 6, useT 1) and FEAT-002 added 42 (posReceiptData, taxInvoiceHtml, receiptTemplate, receiptStore migration, memberTypeBenefits). FEAT-003/004/005 added no tests; their screen logic goes through the tested pure modules. No previously passing test fails.
 

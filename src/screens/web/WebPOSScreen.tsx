@@ -40,7 +40,7 @@ import { useReceiptStore, DEFAULT_TEMPLATE } from '../../store/receiptStore';
 import { buildTemplateHtml, receiptDateTime, receiptPayMethod, receiptBranch } from '../../utils/receiptTemplate';
 import { buildPosReceiptData, PosPrintInvoice } from '../../utils/posReceiptData';
 import { useT, useFormat, useUiLanguage, useReceiptT, payMethodLabel, PAY_ICON } from '../../i18n';
-import type { Language, UiKey } from '../../i18n';
+import type { Language, UiKey, ReceiptKey } from '../../i18n';
 import { translate } from '../../i18n/translate';
 import { formatMoney } from '../../i18n/format';
 import { StaffPopup } from '../../components/sale/StaffPopup';
@@ -3418,7 +3418,7 @@ export const WebPOSScreen: React.FC<POSProps> = ({ onExit }) => {
                       const now = new Date();
                       // ใบเสร็จเติมเงินใช้ "ภาษาใบเสร็จ" (แยกจากภาษา UI)
                       const rl = useReceiptStore.getState().config.receiptLanguage ?? 'th';
-                      const tr = (key: Parameters<typeof translate>[1]) => translate(rl, key);
+                      const tr = (key: ReceiptKey) => translate(rl, key);
                       const receiptHtml = `<!DOCTYPE html><html lang="${rl}"><head><meta charset="UTF-8"/><title>${tr('receipt.topup.title')}</title>
 <style>body{font-family:'Sarabun',sans-serif;font-size:14px;max-width:300px;margin:20px auto;padding:20px}
 .center{text-align:center}.line{border-top:1px dashed #000;margin:10px 0}

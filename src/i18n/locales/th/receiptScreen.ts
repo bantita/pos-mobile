@@ -2,8 +2,6 @@
  * receiptScreen — chrome ของหน้าจอใบเสร็จ/ใบกำกับภาษี/ยกเลิกเอกสาร (ภาษา UI)
  */
 export const receiptScreen = {
-  print: 'พิมพ์',
-  share: 'แชร์',
   reprint: '🔄 พิมพ์ซ้ำ',
   paid: '✅ ชำระเงินสำเร็จ',
   paidDone: 'ชำระเงินเรียบร้อย',
